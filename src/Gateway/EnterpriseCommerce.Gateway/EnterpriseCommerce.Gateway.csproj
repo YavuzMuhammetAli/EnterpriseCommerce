@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    YARP API Gateway: infrastructure component, not a business service.
+    Must not reference any service project. Enforced by EnterpriseCommerce.ArchitectureTests.
+  -->
+
+  <ItemGroup>
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Yarp.ReverseProxy" />
+  </ItemGroup>
+
+</Project>

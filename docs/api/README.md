@@ -1,0 +1,11 @@
+# API Documentation
+
+API conventions and per-service API documentation go here once the first business endpoints exist.
+
+Current state:
+
+- Each service API generates an OpenAPI document with the built-in ASP.NET Core OpenAPI support, served at `/openapi/v1.json` in the Development environment only.
+- Errors use RFC 9457 problem details (`application/problem+json`), including a `traceId` for correlation.
+- External clients reach services through the Gateway (for example `http://localhost:5000/identity/...`).
+
+Planned topics: versioning strategy, resource naming, pagination, idempotency keys, and error catalog.

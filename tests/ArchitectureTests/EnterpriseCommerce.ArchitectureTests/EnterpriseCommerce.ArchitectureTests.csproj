@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Architecture rules are verified in two complementary ways, without extra packages:
+    1. Declared dependencies: every src/**/*.csproj is parsed (ProjectReference, PackageReference, FrameworkReference).
+    2. Compiled dependencies: referenced assemblies of the built layer assemblies are inspected.
+    (1) catches violations even before any code uses the dependency; (2) catches real usage.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Services\Identity\EnterpriseCommerce.Identity.Application\EnterpriseCommerce.Identity.Application.csproj" />
+    <ProjectReference Include="..\..\..\src\Services\Identity\EnterpriseCommerce.Identity.Domain\EnterpriseCommerce.Identity.Domain.csproj" />
+    <ProjectReference Include="..\..\..\src\Services\Identity\EnterpriseCommerce.Identity.Infrastructure\EnterpriseCommerce.Identity.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

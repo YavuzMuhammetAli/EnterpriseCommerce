@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Identity Domain layer.
+    Must not reference other layers or any infrastructure technology
+    (EF Core, SQL Server, MongoDB, Kafka, Redis, ASP.NET Core).
+    Enforced by EnterpriseCommerce.ArchitectureTests.
+  -->
+
+</Project>
