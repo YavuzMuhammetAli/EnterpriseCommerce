@@ -2,6 +2,8 @@
 
 This document describes how the EnterpriseCommerce repository is organized, and the rules that keep services independent. These rules are enforced automatically by `tests/ArchitectureTests`.
 
+Related documents: [PROJECT_DECISIONS.md](PROJECT_DECISIONS.md) (the canonical decisions), [SERVICE_CATALOG.md](SERVICE_CATALOG.md), [PHASE_1_FINAL_AUDIT.md](PHASE_1_FINAL_AUDIT.md), [PHASE_2_IDENTITY_DESIGN_BRIEF.md](PHASE_2_IDENTITY_DESIGN_BRIEF.md) and [CLAUDE.md](../../CLAUDE.md).
+
 ## Repository layout
 
 ```text
@@ -33,7 +35,7 @@ Each business service (see [SERVICE_CATALOG.md](SERVICE_CATALOG.md)) is an indep
 Services communicate only through:
 
 - **synchronous HTTP APIs**, usually reached through the Gateway, and
-- **asynchronous integration events** over Kafka ([ADR-005](../decisions/ADR-005-kafka-for-asynchronous-communication.md)).
+- **asynchronous integration events and commands** over Kafka ([ADR-005](../decisions/ADR-005-kafka-for-asynchronous-communication.md), [ADR-012](../decisions/ADR-012-transactional-outbox-and-asynchronous-commands.md)).
 
 A service never references another service's projects. The same type name in two services (for example `Product` in Catalog and in Order) is intentional. Each one is that service's own model of the concept.
 

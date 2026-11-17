@@ -1,6 +1,6 @@
 # ADR-006: Redis Usage Boundaries
 
-- **Status:** Accepted
+- **Status:** Accepted. Rule 4 (per-service Redis usage left open) is superseded by [ADR-011](ADR-011-per-service-data-store-assignment.md): Cart uses SQL Server as its durable store and Redis for acceleration only.
 - **Date:** 2026-11-17
 
 ## Context

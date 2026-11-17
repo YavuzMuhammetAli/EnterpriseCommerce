@@ -2,18 +2,30 @@
 
 A multi-tenant, multi-vendor e-commerce marketplace built with .NET 10 microservices. It is a long-term, portfolio-grade project, designed with production-inspired practices: clear service boundaries, data ownership, asynchronous integration, automated architecture rules and reproducible local infrastructure.
 
-> **Status: Phase 1 (repository and solution foundation).** No business functionality is implemented yet. See [Current status](#current-status).
+> **Status: Phase 1 (repository and solution foundation) is complete and audited.** Phase 2 (Identity, design only) is awaiting approval. No business functionality is implemented yet. See [Current status](#current-status).
 
 ## Architecture summary
 
 - **Ten business microservices:** Identity, Tenant & Merchant, Catalog, Inventory, Cart, Order, Payment, Fulfillment, Notification and Admin. See the [Service Catalog](docs/architecture/SERVICE_CATALOG.md).
 - **YARP API Gateway** as the single entry point. It is infrastructure only, with no business logic.
-- **Database per service.** No service accesses another service's data store.
+- **Database per service.** No service accesses another service's data store. Catalog uses MongoDB, and all other services use SQL Server. Cart additionally uses Redis, for acceleration only.
 - **Selective Clean Architecture** in every service: Domain → Application → Infrastructure → Api, enforced by architecture tests.
-- **Kafka (KRaft)** for asynchronous integration events. **Redis** for ephemeral and cached data only.
+- **REST** for synchronous calls. **Kafka (KRaft)** carries asynchronous integration events and commands. The **transactional outbox** and **sagas** are the accepted directions, and their implementation is deferred.
+- **Logical tenant isolation.** A tenant claim is never authorization proof on its own.
 - **MVP scope:** single-merchant checkout. Payments are **simulated**, and card data is never collected or stored.
 
-Details: [Solution Structure](docs/architecture/SOLUTION_STRUCTURE.md) · [Architecture Decision Records](docs/decisions/README.md)
+## Key documents
+
+| Document | Purpose |
+|---|---|
+| [PROJECT_DECISIONS.md](docs/architecture/PROJECT_DECISIONS.md) | **Canonical** consolidated architecture and technology decisions |
+| [CLAUDE.md](CLAUDE.md) | Operational rules for AI-assisted development sessions (reading order, rules, verification) |
+| [SERVICE_CATALOG.md](docs/architecture/SERVICE_CATALOG.md) | The ten business services and their responsibilities |
+| [SOLUTION_STRUCTURE.md](docs/architecture/SOLUTION_STRUCTURE.md) | Repository layout, layer rules and naming |
+| [Architecture Decision Records](docs/decisions/README.md) | Historical record of each decision (ADR-001 to ADR-014) |
+| [PHASE_1_FINAL_AUDIT.md](docs/architecture/PHASE_1_FINAL_AUDIT.md) | Phase 1 audit results and findings |
+| [PHASE_2_IDENTITY_DESIGN_BRIEF.md](docs/architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md) | Scope of the next phase (Identity design) |
+| [IDENTITY_API_CONTRACT.md](docs/api/IDENTITY_API_CONTRACT.md) | Phase 0.3 Identity API baseline and API conventions (subject to Phase 2 review) |
 
 ## Technology stack
 
@@ -135,7 +147,8 @@ The suite contains unit tests (exception handling), integration tests (the real 
 - YARP Gateway skeleton with a health endpoint and an example Identity route from configuration.
 - Docker Compose profiles for SQL Server, MongoDB, Redis and Kafka (KRaft): pinned images, named volumes, health checks and memory limits.
 - Unit, integration and architecture tests, and a GitHub Actions CI workflow.
-- Architecture documentation and ADR-001 to ADR-010.
+- Architecture documentation and ADR-001 to ADR-014, with the consolidated decisions in [PROJECT_DECISIONS.md](docs/architecture/PROJECT_DECISIONS.md).
+- Phase 1 final audit ([PHASE_1_FINAL_AUDIT.md](docs/architecture/PHASE_1_FINAL_AUDIT.md)).
 
 **Not implemented yet (explicitly out of scope for Phase 1):**
 
@@ -152,8 +165,8 @@ The suite contains unit tests (exception handling), integration tests (the real 
 
 ## Roadmap (indicative)
 
-1. **Phase 1:** repository and solution foundation *(this phase)*
-2. Identity design: protocol and provider, token strategy, data model
+1. **Phase 1:** repository and solution foundation *(complete, audited)*
+2. **Phase 2:** Identity design: protocol and provider, token strategy, data model, authorization model *(design only, awaiting approval; see [brief](docs/architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md))*
 3. Observability foundation: OpenTelemetry, Collector, Prometheus, Grafana, Loki
 4. Tenant & Merchant, Catalog and Inventory
 5. Cart, Order and simulated Payment, for single-merchant checkout

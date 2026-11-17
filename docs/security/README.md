@@ -11,4 +11,11 @@ Current baseline (Phase 1):
 - NuGet vulnerability auditing (`NuGetAudit`, all packages, including transitive) runs on every restore, and warnings fail the build.
 - **Payments are simulated. Card data is never collected, transmitted or stored.**
 
-Open topics for dedicated design steps: identity protocol and provider, token strategy, service-to-service authentication, tenant isolation enforcement, secret management outside local development, and TLS.
+Accepted security principles ([PROJECT_DECISIONS.md section 10](../architecture/PROJECT_DECISIONS.md#10-security), [ADR-014](../decisions/ADR-014-logical-tenant-isolation.md)):
+
+- Service-level authorization is mandatory, and gateway authorization never replaces it.
+- A tenant ID or token claim is not, by itself, proof of access rights.
+- Platform administration and merchant authorization are separate concerns.
+- Sensitive information is never published in integration events.
+
+Open topics for dedicated design steps (the Identity topics are scoped in [PHASE_2_IDENTITY_DESIGN_BRIEF.md](../architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md)): identity protocol and provider, token strategy, service-to-service authentication, tenant isolation enforcement, secret management outside local development, and TLS.

@@ -1,6 +1,6 @@
 # ADR-004: SQL Server and MongoDB Selection
 
-- **Status:** Accepted
+- **Status:** Accepted. Rule 2 (per-service assignment left open) is superseded by [ADR-011](ADR-011-per-service-data-store-assignment.md).
 - **Date:** 2026-11-17
 
 ## Context
