@@ -35,6 +35,7 @@ builder.Services
     .AddIdentityApplication(new RefreshReuseSettings(adminConsoleClientId))
     .AddIdentityInfrastructure(builder.Configuration);
 builder.AddIdentityProtocolServer();
+builder.AddTrustedProxy();
 
 var app = builder.Build();
 
@@ -44,6 +45,10 @@ if (app.Environment.IsDevelopment() && app.Configuration.GetValue<bool>("Identit
 {
     await app.Services.ApplyIdentityMigrationsAsync(app.Lifetime.ApplicationStopping);
 }
+
+// Forwarded headers first, explicitly: OpenIddict serves discovery from the authentication middleware, and minimal
+// hosting would otherwise not apply them before it (PoC-14). Only the Gateway is trusted (TrustedProxySetup).
+app.UseForwardedHeaders();
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
