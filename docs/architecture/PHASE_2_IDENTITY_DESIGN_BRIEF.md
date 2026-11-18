@@ -1,10 +1,15 @@
 # Phase 2 Design Brief: Identity
 
 - **Phase type:** design only. **No authentication code, no entities, no tables, no migrations.**
-- **Status:** prepared. Phase 2 has **not started** and requires explicit authorization.
+- **Status:** in progress.
+  - **Phase 2.1 (provider selection) is complete:** ASP.NET Core Identity with OpenIddict, recorded in [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md).
+  - **Phase 2.2 has not started** and requires explicit authorization after review of Phase 2.1.
 - **Exit gate:** Phase 2 ends with a design review and an explicit approval request. Implementation starts only after approval.
 
-This brief defines the scope, questions and evaluation criteria for designing the Identity microservice. It deliberately **does not decide** the protocol, provider, token strategy or data model. Those are the outputs of Phase 2.
+This brief defines the scope, questions and evaluation criteria for designing the Identity microservice.
+
+- **Decided in Phase 2.1:** the provider and the protocol family (OAuth 2.0 and OpenID Connect).
+- **Still outputs of the remaining Phase 2 steps:** the client flows, the token strategy and the data model. [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md) lists the recommendations and open questions for them.
 
 Inputs: [PROJECT_DECISIONS.md](PROJECT_DECISIONS.md) (especially sections 5, 7 and 10), [SERVICE_CATALOG.md](SERVICE_CATALOG.md), [ADR-007](../decisions/ADR-007-yarp-api-gateway.md) and [ADR-014](../decisions/ADR-014-logical-tenant-isolation.md).
 
@@ -34,7 +39,9 @@ Inputs: [PROJECT_DECISIONS.md](PROJECT_DECISIONS.md) (especially sections 5, 7 a
 
 ## 7.2 Identity provider options
 
-The candidates below are **not ranked and none is selected**. Facts must be re-verified against official sources during Phase 2. The notes reflect what was publicly documented at the time of writing.
+> **Outcome (Phase 2.1):** **ASP.NET Core Identity with OpenIddict** is selected, per [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md). The ADR records the verified facts, the responsibility boundaries and the rejected alternatives. The table below is kept as the original, pre-decision candidate list.
+
+When this brief was written, the candidates below were **not ranked and none was selected**. Facts must be re-verified against official sources during Phase 2. The notes reflect what was publicly documented at the time of writing.
 
 | Option | What it is | Notes to verify in Phase 2 |
 |---|---|---|
@@ -188,15 +195,17 @@ Evaluate and specify:
 
 ## 7.9 Phase 2 deliverables
 
-1. Identity architecture proposal
-2. Provider comparison (7.2 criteria, verified facts, recommendation)
-3. Authentication protocol decision
-4. Token strategy, including the token validation architecture (7.4.1)
-5. Logical data model
-6. Authorization model (including tenant context propagation)
-7. API contract proposal (`docs/api/`)
-8. Security considerations
-9. ADRs for each decision taken: at minimum the protocol, the provider and the token strategy
-10. Updates to [PROJECT_DECISIONS.md](PROJECT_DECISIONS.md) section 13 (resolved items move out of "deferred")
+| # | Deliverable | Status |
+|---|---|---|
+| 1 | Identity architecture proposal | Partly done: the component boundaries are in [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md) |
+| 2 | Provider comparison (7.2 criteria, verified facts, recommendation) | **Done** (ADR-015) |
+| 3 | Authentication protocol decision | Partly done: OAuth 2.0 and OpenID Connect are accepted, ROPC and implicit are rejected, and the client flows are pending (Phase 2.2) |
+| 4 | Token strategy, including the token validation architecture (7.4.1) | Open (Phase 2.2). Recommendations are in ADR-015 |
+| 5 | Logical data model | Open. ADR-015 section 4 gives the persistence boundaries |
+| 6 | Authorization model (including tenant context propagation) | Open |
+| 7 | API contract proposal (`docs/api/`) | Open |
+| 8 | Security considerations | Open. ADR-015 records the baseline rules |
+| 9 | ADRs for each decision taken: at minimum the protocol, the provider and the token strategy | Provider and protocol family: **done** (ADR-015). Token strategy: open |
+| 10 | Updates to [PROJECT_DECISIONS.md](PROJECT_DECISIONS.md) section 13 (resolved items move out of "deferred") | Done for the provider and protocol |
 
 Phase 2 ends with a **design review and an explicit approval request**. No implementation begins before approval.

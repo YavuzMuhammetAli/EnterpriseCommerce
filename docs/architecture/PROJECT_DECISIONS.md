@@ -10,7 +10,7 @@ How this document relates to the others:
 
 **Change policy:** a decision in this document changes only through a new ADR that supersedes or amends the old one. This document is then updated in the same change. If this document and an ADR disagree, stop and resolve the inconsistency. Never guess.
 
-Last consolidated: 2026-11-17 (Phase 1 final audit).
+Last consolidated: 2026-11-17 (Phase 1 final audit). Updated 2026-11-17 for Phase 2.1 (Identity provider selection, [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)).
 
 ---
 
@@ -47,6 +47,7 @@ The architecture prioritizes **maintainability, scalability, security, separatio
 | Cache | Redis | Local container available |
 | Messaging | Apache Kafka (KRaft) | Local container available |
 | API Gateway | YARP | In use |
+| Identity provider | ASP.NET Core Identity (user store) with OpenIddict (OAuth 2.0 / OpenID Connect server), [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md) | Accepted; not yet implemented |
 | Containers | Docker | In use |
 | Local orchestration | Docker Compose (profiles) | In use |
 | Logging | Serilog | In use |
@@ -207,7 +208,13 @@ Governing ADRs: [ADR-005](../decisions/ADR-005-kafka-for-asynchronous-communicat
 
 ## 10. Security
 
-- **JWT-based authentication is the intended direction, subject to the Identity design ADR** (Phase 2). OAuth 2.0 and OpenID Connect are evaluated in Phase 2 ([PHASE_2_IDENTITY_DESIGN_BRIEF.md](PHASE_2_IDENTITY_DESIGN_BRIEF.md)). The Phase 0.3 API baseline and the proposed claims are in [IDENTITY_API_CONTRACT.md](../api/IDENTITY_API_CONTRACT.md).
+- **Identity provider and protocol (accepted, [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)):**
+  - The Identity service is the platform's **OAuth 2.0 / OpenID Connect** authorization server, built with **OpenIddict** and **ASP.NET Core Identity**, persisted in Identity's own SQL Server database.
+  - Marketplace authorization is never delegated to OpenIddict.
+  - ASP.NET Core Identity roles are **not authoritative** for platform roles (Admin) or merchant roles (Tenant & Merchant).
+  - The Resource Owner Password Credentials grant and the implicit flow are **rejected**.
+  - Client flows, the access token format, lifetimes and the browser client architecture (public SPA client versus backend-for-frontend) are decided in Phase 2.2. The recommendations are in ADR-015.
+  - The Phase 0.3 API baseline and the proposed claims are in [IDENTITY_API_CONTRACT.md](../api/IDENTITY_API_CONTRACT.md).
 - **Intended direction:** services validate JWTs **locally** (signature, issuer, audience, expiry). They don't call Identity on every request. The details are evaluated in Phase 2 ([section 7.4.1 of the brief](PHASE_2_IDENTITY_DESIGN_BRIEF.md#741-token-validation-architecture)).
 - **Service-level authorization is mandatory.** Gateway authorization does not replace it.
 - A tenant ID is not sufficient proof of access rights.
@@ -263,9 +270,11 @@ These are **open**. They must not be decided silently. Each one is decided throu
 
 | Decision | Planned resolution |
 |---|---|
-| Identity protocol and provider | Phase 2 (Identity design) |
 | Detailed Identity data model | Phase 2 |
-| Exact token and session strategy | Phase 2 |
+| Exact token and session strategy (lifetimes, refresh token rotation parameters, revocation behaviour, claim set) | Phase 2.2 |
+| Browser client architecture: public SPA client versus backend-for-frontend, per front end (a backend-for-frontend needs its own ADR) | Phase 2.2 |
+| Access token format and resource-server token validation approach | Phase 2.2 |
+| Signing key storage and rotation, and Data Protection key storage, outside local development | Phase 2.2 (direction); deployment phase (concrete store) |
 | Kafka client library | First event-flow phase |
 | Outbox implementation details | First event-flow phase |
 | Mediator library selection (if any) | When the first service needs it ([ADR-009](../decisions/ADR-009-selective-cqrs.md)) |
@@ -275,3 +284,7 @@ These are **open**. They must not be decided silently. Each one is decided throu
 | Detailed observability implementation | Observability phase |
 | Detailed Kubernetes deployment architecture | Deployment phase (advanced scope) |
 | Saga state machine, timeouts and reservation expiration design | Checkout design phase |
+
+**Resolved since the Phase 1 audit:**
+
+- Identity protocol and provider: OAuth 2.0 / OpenID Connect with ASP.NET Core Identity and OpenIddict ([ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md), Phase 2.1).

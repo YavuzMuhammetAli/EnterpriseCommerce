@@ -35,7 +35,10 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
 - Does not own:
   - tenant or merchant lifecycle, membership or merchant roles (Tenant & Merchant)
   - platform administrator assignments (Admin)
-- Open decisions: the identity protocol and provider, the token and session strategy, and the data model. These are scoped in [PHASE_2_IDENTITY_DESIGN_BRIEF.md](PHASE_2_IDENTITY_DESIGN_BRIEF.md).
+- Provider and protocol (decided in Phase 2.1):
+  - ASP.NET Core Identity with OpenIddict, using OAuth 2.0 and OpenID Connect ([ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)).
+  - ASP.NET Core Identity roles are not authoritative for platform or merchant roles.
+- Open decisions: the client flows and browser client architecture, the token and session strategy, and the data model. These are scoped in [PHASE_2_IDENTITY_DESIGN_BRIEF.md](PHASE_2_IDENTITY_DESIGN_BRIEF.md).
 - API baseline: [IDENTITY_API_CONTRACT.md](../api/IDENTITY_API_CONTRACT.md) (Phase 0.3, subject to Phase 2 review).
 - Phase 1 state: a compilable four-layer skeleton with a health endpoint, OpenAPI, exception handling and structured logging. **No identity features.**
 

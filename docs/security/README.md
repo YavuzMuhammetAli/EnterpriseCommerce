@@ -17,5 +17,16 @@ Accepted security principles ([PROJECT_DECISIONS.md section 10](../architecture/
 - A tenant ID or token claim is not, by itself, proof of access rights.
 - Platform administration and merchant authorization are separate concerns.
 - Sensitive information is never published in integration events.
+- Identity uses OAuth 2.0 and OpenID Connect, implemented with ASP.NET Core Identity and OpenIddict ([ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)):
+  - The Resource Owner Password Credentials grant and the implicit flow are rejected.
+  - Marketplace authorization is never delegated to the identity provider.
+  - Signing keys are never committed.
 
-Open topics for dedicated design steps (the Identity topics are scoped in [PHASE_2_IDENTITY_DESIGN_BRIEF.md](../architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md)): identity protocol and provider, token strategy, service-to-service authentication, tenant isolation enforcement, secret management outside local development, and TLS.
+Open topics for dedicated design steps (the Identity topics are scoped in [PHASE_2_IDENTITY_DESIGN_BRIEF.md](../architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md), and the Phase 2.2 questions are listed in ADR-015):
+
+- token strategy and browser client architecture
+- service-to-service authentication details
+- signing key storage and rotation outside local development
+- tenant isolation enforcement
+- secret management outside local development
+- TLS

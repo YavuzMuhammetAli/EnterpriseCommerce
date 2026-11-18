@@ -2,7 +2,7 @@
 
 A multi-tenant, multi-vendor e-commerce marketplace built with .NET 10 microservices. It is a long-term, portfolio-grade project, designed with production-inspired practices: clear service boundaries, data ownership, asynchronous integration, automated architecture rules and reproducible local infrastructure.
 
-> **Status: Phase 1 (repository and solution foundation) is complete and audited.** Phase 2 (Identity, design only) is awaiting approval. No business functionality is implemented yet. See [Current status](#current-status).
+> **Status: Phase 1 (repository and solution foundation) is complete and audited.** Phase 2 (Identity, design only) is in progress: Phase 2.1 selected ASP.NET Core Identity with OpenIddict ([ADR-015](docs/decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)), and Phase 2.2 awaits approval. No business functionality is implemented yet. See [Current status](#current-status).
 
 ## Architecture summary
 
@@ -22,7 +22,7 @@ A multi-tenant, multi-vendor e-commerce marketplace built with .NET 10 microserv
 | [CLAUDE.md](CLAUDE.md) | Operational rules for AI-assisted development sessions (reading order, rules, verification) |
 | [SERVICE_CATALOG.md](docs/architecture/SERVICE_CATALOG.md) | The ten business services and their responsibilities |
 | [SOLUTION_STRUCTURE.md](docs/architecture/SOLUTION_STRUCTURE.md) | Repository layout, layer rules and naming |
-| [Architecture Decision Records](docs/decisions/README.md) | Historical record of each decision (ADR-001 to ADR-014) |
+| [Architecture Decision Records](docs/decisions/README.md) | Historical record of each decision (ADR-001 to ADR-015) |
 | [PHASE_1_FINAL_AUDIT.md](docs/architecture/PHASE_1_FINAL_AUDIT.md) | Phase 1 audit results and findings |
 | [PHASE_2_IDENTITY_DESIGN_BRIEF.md](docs/architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md) | Scope of the next phase (Identity design) |
 | [IDENTITY_API_CONTRACT.md](docs/api/IDENTITY_API_CONTRACT.md) | Phase 0.3 Identity API baseline and API conventions (subject to Phase 2 review) |
@@ -150,9 +150,11 @@ The suite contains unit tests (exception handling), integration tests (the real 
 - Architecture documentation and ADR-001 to ADR-014, with the consolidated decisions in [PROJECT_DECISIONS.md](docs/architecture/PROJECT_DECISIONS.md).
 - Phase 1 final audit ([PHASE_1_FINAL_AUDIT.md](docs/architecture/PHASE_1_FINAL_AUDIT.md)).
 
+**Decided (Phase 2.1, documentation only):** the Identity provider is ASP.NET Core Identity with OpenIddict, using OAuth 2.0 and OpenID Connect ([ADR-015](docs/decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)). No Identity code or packages exist yet.
+
 **Not implemented yet (explicitly out of scope for Phase 1):**
 
-- User registration, login, password management, JWT/token issuance and refresh token rotation (the identity protocol and provider are not yet chosen)
+- User registration, login, password management, JWT/token issuance and refresh token rotation (the provider is chosen in [ADR-015](docs/decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md); the token strategy is not yet designed)
 - Authentication and authorization configuration
 - Tenant and merchant management
 - Product catalog, inventory operations, cart, checkout, orders, payments, fulfillment, notifications and admin features
@@ -166,7 +168,7 @@ The suite contains unit tests (exception handling), integration tests (the real 
 ## Roadmap (indicative)
 
 1. **Phase 1:** repository and solution foundation *(complete, audited)*
-2. **Phase 2:** Identity design: protocol and provider, token strategy, data model, authorization model *(design only, awaiting approval; see [brief](docs/architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md))*
+2. **Phase 2:** Identity design: protocol and provider, token strategy, data model, authorization model *(design only, in progress: 2.1 provider selection done, 2.2 awaiting approval; see [brief](docs/architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md))*
 3. Observability foundation: OpenTelemetry, Collector, Prometheus, Grafana, Loki
 4. Tenant & Merchant, Catalog and Inventory
 5. Cart, Order and simulated Payment, for single-merchant checkout

@@ -2,7 +2,9 @@
 
 - **Status:** **preserved baseline, not a final implementation specification.**
 - **Origin:** the Phase 0.3 API design, which is the agreed baseline for the endpoint areas, API conventions and JWT claims.
-- **Review:** this contract is re-evaluated in Phase 2 ([PHASE_2_IDENTITY_DESIGN_BRIEF.md](../architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md)) against the selected protocol and provider. **No identity provider has been selected.** Nothing here assumes ASP.NET Core Identity, OpenIddict, Duende IdentityServer, Keycloak or any other product.
+- **Review:** this contract is re-evaluated in Phase 2 ([PHASE_2_IDENTITY_DESIGN_BRIEF.md](../architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md)) against the selected protocol and provider.
+  - **Provider (selected in Phase 2.1):** ASP.NET Core Identity with OpenIddict, using OAuth 2.0 and OpenID Connect ([ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)).
+  - **This baseline text predates that decision.** The endpoints marked *Provider-dependent* are mapped to the standard protocol endpoints in the Phase 2.2 API contract proposal. Until then, the text below is unchanged.
 - **Implementation:** none. These endpoints do not exist yet.
 
 ### How to read this document
@@ -198,7 +200,7 @@ Rules:
 ## 4. Open items for Phase 2 review
 
 1. Confirm the **Reconstructed** paths and fields against the original Phase 0.3 design.
-2. Map every **Provider-dependent** endpoint to the selected protocol and provider. Standard endpoints (for example token, authorize, end-session, discovery, JWKS, UserInfo) may replace custom ones.
+2. Map every **Provider-dependent** endpoint to the selected protocol and provider. Standard endpoints (for example token, authorize, end-session, discovery, JWKS, UserInfo) may replace custom ones. The provider is OpenIddict with ASP.NET Core Identity ([ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md), open question O12).
 3. Refresh token delivery for browser clients: body or `HttpOnly` cookie, and a backend-for-frontend option.
 4. Idempotency-Key retention, storage and scope.
 5. The `tenant_context` and `roles` claim shape, and the strategy for stale claims.
