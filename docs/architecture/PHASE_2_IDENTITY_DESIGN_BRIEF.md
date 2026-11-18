@@ -3,7 +3,8 @@
 - **Phase type:** design only. **No authentication code, no entities, no tables, no migrations.**
 - **Status:** in progress.
   - **Phase 2.1 (provider selection) is complete:** ASP.NET Core Identity with OpenIddict, recorded in [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md).
-  - **Phase 2.2 has not started** and requires explicit authorization after review of Phase 2.1.
+  - **Phase 2.2 (authentication flows and security design) is proposed and awaiting review:** [PHASE_2_2_AUTHENTICATION_FLOWS.md](PHASE_2_2_AUTHENTICATION_FLOWS.md). Nothing in it is accepted until approved and recorded in ADRs.
+  - **Phase 2.3 has not started** and requires explicit authorization after review of Phase 2.2.
 - **Exit gate:** Phase 2 ends with a design review and an explicit approval request. Implementation starts only after approval.
 
 This brief defines the scope, questions and evaluation criteria for designing the Identity microservice.
@@ -199,12 +200,12 @@ Evaluate and specify:
 |---|---|---|
 | 1 | Identity architecture proposal | Partly done: the component boundaries are in [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md) |
 | 2 | Provider comparison (7.2 criteria, verified facts, recommendation) | **Done** (ADR-015) |
-| 3 | Authentication protocol decision | Partly done: OAuth 2.0 and OpenID Connect are accepted, ROPC and implicit are rejected, and the client flows are pending (Phase 2.2) |
-| 4 | Token strategy, including the token validation architecture (7.4.1) | Open (Phase 2.2). Recommendations are in ADR-015 |
+| 3 | Authentication protocol decision | Partly done: OAuth 2.0 and OpenID Connect are accepted, ROPC and implicit are rejected. The client flows are **proposed** in [PHASE_2_2_AUTHENTICATION_FLOWS.md](PHASE_2_2_AUTHENTICATION_FLOWS.md), awaiting approval |
+| 4 | Token strategy, including the token validation architecture (7.4.1) | **Proposed** in [PHASE_2_2_AUTHENTICATION_FLOWS.md](PHASE_2_2_AUTHENTICATION_FLOWS.md) (sections 5.4, 6 and 7), awaiting approval |
 | 5 | Logical data model | Open. ADR-015 section 4 gives the persistence boundaries |
 | 6 | Authorization model (including tenant context propagation) | Open |
 | 7 | API contract proposal (`docs/api/`) | Open |
-| 8 | Security considerations | Open. ADR-015 records the baseline rules |
+| 8 | Security considerations | Partly proposed: authentication security, the failure and threat matrix and abuse protection are in [PHASE_2_2_AUTHENTICATION_FLOWS.md](PHASE_2_2_AUTHENTICATION_FLOWS.md), awaiting approval. ADR-015 records the baseline rules |
 | 9 | ADRs for each decision taken: at minimum the protocol, the provider and the token strategy | Provider and protocol family: **done** (ADR-015). Token strategy: open |
 | 10 | Updates to [PROJECT_DECISIONS.md](PROJECT_DECISIONS.md) section 13 (resolved items move out of "deferred") | Done for the provider and protocol |
 

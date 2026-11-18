@@ -5,6 +5,7 @@
 - **Review:** this contract is re-evaluated in Phase 2 ([PHASE_2_IDENTITY_DESIGN_BRIEF.md](../architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md)) against the selected protocol and provider.
   - **Provider (selected in Phase 2.1):** ASP.NET Core Identity with OpenIddict, using OAuth 2.0 and OpenID Connect ([ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)).
   - **This baseline text predates that decision.** The endpoints marked *Provider-dependent* are mapped to the standard protocol endpoints in the Phase 2.2 API contract proposal. Until then, the text below is unchanged.
+  - **Phase 2.2 proposal (awaiting approval):** the endpoint mapping, the claim set and the confirmation and reset token semantics are proposed in [PHASE_2_2_AUTHENTICATION_FLOWS.md](../architecture/PHASE_2_2_AUTHENTICATION_FLOWS.md) (sections 5.6.3, 6.1 and 8). This contract is updated only after that proposal is approved.
 - **Implementation:** none. These endpoints do not exist yet.
 
 ### How to read this document

@@ -18,7 +18,7 @@ The operational instruction manual for Claude Code sessions in this repository. 
   - database per service
   - Kafka integration events and commands, with a transactional outbox (direction) and sagas (direction)
   - logical tenant isolation
-- **Current phase:** Phase 1 (foundation) is **complete**. The Phase 1 final audit is done. **Phase 2 (Identity) is design-only.** Phase 2.1 (provider selection: ASP.NET Core Identity with OpenIddict, [ADR-015](docs/decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)) is complete. **Phase 2.2 has not started** and needs explicit authorization. See [docs/architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md](docs/architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md).
+- **Current phase:** Phase 1 (foundation) is **complete**. The Phase 1 final audit is done. **Phase 2 (Identity) is design-only.** Phase 2.1 (provider selection: ASP.NET Core Identity with OpenIddict, [ADR-015](docs/decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)) is complete. Phase 2.2 (authentication flows and security design) is **proposed and awaiting architectural review**: [docs/architecture/PHASE_2_2_AUTHENTICATION_FLOWS.md](docs/architecture/PHASE_2_2_AUTHENTICATION_FLOWS.md). Its recommendations are not accepted until approved and recorded in ADRs. **Phase 2.3 has not started** and needs explicit authorization. See [docs/architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md](docs/architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md).
 
 ## Mandatory reading order
 

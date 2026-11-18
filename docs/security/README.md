@@ -24,8 +24,8 @@ Accepted security principles ([PROJECT_DECISIONS.md section 10](../architecture/
 
 Open topics for dedicated design steps (the Identity topics are scoped in [PHASE_2_IDENTITY_DESIGN_BRIEF.md](../architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md), and the Phase 2.2 questions are listed in ADR-015):
 
-- token strategy and browser client architecture
-- service-to-service authentication details
+- token strategy and browser client architecture (proposed, awaiting review: [PHASE_2_2_AUTHENTICATION_FLOWS.md](../architecture/PHASE_2_2_AUTHENTICATION_FLOWS.md))
+- service-to-service authentication details (proposed in the same document)
 - signing key storage and rotation outside local development
 - tenant isolation enforcement
 - secret management outside local development
