@@ -1,6 +1,7 @@
 using EnterpriseCommerce.Identity.Api.ExceptionHandling;
 using EnterpriseCommerce.Identity.Application;
 using EnterpriseCommerce.Identity.Infrastructure;
+using EnterpriseCommerce.Identity.Infrastructure.Persistence;
 using Serilog;
 using Serilog.Events;
 
@@ -29,6 +30,13 @@ builder.Services
     .AddIdentityInfrastructure(builder.Configuration);
 
 var app = builder.Build();
+
+// Development convenience only, behind an explicit flag: deployed environments apply migrations as a
+// separate, reviewed step and never at application startup.
+if (app.Environment.IsDevelopment() && app.Configuration.GetValue<bool>("Identity:Database:ApplyMigrationsAtStartup"))
+{
+    await app.Services.ApplyIdentityMigrationsAsync(app.Lifetime.ApplicationStopping);
+}
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();

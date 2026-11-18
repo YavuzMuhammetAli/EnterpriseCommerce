@@ -1,5 +1,6 @@
 using System.Text.Json;
 using EnterpriseCommerce.Identity.Api.ExceptionHandling;
+using EnterpriseCommerce.Identity.Application.Security;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -60,6 +61,35 @@ public sealed class GlobalExceptionHandlerTests
         Assert.DoesNotContain(SensitiveDetail, body, StringComparison.Ordinal);
         Assert.DoesNotContain(nameof(InvalidOperationException), body, StringComparison.Ordinal);
         Assert.DoesNotContain("StackTrace", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task TryHandleAsync_SecurityStateUnavailable_Returns503WithoutDetails()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var services = new ServiceCollection()
+            .AddLogging()
+            .AddProblemDetails()
+            .BuildServiceProvider();
+
+        var httpContext = CreateHttpContext(services);
+        var handler = new GlobalExceptionHandler(
+            services.GetRequiredService<IProblemDetailsService>(),
+            NullLogger<GlobalExceptionHandler>.Instance);
+
+        var handled = await handler.TryHandleAsync(
+            httpContext,
+            new SecurityStateUnavailableException(SensitiveDetail, new InvalidOperationException(SensitiveDetail)),
+            cancellationToken);
+
+        Assert.True(handled);
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, httpContext.Response.StatusCode);
+        Assert.Equal("5", httpContext.Response.Headers.RetryAfter.ToString());
+
+        var body = await ReadBodyAsync(httpContext, cancellationToken);
+        Assert.DoesNotContain(SensitiveDetail, body, StringComparison.Ordinal);
+        using var json = JsonDocument.Parse(body);
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, json.RootElement.GetProperty("status").GetInt32());
     }
 
     private static DefaultHttpContext CreateHttpContext(IServiceProvider services)

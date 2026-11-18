@@ -1,15 +1,16 @@
+using EnterpriseCommerce.Identity.Application.Security;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EnterpriseCommerce.Identity.Api.ExceptionHandling;
 
 /// <summary>
-/// Last-resort handler for unhandled exceptions.
-/// Logs the exception and returns a generic 500 problem details response
-/// without leaking exception messages or stack traces to the client.
-/// Mapping of domain/application exceptions to specific status codes is added
-/// when those exception types exist.
+/// Last-resort handler for unhandled exceptions. Never leaks exception messages or stack traces to the client.
 /// </summary>
+/// <remarks>
+/// <see cref="SecurityStateUnavailableException"/> becomes <c>503</c>: the authoritative security state could not be
+/// confirmed, so nothing was issued or reported as done (ADR-017 section 8). Everything else becomes a generic <c>500</c>.
+/// </remarks>
 internal sealed partial class GlobalExceptionHandler(
     IProblemDetailsService problemDetailsService,
     ILogger<GlobalExceptionHandler> logger) : IExceptionHandler
@@ -19,19 +20,36 @@ internal sealed partial class GlobalExceptionHandler(
         Exception exception,
         CancellationToken cancellationToken)
     {
-        LogUnhandledException(logger, exception, httpContext.Request.Method, httpContext.Request.Path);
+        ProblemDetails problem;
 
-        httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
-
-        return await problemDetailsService.TryWriteAsync(new ProblemDetailsContext
+        if (exception is SecurityStateUnavailableException)
         {
-            HttpContext = httpContext,
-            ProblemDetails = new ProblemDetails
+            LogSecurityStateUnavailable(logger, exception, httpContext.Request.Method, httpContext.Request.Path);
+            httpContext.Response.Headers.RetryAfter = "5";
+            problem = new ProblemDetails
+            {
+                Status = StatusCodes.Status503ServiceUnavailable,
+                Title = "The service is temporarily unavailable. Try again later.",
+                Type = "https://tools.ietf.org/html/rfc9110#section-15.6.4",
+            };
+        }
+        else
+        {
+            LogUnhandledException(logger, exception, httpContext.Request.Method, httpContext.Request.Path);
+            problem = new ProblemDetails
             {
                 Status = StatusCodes.Status500InternalServerError,
                 Title = "An unexpected error occurred.",
                 Type = "https://tools.ietf.org/html/rfc9110#section-15.6.1",
-            },
+            };
+        }
+
+        httpContext.Response.StatusCode = problem.Status.Value;
+
+        return await problemDetailsService.TryWriteAsync(new ProblemDetailsContext
+        {
+            HttpContext = httpContext,
+            ProblemDetails = problem,
         });
     }
 
@@ -40,6 +58,16 @@ internal sealed partial class GlobalExceptionHandler(
         Level = LogLevel.Error,
         Message = "Unhandled exception while processing {RequestMethod} {RequestPath}")]
     private static partial void LogUnhandledException(
+        ILogger logger,
+        Exception exception,
+        string requestMethod,
+        PathString requestPath);
+
+    [LoggerMessage(
+        EventId = 1001,
+        Level = LogLevel.Error,
+        Message = "Security state unavailable while processing {RequestMethod} {RequestPath}; failed closed with 503")]
+    private static partial void LogSecurityStateUnavailable(
         ILogger logger,
         Exception exception,
         string requestMethod,

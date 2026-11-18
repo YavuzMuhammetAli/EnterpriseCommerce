@@ -4,7 +4,8 @@ namespace EnterpriseCommerce.Identity.Domain;
 
 /// <summary>
 /// Marker used to locate this assembly (e.g. by architecture tests).
-/// Domain entities are intentionally not modelled yet; see docs/architecture/SERVICE_CATALOG.md.
+/// The Identity domain stays minimal: account status, account security tokens and the security-version rule.
+/// Framework types (ASP.NET Core Identity, OpenIddict) never appear here (ADR-015 A6).
 /// </summary>
 public static class AssemblyReference
 {

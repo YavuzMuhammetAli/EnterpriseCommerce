@@ -1,13 +1,36 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!--
+    Identity Infrastructure: EF Core persistence in Identity's own SQL Server database,
+    ASP.NET Core Identity stores and OpenIddict core/EF Core integration (ADR-015, ADR-017, ADR-018).
+  -->
+
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+    <PackageReference Include="OpenIddict.EntityFrameworkCore" />
+  </ItemGroup>
+
+  <!-- Design-time only (dotnet ef migrations). Never flows to consumers or the published output. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\EnterpriseCommerce.Identity.Application\EnterpriseCommerce.Identity.Application.csproj" />
     <ProjectReference Include="..\EnterpriseCommerce.Identity.Domain\EnterpriseCommerce.Identity.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EnterpriseCommerce.Identity.Api" />
+    <InternalsVisibleTo Include="EnterpriseCommerce.Identity.IntegrationTests" />
+    <InternalsVisibleTo Include="EnterpriseCommerce.Identity.UnitTests" />
   </ItemGroup>
 
 </Project>

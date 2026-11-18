@@ -115,6 +115,11 @@ Report:
 ```bash
 dotnet build EnterpriseCommerce.sln -c Release                      # must be 0 warnings / 0 errors
 dotnet test --solution EnterpriseCommerce.sln -c Release            # Microsoft.Testing.Platform (set in global.json)
+
+# SQL-backed integration tests run only when EC_TEST_SQLSERVER is set (they skip otherwise; CI requires them):
+export EC_TEST_SQLSERVER='Server=(localdb)\MSSQLLocalDB;Integrated Security=true;TrustServerCertificate=true'   # or the Compose sqlserver profile
+dotnet tool restore                                                 # dotnet-ef (dotnet-tools.json)
+dotnet tool run dotnet-ef migrations add <Name> --project src/Services/Identity/EnterpriseCommerce.Identity.Infrastructure --output-dir Persistence/Migrations --namespace EnterpriseCommerce.Identity.Infrastructure.Persistence.Migrations
 dotnet run --project src/Services/Identity/EnterpriseCommerce.Identity.Api --launch-profile http   # http://localhost:5101
 dotnet run --project src/Gateway/EnterpriseCommerce.Gateway --launch-profile http                  # http://localhost:5000
 
@@ -129,4 +134,6 @@ docker compose --profile <name> down                                # same profi
 - Windows, Docker Desktop on WSL2. The Docker VM has about 3.8 GB of memory, so **start only the profiles you need**. The `all` profile does not fit as configured.
 - A locally installed MongoDB uses port 27017. Use `MONGO_PORT=27018` for the Compose MongoDB.
 - In Git Bash, prefix `docker compose exec` commands that pass container paths with `MSYS_NO_PATHCONV=1`.
+- Identity needs `ConnectionStrings__IdentityDatabase` (environment or user secrets; never committed). In Development, `Identity__Database__ApplyMigrationsAtStartup=true` applies the migrations at startup.
+- `dotnet ef migrations add` puts the model snapshot under a namespace-derived folder when `--namespace` is used. Move it into `Persistence/Migrations` and delete the generated folder.
 - The Phase 1 audit findings and open items are in [docs/architecture/PHASE_1_FINAL_AUDIT.md](docs/architecture/PHASE_1_FINAL_AUDIT.md).
