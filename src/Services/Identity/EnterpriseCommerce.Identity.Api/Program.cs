@@ -1,4 +1,5 @@
 using EnterpriseCommerce.Identity.Api.Accounts;
+using EnterpriseCommerce.Identity.Api.Diagnostics;
 using EnterpriseCommerce.Identity.Api.ExceptionHandling;
 using EnterpriseCommerce.Identity.Api.Protocol;
 using EnterpriseCommerce.Identity.Application;
@@ -25,7 +26,7 @@ builder.Services.AddProblemDetails(options =>
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 builder.Services.AddOpenApi();
-builder.Services.AddHealthChecks();
+builder.Services.AddIdentityHealthChecks();
 builder.Services.AddRazorPages();
 
 // Layer composition.
@@ -78,7 +79,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.MapHealthChecks("/health");
+app.MapIdentityHealthChecks();
 app.MapRazorPages();
 app.MapProtocolEndpoints();
 

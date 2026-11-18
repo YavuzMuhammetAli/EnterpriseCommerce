@@ -49,6 +49,17 @@ public sealed class AuthorizationCodeFlowTests(IdentityServerFixture identity) :
     }
 
     [Fact]
+    public async Task Readiness_WithTheDatabase_IsHealthy()
+    {
+        identity.RequireAvailable();
+        using var client = identity.CreateBackChannel();
+
+        using var ready = await client.GetAsync(new Uri("/health/ready", UriKind.Relative), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, ready.StatusCode);
+    }
+
+    [Fact]
     public async Task Jwks_PublishesOnlyRsaKeysOfAtLeast3072Bits()
     {
         identity.RequireAvailable();

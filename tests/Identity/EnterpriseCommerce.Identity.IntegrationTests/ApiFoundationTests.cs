@@ -17,6 +17,18 @@ public sealed class ApiFoundationTests(IdentityApiFactory factory) : IClassFixtu
     }
 
     [Fact]
+    public async Task Readiness_WithoutTheDatabase_ReportsUnavailable_WhileLivenessStaysHealthy()
+    {
+        using var client = factory.CreateClient();
+
+        using var live = await client.GetAsync(new Uri("/health/live", UriKind.Relative), TestContext.Current.CancellationToken);
+        using var ready = await client.GetAsync(new Uri("/health/ready", UriKind.Relative), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, live.StatusCode);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, ready.StatusCode);
+    }
+
+    [Fact]
     public async Task OpenApiDocument_IsServedInDevelopment()
     {
         using var client = factory.CreateClient();

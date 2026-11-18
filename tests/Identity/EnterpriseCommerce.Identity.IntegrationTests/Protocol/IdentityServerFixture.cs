@@ -79,7 +79,7 @@ public sealed record TokenResponse(HttpStatusCode Status, JsonElement Body)
 /// The real Identity host on a throwaway SQL Server database, with three BFF clients and one service client.
 /// Drives the browser login and the authorization code flow with PKCE like a BFF would.
 /// </summary>
-public sealed partial class IdentityServerFixture : IAsyncLifetime
+public partial class IdentityServerFixture : IAsyncLifetime
 {
     public const string Password = "Correct-Horse-Battery-9";
     public static readonly Uri Issuer = new("https://localhost/");
@@ -116,7 +116,7 @@ public sealed partial class IdentityServerFixture : IAsyncLifetime
             builder.UseSetting("Identity:Issuer", Issuer.AbsoluteUri);
             builder.UseSetting("Identity:AdminConsoleClientId", Admin.ClientId);
             builder.UseSetting("Identity:RateLimits:CredentialRequestsPerMinute", "100000");
-            builder.UseSetting("Serilog:MinimumLevel:Default", "Warning");
+            builder.UseSetting("Serilog:MinimumLevel:Default", MinimumLogLevel);
 
             var index = 0;
             foreach (var client in new[] { Storefront, Merchant, Admin })
@@ -135,10 +135,19 @@ public sealed partial class IdentityServerFixture : IAsyncLifetime
             builder.UseSetting(service + "JsonWebKeySet", Service.JsonWebKeySet);
             builder.UseSetting(service + "ServiceScopes:0:Scope", "svc.inventory.reservations");
             builder.UseSetting(service + "ServiceScopes:0:Audience", "inventory-api");
+            ConfigureHost(builder);
         });
 
         // Starts the host, which registers the clients.
         _ = _factory.Server;
+    }
+
+    /// <summary>The Serilog default level for the host. The shipped per-namespace overrides still apply.</summary>
+    protected virtual string MinimumLogLevel => "Warning";
+
+    /// <summary>Extra host configuration for derived fixtures.</summary>
+    protected virtual void ConfigureHost(IWebHostBuilder builder)
+    {
     }
 
     public async ValueTask DisposeAsync()
@@ -153,6 +162,7 @@ public sealed partial class IdentityServerFixture : IAsyncLifetime
         Merchant.Dispose();
         Admin.Dispose();
         Service.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>A browser: follows no redirects automatically and keeps cookies.</summary>

@@ -60,7 +60,17 @@ jobs:
           EC_TEST_SQLSERVER: "Server=127.0.0.1,1433;User ID=sa;Password=CiOnly_Ephemeral_Pa55word!;TrustServerCertificate=true"
           # Infrastructure tests must run in CI: a missing server fails the build instead of skipping.
           EC_REQUIRE_INFRA_TESTS: "true"
-        run: dotnet test --solution EnterpriseCommerce.sln --configuration Release --no-build
+        # The default bash shell uses pipefail, so a test failure still fails this step.
+        run: dotnet test --solution EnterpriseCommerce.sln --configuration Release --no-build 2>&1 | tee test-output.log
+
+      - name: Scan test output for secrets (ADR-017 section 11)
+        if: always()
+        run: |
+          # Compact JWS/JWE values (tokens, codes, client assertions) and sensitive OAuth parameters must never appear.
+          if grep -nE 'eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|(code_verifier|client_assertion|refresh_token|id_token_hint)=[^&[:space:]]{8,}' test-output.log; then
+            echo "::error::Secret-like material found in the test output."
+            exit 1
+          fi
 
   compose-validate:
     name: Validate Docker Compose
