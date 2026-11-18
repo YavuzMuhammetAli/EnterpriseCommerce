@@ -1,5 +1,8 @@
+using EnterpriseCommerce.Identity.Api.Accounts;
 using EnterpriseCommerce.Identity.Api.ExceptionHandling;
+using EnterpriseCommerce.Identity.Api.Protocol;
 using EnterpriseCommerce.Identity.Application;
+using EnterpriseCommerce.Identity.Application.Tokens;
 using EnterpriseCommerce.Identity.Infrastructure;
 using EnterpriseCommerce.Identity.Infrastructure.Persistence;
 using Serilog;
@@ -23,11 +26,15 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks();
+builder.Services.AddRazorPages();
 
 // Layer composition.
+var adminConsoleClientId = builder.Configuration[$"{IdentityServerSettings.SectionName}:{nameof(IdentityServerSettings.AdminConsoleClientId)}"]
+    ?? new IdentityServerSettings().AdminConsoleClientId;
 builder.Services
-    .AddIdentityApplication()
+    .AddIdentityApplication(new RefreshReuseSettings(adminConsoleClientId))
     .AddIdentityInfrastructure(builder.Configuration);
+builder.AddIdentityProtocolServer();
 
 var app = builder.Build();
 
@@ -41,13 +48,25 @@ if (app.Environment.IsDevelopment() && app.Configuration.GetValue<bool>("Identit
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
+// Request logs carry the path only, never the query string (ADR-017 section 11).
 app.UseSerilogRequestLogging(options =>
+{
+    options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
     options.GetLevel = (httpContext, _, exception) =>
         exception is not null || httpContext.Response.StatusCode >= StatusCodes.Status500InternalServerError
             ? LogEventLevel.Error
             : httpContext.Request.Path.StartsWithSegments("/health")
                 ? LogEventLevel.Verbose
-                : LogEventLevel.Information);
+                : LogEventLevel.Information;
+});
+
+app.UseRouting();
+app.UseRateLimiter();
+
+// OpenIddict serves its protocol endpoints from the authentication middleware.
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseCredentialFormProtection();
 
 if (app.Environment.IsDevelopment())
 {
@@ -55,5 +74,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapHealthChecks("/health");
+app.MapRazorPages();
+app.MapProtocolEndpoints();
 
 await app.RunAsync();

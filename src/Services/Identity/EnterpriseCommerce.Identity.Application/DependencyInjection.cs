@@ -1,4 +1,6 @@
+using EnterpriseCommerce.Identity.Application.Security;
 using EnterpriseCommerce.Identity.Application.Sessions;
+using EnterpriseCommerce.Identity.Application.Tokens;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EnterpriseCommerce.Identity.Application;
@@ -9,11 +11,18 @@ namespace EnterpriseCommerce.Identity.Application;
 /// </summary>
 public static class DependencyInjection
 {
-    public static IServiceCollection AddIdentityApplication(this IServiceCollection services)
+    /// <param name="services">The service collection.</param>
+    /// <param name="reuseSettings">Client facts of the refresh-token reuse policy (ADR-017 section 5).</param>
+    public static IServiceCollection AddIdentityApplication(this IServiceCollection services, RefreshReuseSettings reuseSettings)
     {
         ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(reuseSettings);
 
+        services.AddSingleton(reuseSettings);
         services.AddScoped<LogoutAllSessionsHandler>();
+        services.AddScoped<SecurityStateReader>();
+        services.AddScoped<RefreshTokenReuseHandler>();
+        services.AddScoped<TokenGrantGuard>();
 
         return services;
     }

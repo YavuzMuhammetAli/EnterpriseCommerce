@@ -1,4 +1,5 @@
 using EnterpriseCommerce.Identity.Application.Security;
+using EnterpriseCommerce.Identity.Domain.Accounts;
 using EnterpriseCommerce.Identity.Domain.Security;
 using EnterpriseCommerce.Identity.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +16,41 @@ internal sealed class AuthoritativeSecurityUnit(
     IdentityServiceDbContext context,
     IOpenIddictAuthorizationManager authorizations) : IAuthoritativeSecurityUnit
 {
+    public async Task<AccountSignInState?> ReadAccountStateAsync(string userId, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+
+        var account = await context.Users
+            .AsNoTracking()
+            .Where(user => user.Id == userId)
+            .Select(user => new { user.Status, user.EmailConfirmed })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        return account is null ? null : new AccountSignInState(account.Status, account.EmailConfirmed);
+    }
+
+    public async Task<bool> TryRecordRefreshRedemptionAsync(
+        string tokenId,
+        string? authorizationId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tokenId);
+
+        try
+        {
+            await context.Database.ExecuteSqlAsync(
+                $"INSERT INTO [RefreshTokenRedemptions] ([TokenId], [AuthorizationId], [RedeemedAt]) VALUES ({tokenId}, {authorizationId}, {now})",
+                cancellationToken);
+            return true;
+        }
+        catch (Exception exception) when (SqlServerErrors.IsUniqueViolation(exception))
+        {
+            // The primary key on the token entry ID admits exactly one redemption: this request is a reuse.
+            return false;
+        }
+    }
+
     public async Task<long?> ReadSecurityVersionAsync(string userId, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(userId);

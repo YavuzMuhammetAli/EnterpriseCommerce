@@ -1,0 +1,25 @@
+@page "/account/login"
+@model EnterpriseCommerce.Identity.Api.Pages.Account.LoginModel
+@{
+    ViewData["Title"] = "Sign in";
+}
+<h1>Sign in</h1>
+
+@if (Model.ErrorMessage is not null)
+{
+    <p role="alert">@Model.ErrorMessage</p>
+}
+
+@if (Model.ShowConfirmEmailHint)
+{
+    <p role="status">Confirm your email address to continue. Check your inbox for the confirmation link.</p>
+}
+
+<form method="post">
+    <input type="hidden" asp-for="ReturnUrl" />
+    <label asp-for="Input.Email">Email</label>
+    <input asp-for="Input.Email" type="email" autocomplete="username" required />
+    <label asp-for="Input.Password">Password</label>
+    <input asp-for="Input.Password" type="password" autocomplete="current-password" required />
+    <button type="submit">Sign in</button>
+</form>

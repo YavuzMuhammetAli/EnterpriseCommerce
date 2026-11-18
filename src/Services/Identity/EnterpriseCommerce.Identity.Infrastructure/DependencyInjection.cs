@@ -50,6 +50,19 @@ public static class DependencyInjection
         services.AddOpenIddict()
             .AddCore(options => options.UseEntityFrameworkCore().UseDbContext<IdentityServiceDbContext>());
 
+        // ASP.NET Core Identity user store only: no roles (ADR-015 A3) and no framework email or reset tokens,
+        // which are replaced by persisted single-use tokens (ADR-018).
+        services.AddIdentityCore<ApplicationUser>(options =>
+            {
+                options.User.RequireUniqueEmail = true;
+                options.SignIn.RequireConfirmedEmail = true;
+                options.Lockout.AllowedForNewUsers = true;
+                options.Lockout.MaxFailedAccessAttempts = 5;
+                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+                options.Password.RequiredLength = 12;
+            })
+            .AddEntityFrameworkStores<IdentityServiceDbContext>();
+
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<IAuthoritativeSecurityTransaction, AuthoritativeSecurityTransaction>();
         services.AddSingleton<ISessionRevocationCleanup, SessionRevocationCleanup>();

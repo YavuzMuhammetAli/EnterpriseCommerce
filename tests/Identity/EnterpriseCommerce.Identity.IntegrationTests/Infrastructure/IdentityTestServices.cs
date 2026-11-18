@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
 using EnterpriseCommerce.Identity.Application;
+using EnterpriseCommerce.Identity.Application.Tokens;
 using EnterpriseCommerce.Identity.Domain.Accounts;
 using EnterpriseCommerce.Identity.Domain.Security;
 using EnterpriseCommerce.Identity.Infrastructure;
@@ -32,7 +33,7 @@ internal static class IdentityTestServices
         var services = new ServiceCollection()
             .AddLogging()
             .AddSingleton<IConfiguration>(configuration)
-            .AddIdentityApplication()
+            .AddIdentityApplication(new RefreshReuseSettings("bff-admin"))
             .AddIdentityInfrastructure(configuration);
 
         configure?.Invoke(services);
@@ -55,6 +56,7 @@ internal static class IdentityTestServices
             Email = email,
             NormalizedEmail = email.ToUpperInvariant(),
             EmailConfirmed = true,
+            LockoutEnabled = true,
             SecurityStamp = Guid.NewGuid().ToString(),
             Status = AccountStatus.Active,
             CreatedAt = DateTimeOffset.UtcNow,

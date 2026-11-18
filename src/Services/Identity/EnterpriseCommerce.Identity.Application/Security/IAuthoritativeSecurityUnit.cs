@@ -1,3 +1,4 @@
+using EnterpriseCommerce.Identity.Domain.Accounts;
 using EnterpriseCommerce.Identity.Domain.Security;
 
 namespace EnterpriseCommerce.Identity.Application.Security;
@@ -11,6 +12,15 @@ namespace EnterpriseCommerce.Identity.Application.Security;
 /// </summary>
 public interface IAuthoritativeSecurityUnit
 {
+    /// <summary>Reads the account facts that decide sign-in, or <see langword="null"/> when the user does not exist.</summary>
+    Task<AccountSignInState?> ReadAccountStateAsync(string userId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Records the redemption of a refresh token entry in the redemption ledger (ADR-017 section 5).
+    /// Returns <see langword="false"/> when the entry was already recorded, which means the token is being reused.
+    /// </summary>
+    Task<bool> TryRecordRefreshRedemptionAsync(string tokenId, string? authorizationId, DateTimeOffset now, CancellationToken cancellationToken);
+
     /// <summary>Reads the user's current security version, or <see langword="null"/> when the record is missing.</summary>
     Task<long?> ReadSecurityVersionAsync(string userId, CancellationToken cancellationToken);
 

@@ -16,5 +16,6 @@ public sealed class IdentityApiFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder) =>
         builder
             .UseEnvironment("Development")
-            .UseSetting("ConnectionStrings:IdentityDatabase", UnusedDatabase);
+            .UseSetting("ConnectionStrings:IdentityDatabase", UnusedDatabase)
+            .UseSetting("Identity:Issuer", "https://localhost/");
 }

@@ -1,5 +1,6 @@
 using EnterpriseCommerce.Identity.Application.Security;
 using EnterpriseCommerce.Identity.Application.Sessions;
+using EnterpriseCommerce.Identity.Domain.Accounts;
 using EnterpriseCommerce.Identity.Domain.Security;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -75,6 +76,11 @@ public sealed class LogoutAllSessionsHandlerTests
             Committed = decision.ShouldCommit;
             return decision.Result;
         }
+
+        public Task<AccountSignInState?> ReadAccountStateAsync(string userId, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<bool> TryRecordRefreshRedemptionAsync(string tokenId, string? authorizationId, DateTimeOffset now, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
 
         public Task<long?> ReadSecurityVersionAsync(string userId, CancellationToken cancellationToken) => Task.FromResult(_version);
 

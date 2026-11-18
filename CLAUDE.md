@@ -120,7 +120,7 @@ dotnet test --solution EnterpriseCommerce.sln -c Release            # Microsoft.
 export EC_TEST_SQLSERVER='Server=(localdb)\MSSQLLocalDB;Integrated Security=true;TrustServerCertificate=true'   # or the Compose sqlserver profile
 dotnet tool restore                                                 # dotnet-ef (dotnet-tools.json)
 dotnet tool run dotnet-ef migrations add <Name> --project src/Services/Identity/EnterpriseCommerce.Identity.Infrastructure --output-dir Persistence/Migrations --namespace EnterpriseCommerce.Identity.Infrastructure.Persistence.Migrations
-dotnet run --project src/Services/Identity/EnterpriseCommerce.Identity.Api --launch-profile http   # http://localhost:5101
+dotnet run --project src/Services/Identity/EnterpriseCommerce.Identity.Api --launch-profile https  # https://localhost:7101 (issuer; OpenIddict requires HTTPS)
 dotnet run --project src/Gateway/EnterpriseCommerce.Gateway --launch-profile http                  # http://localhost:5000
 
 cd deploy/docker && cp .env.example .env                            # once

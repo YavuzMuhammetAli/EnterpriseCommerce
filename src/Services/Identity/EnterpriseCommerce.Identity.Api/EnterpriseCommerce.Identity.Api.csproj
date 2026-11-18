@@ -4,6 +4,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="OpenIddict.AspNetCore" />
     <PackageReference Include="Serilog.AspNetCore" />
   </ItemGroup>
 
@@ -13,6 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="EnterpriseCommerce.Identity.IntegrationTests" />
     <InternalsVisibleTo Include="EnterpriseCommerce.Identity.UnitTests" />
   </ItemGroup>
 
