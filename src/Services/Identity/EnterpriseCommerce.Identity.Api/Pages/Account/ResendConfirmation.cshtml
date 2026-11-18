@@ -1,0 +1,12 @@
+@page "/account/resend-confirmation"
+@model EnterpriseCommerce.Identity.Api.Pages.Account.ResendConfirmationModel
+@{
+    ViewData["Title"] = "Resend the confirmation email";
+}
+<h1>Resend the confirmation email</h1>
+
+<form method="post">
+    <label asp-for="Email">Email</label>
+    <input asp-for="Email" type="email" autocomplete="username" required />
+    <button type="submit">Send</button>
+</form>

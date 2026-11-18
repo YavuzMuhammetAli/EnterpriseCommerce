@@ -95,7 +95,25 @@ public sealed class LogoutAllSessionsHandlerTests
         public Task<string?> TryConsumeSecurityTokenAsync(string tokenHash, SecurityTokenPurpose purpose, DateTimeOffset now, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
-        public Task<int> SupersedeSecurityTokensAsync(string userId, DateTimeOffset now, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<int> SupersedeSecurityTokensAsync(string userId, SecurityTokenPurpose? purpose, DateTimeOffset now, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<AccountCreation> CreateAccountAsync(string email, string password, DateTimeOffset now, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<AccountByEmail?> FindAccountByEmailAsync(string normalizedEmail, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<bool> ConfirmEmailAsync(string userId, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<DateTime?> LockAccountForSecurityEmailAsync(string userId, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<DateTime>> ReadSecurityEmailRequestTimesAsync(string userId, SecurityTokenPurpose purpose, DateTime since, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<Guid> CreateSecurityEmailDeliveryAsync(string userId, SecurityTokenPurpose purpose, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<bool> LinkSecurityEmailTokenAsync(Guid deliveryId, Guid tokenId, CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public Task<bool> TryRevokeAuthorizationAsync(string authorizationId, CancellationToken cancellationToken) => throw new NotSupportedException();
     }

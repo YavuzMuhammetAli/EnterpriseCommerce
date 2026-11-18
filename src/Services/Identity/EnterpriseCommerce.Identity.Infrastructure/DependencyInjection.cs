@@ -1,6 +1,9 @@
+using EnterpriseCommerce.Identity.Application.Accounts;
 using EnterpriseCommerce.Identity.Application.Security;
+using EnterpriseCommerce.Identity.Application.SecurityEmails;
 using EnterpriseCommerce.Identity.Infrastructure.Persistence;
 using EnterpriseCommerce.Identity.Infrastructure.Security;
+using EnterpriseCommerce.Identity.Infrastructure.SecurityEmails;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -55,6 +58,9 @@ public static class DependencyInjection
         services.AddIdentityCore<ApplicationUser>(options =>
             {
                 options.User.RequireUniqueEmail = true;
+
+                // The user name is the validated email address (AccountEmail); no second character filter.
+                options.User.AllowedUserNameCharacters = string.Empty;
                 options.SignIn.RequireConfirmedEmail = true;
                 options.Lockout.AllowedForNewUsers = true;
                 options.Lockout.MaxFailedAccessAttempts = 5;
@@ -66,7 +72,49 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<IAuthoritativeSecurityTransaction, AuthoritativeSecurityTransaction>();
         services.AddSingleton<ISessionRevocationCleanup, SessionRevocationCleanup>();
+        services.AddScoped<IAccountPasswordPolicy, AccountPasswordPolicy>();
+
+        AddSecurityEmailDelivery(services, configuration);
 
         return services;
+    }
+
+    /// <summary>
+    /// Security email delivery (ADR-018 section 3): delivery records, the bounded queue, one worker, status-only
+    /// reconciliation, and the Notification integration as the only <see cref="ISecurityEmailDispatcher"/>. The host
+    /// may replace the dispatcher with the isolated development mail sink (Identity.Api, Debug builds only).
+    /// </summary>
+    private static void AddSecurityEmailDelivery(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<SecurityEmailDeliveryOptions>()
+            .Bind(configuration.GetSection(SecurityEmailDeliveryOptions.SectionName))
+            .Validate(options => options.IsValid(), $"{SecurityEmailDeliveryOptions.SectionName} is out of range.")
+            .ValidateOnStart();
+        services.AddOptions<NotificationDeliveryOptions>()
+            .Bind(configuration.GetSection(NotificationDeliveryOptions.SectionName));
+
+        services.AddSingleton(provider =>
+        {
+            var options = provider.GetRequiredService<IOptions<SecurityEmailDeliveryOptions>>().Value;
+            var issuer = configuration["Identity:Issuer"] is { Length: > 0 } value
+                ? new Uri(value, UriKind.Absolute)
+                : throw new InvalidOperationException("Identity:Issuer is required to build security email links.");
+            return new SecurityEmailSettings(
+                new Uri(issuer, options.ConfirmationPath),
+                options.ConfirmationTokenLifetime,
+                options.MaxDispatchAttempts,
+                options.RetryBaseDelay);
+        });
+
+        services.AddSingleton<SecurityEmailQueue>();
+        services.AddSingleton<ISecurityEmailQueue>(provider => provider.GetRequiredService<SecurityEmailQueue>());
+        services.AddScoped<ISecurityEmailDeliveryStore, SecurityEmailDeliveryStore>();
+        services.AddHostedService<SecurityEmailDeliveryWorker>();
+        services.AddHostedService<SecurityEmailReconciler>();
+
+        services.AddSingleton<NotificationServiceTokenProvider>();
+        services.AddHttpClient(NotificationServiceTokenProvider.HttpClientName);
+        services.AddHttpClient<ISecurityEmailDispatcher, NotificationSecurityEmailDispatcher>((provider, client) =>
+            client.Timeout = provider.GetRequiredService<IOptions<NotificationDeliveryOptions>>().Value.Timeout);
     }
 }

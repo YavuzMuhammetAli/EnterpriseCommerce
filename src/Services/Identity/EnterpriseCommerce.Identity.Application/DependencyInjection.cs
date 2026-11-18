@@ -1,4 +1,6 @@
+using EnterpriseCommerce.Identity.Application.Accounts;
 using EnterpriseCommerce.Identity.Application.Security;
+using EnterpriseCommerce.Identity.Application.SecurityEmails;
 using EnterpriseCommerce.Identity.Application.Sessions;
 using EnterpriseCommerce.Identity.Application.Tokens;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,6 +25,11 @@ public static class DependencyInjection
         services.AddScoped<SecurityStateReader>();
         services.AddScoped<RefreshTokenReuseHandler>();
         services.AddScoped<TokenGrantGuard>();
+        services.AddScoped<RegisterAccountHandler>();
+        services.AddScoped<ResendConfirmationHandler>();
+        services.AddScoped<ConfirmEmailHandler>();
+        services.AddScoped<SecurityEmailScheduler>();
+        services.AddScoped<SecurityEmailDeliveryProcessor>();
 
         return services;
     }

@@ -1,0 +1,23 @@
+@page "/account/register"
+@model EnterpriseCommerce.Identity.Api.Pages.Account.RegisterModel
+@{
+    ViewData["Title"] = "Create account";
+}
+<h1>Create account</h1>
+
+@foreach (var error in Model.Errors)
+{
+    <p role="alert">@error</p>
+}
+
+<form method="post">
+    <label asp-for="Input.Email">Email</label>
+    <input asp-for="Input.Email" type="email" autocomplete="username" required />
+    <label asp-for="Input.Password">Password</label>
+    <input asp-for="Input.Password" type="password" autocomplete="new-password" required />
+    <label asp-for="Input.ConfirmPassword">Repeat the password</label>
+    <input asp-for="Input.ConfirmPassword" type="password" autocomplete="new-password" required />
+    <button type="submit">Create account</button>
+</form>
+
+<p><a href="/account/login">Sign in</a></p>

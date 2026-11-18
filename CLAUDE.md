@@ -134,6 +134,8 @@ docker compose --profile <name> down                                # same profi
 - Windows, Docker Desktop on WSL2. The Docker VM has about 3.8 GB of memory, so **start only the profiles you need**. The `all` profile does not fit as configured.
 - A locally installed MongoDB uses port 27017. Use `MONGO_PORT=27018` for the Compose MongoDB.
 - In Git Bash, prefix `docker compose exec` commands that pass container paths with `MSYS_NO_PATHCONV=1`.
+- SQL-backed tests must also pass against the Compose SQL Server 2022 (`--profile sqlserver`), not only LocalDB: `EC_TEST_SQLSERVER='Server=127.0.0.1,1433;User ID=sa;Password=<from deploy/docker/.env>;TrustServerCertificate=true'`.
+- Identity security emails in Development: `docker compose --profile mailsink up -d --wait`, then run a Debug build with `Identity__DevelopmentMailSink__Enabled=true` and read the mail at http://localhost:8025. Never commit that flag.
 - Identity needs `ConnectionStrings__IdentityDatabase` (environment or user secrets; never committed). In Development, `Identity__Database__ApplyMigrationsAtStartup=true` applies the migrations at startup.
 - `dotnet ef migrations add` puts the model snapshot under a namespace-derived folder when `--namespace` is used. Move it into `Persistence/Migrations` and delete the generated folder.
 - The Phase 1 audit findings and open items are in [docs/architecture/PHASE_1_FINAL_AUDIT.md](docs/architecture/PHASE_1_FINAL_AUDIT.md).

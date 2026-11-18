@@ -41,7 +41,7 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
   - ASP.NET Core Identity roles are not authoritative for platform or merchant roles.
 - Token, session and protocol strategy (decided in Phase 2.2, [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md)): Identity has its own host behind the Gateway, hosts the account UI for every credential entry, and owns the per-user security version and the refresh-token redemption ledger.
 - Account security tokens ([ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)): Identity creates, hashes and consumes confirmation and reset tokens, and hands security emails to Notification through a bounded in-process queue. It does not own email delivery.
-- Open: the detailed data model, designed in the Phase 2.3 implementation within these ADRs.
+- Implementation (Phase 2.3): persistence and the authoritative transaction, login, authorization code + PKCE, token issuance with the redemption ledger and reuse policy, trusted forwarded headers, log redaction and health checks, registration and email confirmation with the security email queue, worker and reconciliation. See [PHASE_2_IDENTITY_DESIGN_BRIEF.md](PHASE_2_IDENTITY_DESIGN_BRIEF.md#phase-23-implementation-progress).
 - API contract: [IDENTITY_API_CONTRACT.md](../api/IDENTITY_API_CONTRACT.md).
 - Phase 1 state: a compilable four-layer skeleton with a health endpoint, OpenAPI, exception handling and structured logging. **No identity features.**
 
@@ -133,7 +133,7 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
   - notification delivery status
   - retry and failure handling
 - Mostly event-driven. It must not become a place where other services' business rules live.
-- Security emails (confirmation and password reset links) arrive through an authenticated internal endpoint called by Identity with a service token, never through Kafka. Notification never persists the link or the rendered body of a security email ([ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)).
+- Security emails (confirmation and password reset links) arrive through an authenticated internal endpoint called by Identity with a service token, never through Kafka. Notification never persists the link or the rendered body of a security email ([ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)). The endpoint contract Identity calls is defined in [IDENTITY_API_CONTRACT.md section 4a](../api/IDENTITY_API_CONTRACT.md#4a-outbound-security-email-handover-to-notification-internal); Notification has not implemented it yet.
 
 ## 10. Admin
 

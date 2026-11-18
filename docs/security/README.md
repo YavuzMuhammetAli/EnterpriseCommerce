@@ -37,10 +37,13 @@ Accepted authentication and session security (Phase 2.2):
 
 The threat matrix, residual risks and required security tests are in [PHASE_2_2_AUTHENTICATION_FLOWS.md](../architecture/PHASE_2_2_AUTHENTICATION_FLOWS.md#10-failure-and-threat-matrix) (sections 10 and 11).
 
+**Implemented safeguards for security emails (Phase 2.3 S3, ADR-018):** confirmation tokens are minted only after the delivery worker claims a delivery, stored as SHA-256 hashes, consumed only by POST, and never logged. The development mail sink is isolated by five layers: a Debug-only project reference, `#if DEBUG` registration, a runtime guard (Development, explicit opt-in, loopback or the Compose host `mailpit`), a startup failure outside Development if its settings or assembly are present, and CI checks (architecture tests and the Release publish output).
+
 **Verification gates before any production-like deployment:**
 
 - **Real Safari** (macOS and iOS): login, refresh, logout, cookie attributes and CSRF. Playwright WebKit results do not count as Safari evidence (ADR-016 section 8).
 - MFA for platform administrators (Phase 2.2 decision D17, deferred).
+- Notification must implement the internal security email endpoint ([IDENTITY_API_CONTRACT.md section 4a](../api/IDENTITY_API_CONTRACT.md#4a-outbound-security-email-handover-to-notification-internal)). Identity refuses to start outside Development until it is configured.
 
 Open topics for dedicated design steps:
 

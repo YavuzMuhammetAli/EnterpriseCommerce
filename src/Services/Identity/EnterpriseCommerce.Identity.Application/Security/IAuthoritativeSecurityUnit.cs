@@ -43,8 +43,38 @@ public interface IAuthoritativeSecurityUnit
         DateTimeOffset now,
         CancellationToken cancellationToken);
 
-    /// <summary>Supersedes every outstanding token of the user, whatever its purpose. Returns the number superseded.</summary>
-    Task<int> SupersedeSecurityTokensAsync(string userId, DateTimeOffset now, CancellationToken cancellationToken);
+    /// <summary>
+    /// Supersedes the user's outstanding tokens of one purpose, or of every purpose when <paramref name="purpose"/> is
+    /// <see langword="null"/>. Returns the number superseded.
+    /// </summary>
+    Task<int> SupersedeSecurityTokensAsync(string userId, SecurityTokenPurpose? purpose, DateTimeOffset now, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Creates an account with an unconfirmed email, applying the ASP.NET Core Identity password policy and the unique
+    /// normalized email, together with its security-version record. Both commit or neither does.
+    /// </summary>
+    Task<AccountCreation> CreateAccountAsync(string email, string password, DateTimeOffset now, CancellationToken cancellationToken);
+
+    /// <summary>Finds an account by its normalized email, or <see langword="null"/>.</summary>
+    Task<AccountByEmail?> FindAccountByEmailAsync(string normalizedEmail, CancellationToken cancellationToken);
+
+    /// <summary>Marks the email of an active account as confirmed. Returns <see langword="false"/> when no row qualified.</summary>
+    Task<bool> ConfirmEmailAsync(string userId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Locks the account's security-version row until the transaction ends, serializing security email requests of
+    /// one account across Identity instances. Returns the database clock, or <see langword="null"/> when the record is missing.
+    /// </summary>
+    Task<DateTime?> LockAccountForSecurityEmailAsync(string userId, CancellationToken cancellationToken);
+
+    /// <summary>Creation times (database clock) of the account's deliveries of one purpose since <paramref name="since"/>.</summary>
+    Task<IReadOnlyList<DateTime>> ReadSecurityEmailRequestTimesAsync(string userId, SecurityTokenPurpose purpose, DateTime since, CancellationToken cancellationToken);
+
+    /// <summary>Records a new <c>Queued</c> delivery. No token exists until the worker claims it.</summary>
+    Task<Guid> CreateSecurityEmailDeliveryAsync(string userId, SecurityTokenPurpose purpose, CancellationToken cancellationToken);
+
+    /// <summary>Links a minted token to a delivery that is still dispatching. Returns <see langword="false"/> otherwise.</summary>
+    Task<bool> LinkSecurityEmailTokenAsync(Guid deliveryId, Guid tokenId, CancellationToken cancellationToken);
 
     /// <summary>
     /// Revokes one authorization (one client session).
@@ -52,3 +82,17 @@ public interface IAuthoritativeSecurityUnit
     /// </summary>
     Task<bool> TryRevokeAuthorizationAsync(string authorizationId, CancellationToken cancellationToken);
 }
+
+/// <summary>Result of <see cref="IAuthoritativeSecurityUnit.CreateAccountAsync"/>.</summary>
+public enum AccountCreationStatus
+{
+    Created,
+    DuplicateEmail,
+    Rejected,
+}
+
+/// <summary>Result of an account creation. <paramref name="UserId"/> is set only when created.</summary>
+public sealed record AccountCreation(AccountCreationStatus Status, string? UserId);
+
+/// <summary>An account found by email.</summary>
+public sealed record AccountByEmail(string UserId, AccountSignInState State);

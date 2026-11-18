@@ -14,6 +14,20 @@ This brief defines the scope, questions and evaluation criteria for designing th
 
 Inputs: [PROJECT_DECISIONS.md](PROJECT_DECISIONS.md) (especially sections 5, 7 and 10), [SERVICE_CATALOG.md](SERVICE_CATALOG.md), [ADR-007](../decisions/ADR-007-yarp-api-gateway.md) and [ADR-014](../decisions/ADR-014-logical-tenant-isolation.md).
 
+## Phase 2.3 implementation progress
+
+| Slice | Content | Status |
+|---|---|---|
+| S1 | Persistence, migrations, authoritative transaction with whole-transaction deadlock retry, post-commit cleanup | Done |
+| S2 | Identity-hosted login, authorization code + PKCE, token issuance, redemption ledger, presenter-checked reuse policy | Done |
+| S3 | Registration, email confirmation, resend limits, security email delivery records, bounded queue, worker, status-only reconciliation, Notification adapter, isolated development mail sink | Done |
+| S5 | Gateway routing and trusted forwarded headers | Done |
+| S6 | Log redaction guard, health checks, CI secret scan | Done (first part) |
+| S4 | Logout and revocation endpoints, logout-all endpoint, password reset and change | Next |
+| S7 | Backend-for-frontend and the dedicated session Redis | Not started |
+
+Implementation findings are recorded in [PHASE_2_2_AUTHENTICATION_FLOWS.md section 11.7](PHASE_2_2_AUTHENTICATION_FLOWS.md#117-implementation-findings-phase-23).
+
 ## Prerequisites
 
 1. **API contract baseline.** The Phase 0.3 Identity API baseline is preserved in [IDENTITY_API_CONTRACT.md](../api/IDENTITY_API_CONTRACT.md). Its endpoint areas, conventions and claim set are the baseline. Exact paths and fields are marked *Reconstructed* and must be confirmed against the original Phase 0.3 design during Phase 2 review.

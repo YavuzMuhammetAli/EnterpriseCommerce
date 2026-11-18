@@ -23,3 +23,33 @@ internal sealed class RefreshTokenRedemption
 
     public DateTimeOffset RedeemedAt { get; set; }
 }
+
+/// <summary>
+/// One security email delivery (ADR-018 section 3). It never holds the raw token, the link or the email body:
+/// only the delivery state and, once minted, the ID of the hashed token record. Timestamps are UTC from the
+/// database clock (<c>SYSUTCDATETIME()</c>).
+/// </summary>
+internal sealed class SecurityEmailDeliveryRecord
+{
+    public Guid Id { get; set; }
+
+    public string UserId { get; set; } = string.Empty;
+
+    public Domain.Security.SecurityTokenPurpose Purpose { get; set; }
+
+    public Domain.SecurityEmails.SecurityEmailDeliveryStatus Status { get; set; }
+
+    public int AttemptCount { get; set; }
+
+    public DateTime CreatedAt { get; set; }
+
+    public DateTime? ClaimedAt { get; set; }
+
+    public DateTime? CompletedAt { get; set; }
+
+    /// <summary>A coarse, non-sensitive reason for a final failure (for example <c>queue-full</c>).</summary>
+    public string? ErrorCategory { get; set; }
+
+    /// <summary>The hashed token record minted for this delivery after the claim.</summary>
+    public Guid? SecurityTokenId { get; set; }
+}

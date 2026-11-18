@@ -75,7 +75,10 @@ public sealed partial class SensitiveLogRedactionTests(LogCapturingIdentityServe
         }
 
         var events = identity.Sink.Events.ToList();
-        Assert.NotEmpty(events);
+
+        // The capture must include the request-time security events, not only startup logs.
+        Assert.Contains(events, entry => entry.Contains("RefreshTokenReuseDetected", StringComparison.Ordinal));
+        Assert.Contains(events, entry => entry.Contains("LoginFailed", StringComparison.Ordinal));
 
         foreach (var secret in secrets)
         {
@@ -85,6 +88,46 @@ public sealed partial class SensitiveLogRedactionTests(LogCapturingIdentityServe
         Assert.DoesNotContain(events, entry => JwtLike().IsMatch(entry));
         Assert.DoesNotContain(events, entry => SensitiveParameter().IsMatch(entry));
     }
+
+    [Fact]
+    public async Task RegistrationAndConfirmation_NeverLogTheConfirmationToken_TheLink_OrThePassword()
+    {
+        identity.RequireAvailable();
+        var email = $"log-{Guid.NewGuid():N}@example.test";
+        using var browser = identity.CreateBrowser();
+
+        using (await identity.RegisterAsync(browser, email))
+        {
+        }
+
+        var message = Assert.Single(await identity.Dispatcher.WaitForAsync(email));
+        var token = Infrastructure.CapturingSecurityEmailDispatcher.TokenOf(message);
+        using (await browser.GetAsync(message.Link.PathAndQuery, TestContext.Current.CancellationToken))
+        {
+        }
+
+        using (var confirm = await identity.SubmitPageFormAsync(browser, message.Link.PathAndQuery, new Dictionary<string, string> { ["Token"] = token }))
+        {
+            Assert.Contains("Your email address is confirmed", await confirm.Content.ReadAsStringAsync(TestContext.Current.CancellationToken), StringComparison.Ordinal);
+        }
+
+        // A replay produces a SecurityTokenRejected event; it must not carry the token either.
+        using (await identity.SubmitPageFormAsync(browser, message.Link.PathAndQuery, new Dictionary<string, string> { ["Token"] = token }))
+        {
+        }
+
+        var events = identity.Sink.Events.ToList();
+        // The capture must include the request-time security events, not only startup logs.
+        Assert.Contains(events, entry => entry.Contains("EmailConfirmed", StringComparison.Ordinal));
+        Assert.Contains(events, entry => entry.Contains("SecurityTokenRejected", StringComparison.Ordinal));
+        Assert.DoesNotContain(events, entry => entry.Contains(token, StringComparison.Ordinal));
+        Assert.DoesNotContain(events, entry => entry.Contains(message.Link.AbsoluteUri, StringComparison.Ordinal));
+        Assert.DoesNotContain(events, entry => entry.Contains(IdentityServerFixture.Password, StringComparison.Ordinal));
+        Assert.DoesNotContain(events, entry => SensitiveParameter().IsMatch(entry) || TokenParameter().IsMatch(entry));
+    }
+
+    [GeneratedRegex(@"token=[A-Za-z0-9_-]{20,}")]
+    private static partial Regex TokenParameter();
 
     /// <summary>Compact JWS/JWE serializations: access, ID and refresh tokens, codes and client assertions.</summary>
     [GeneratedRegex(@"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}")]

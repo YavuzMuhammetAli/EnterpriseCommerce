@@ -12,6 +12,14 @@ internal static partial class CredentialFormProtection
     public static IApplicationBuilder UseCredentialFormProtection(this IApplicationBuilder app) =>
         app.Use(async (context, next) =>
         {
+            if (context.Request.Path.StartsWithSegments(AccountPathPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                // Account pages may carry credentials or single-use tokens (ADR-018 section 1).
+                context.Response.Headers.CacheControl = "no-store";
+                context.Response.Headers["Referrer-Policy"] = "no-referrer";
+                context.Response.Headers.XContentTypeOptions = "nosniff";
+            }
+
             if (HttpMethods.IsPost(context.Request.Method)
                 && context.Request.Path.StartsWithSegments(AccountPathPrefix, StringComparison.OrdinalIgnoreCase)
                 && !IsSameOrigin(context.Request))

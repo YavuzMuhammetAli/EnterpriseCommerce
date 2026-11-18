@@ -106,10 +106,16 @@ Page paths are implementation details of Identity.Api and are not a client contr
 
 ### 2.2 Registration (page)
 
-- **Fields:** email, password, and optional profile fields such as a display name (final field list: implementation).
-- **Outcome:** the same neutral "check your inbox" page whether or not the email is already registered (enumeration resistance). A new account is created with an unconfirmed email. An existing address receives a "someone tried to register with your address" email.
+**Implemented (Phase 2.3 S3).** Page: `/account/register`.
+
+- **Fields:** email, password, password repeated. Profile fields are not collected yet.
+- **Server-side validation** (shown on the page): a plain email address (no display name, at most 256 characters, normalized upper-invariant for uniqueness) and the ASP.NET Core Identity password policy (at least 12 characters, upper case, lower case, digit, symbol). These checks never depend on whether the account exists.
+- **Outcome:** a redirect to the neutral page `/account/check-email` in every accepted case, whether or not the email is already registered (enumeration resistance).
+  - New address: one authoritative transaction creates the account (email unconfirmed), its security-version record (version 1) and a queued confirmation delivery. The user is **not** signed in.
+  - Existing, still unconfirmed account: nothing is created. A confirmation email is requested again within the resend limits.
+  - Existing, confirmed or disabled account: nothing is created and nothing is sent. The "someone tried to register with your address" notice is not implemented yet.
 - Registration creates an **identity only**. Tenant, merchant and membership creation belong to Tenant & Merchant ([SERVICE_CATALOG.md](../architecture/SERVICE_CATALOG.md)).
-- **Accepted:** an account cannot sign in before its email is confirmed.
+- An account cannot sign in before its email is confirmed.
 
 ### 2.3 Login and token issuance (protocol)
 
@@ -140,13 +146,21 @@ Page paths are implementation details of Identity.Api and are not a client contr
 
 ### 2.7 Email confirmation
 
-Identity-hosted pages.
+**Implemented (Phase 2.3 S3).** Identity-hosted pages ([ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)).
 
+| Page | Behaviour |
+|---|---|
+| `GET /account/confirm-email?token=...` | Renders a form with a "Confirm my email address" button. **Never consumes the token**, so email scanners and link previews change nothing. |
+| `POST /account/confirm-email` | Consumes the token and confirms the email in one authoritative transaction. Success: "Your email address is confirmed". Every failure (invalid, expired, superseded, consumed, account not active) shows one generic message with a link to request a new email. The token is never echoed back. |
+| `GET/POST /account/resend-confirmation` | Takes an email address. Always redirects to `/account/check-email`. |
 
-- The link carries only a random token, never the user ID or email address.
-- Opening the link (GET) shows a page with a button. **Only the POST consumes the token.**
-- Confirmation tokens are **single-use, time-limited and stored hashed** ([ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)). An invalid, expired, superseded or consumed token gets one generic error with a link to request a new email.
-- **Resend:** always the same neutral response. It issues a new token and supersedes the previous one, within the resend limits.
+- The link carries only a 256-bit random token (URL-safe Base64, 43 characters), never the user ID or the email address. Only its SHA-256 hash is stored. The token is looked up by hash; no request parameter selects the account.
+- Token lifetime: **24 hours**. Only one unconsumed confirmation token exists per account: minting a new one supersedes the earlier ones, and a successful confirmation supersedes any remaining one.
+- The token is minted only when the delivery worker claims the delivery, so a delivery that is never dispatched never creates a token.
+- **Resend limits** per account and purpose: at most 3 emails per hour, at most 10 per day, and at least 60 seconds between two. Excess requests are suppressed silently: nothing is recorded, sent or minted, and the response is unchanged. The limits are enforced in the database under a per-account row lock, so they hold across Identity instances.
+- Unknown, confirmed and disabled addresses get the same response and no email.
+- All `/account/*` responses send `Cache-Control: no-store`, `Referrer-Policy: no-referrer` and `X-Content-Type-Options: nosniff`. POST requests also require the antiforgery token and pass the Fetch Metadata and exact `Origin` checks (ADR-016 section 6).
+- Rate limits: per IP in Identity (`Identity:RateLimits:CredentialRequestsPerMinute`) and at the Gateway for routes with the `identity-account` policy (`Gateway:RateLimits:IdentityAccountRequestsPerMinute`, default 30 per minute).
 
 ### 2.8 Password reset (pages)
 
@@ -208,7 +222,23 @@ Rules:
 3. The final error `type` URI scheme.
 4. Internal Admin endpoints for account disablement and reactivation: exact paths and the service scope name.
 
-Out of scope for this contract: MFA enrolment, external logins (social providers), and the internal Notification handoff endpoint (owned by Notification).
+Out of scope for this contract: MFA enrolment and external logins (social providers).
+
+## 4a. Outbound: security email handover to Notification (internal)
+
+**Defined by Identity in Phase 2.3 S3. Not yet implemented by Notification.** Identity calls it from its delivery worker (ADR-018 section 3). Until Notification provides it, Identity cannot run outside Development.
+
+`POST {Notification internal base address}/internal/v1/security-emails`
+
+| Part | Content |
+|---|---|
+| Authentication | `Authorization: Bearer <access token>`. Identity obtains it with the client credentials grant as the service client `svc-identity` (default), scope `svc.notification.security-email`, authenticating with `private_key_jwt` (typed `client-authentication+jwt`). |
+| `Idempotency-Key` | The delivery ID (a GUID). Retries of one delivery always reuse it, with the same link. Notification must treat a repeated key as the same email and answer `2xx` or `409`. |
+| Body (JSON) | `deliveryId` (GUID), `purpose` (`EmailConfirmation`), `recipient` (email address), `link` (absolute URL that contains the token). |
+| Responses | `2xx` or `409`: accepted. `401`, `408`, `429`, `5xx`: transient, retried. Other `4xx`: rejected, not retried. A timeout or broken connection after sending is an unknown outcome and is retried with the same key. |
+| Notification obligations | Never log, persist or forward the link or the rendered body of a security email beyond delivery (PHASE_2_2_AUTHENTICATION_FLOWS.md section 5.6.4). Authorize the calling client and scope. |
+
+Identity configuration: `Identity:Notification:BaseAddress`, `TokenEndpoint`, `Issuer`, `ClientId`, `PrivateKeyPath`, `Scope`, `Timeout`. The private key comes from a protected store and is never committed.
 
 ## 5. Changes from the Phase 0.3 baseline
 

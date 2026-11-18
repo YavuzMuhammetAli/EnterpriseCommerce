@@ -8,6 +8,8 @@
   -->
 
   <ItemGroup>
+    <!-- Identity.Api: its Release build must not reference the development mail sink (DevelopmentAdapterTests). -->
+    <ProjectReference Include="..\..\..\src\Services\Identity\EnterpriseCommerce.Identity.Api\EnterpriseCommerce.Identity.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Services\Identity\EnterpriseCommerce.Identity.Application\EnterpriseCommerce.Identity.Application.csproj" />
     <ProjectReference Include="..\..\..\src\Services\Identity\EnterpriseCommerce.Identity.Domain\EnterpriseCommerce.Identity.Domain.csproj" />
     <ProjectReference Include="..\..\..\src\Services\Identity\EnterpriseCommerce.Identity.Infrastructure\EnterpriseCommerce.Identity.Infrastructure.csproj" />

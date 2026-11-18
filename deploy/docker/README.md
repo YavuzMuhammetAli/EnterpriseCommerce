@@ -21,7 +21,8 @@ No service starts by default. Choose what you need:
 | `mongodb`   | MongoDB    | `mongo:8.0.38`                                          | `localhost:27017` | 1 GB (WiredTiger cache 0.5 GB) |
 | `redis`     | Redis      | `redis:8.8.4-alpine`                                    | `localhost:6379`  | 384 MB (maxmemory 256 MB) |
 | `kafka`     | Kafka (KRaft, single node) | `apache/kafka:4.4.0`                    | `localhost:9094`  | 1 GB (heap 512 MB) |
-| `all`       | all of the above | | | about 5 GB in total |
+| `mailsink`  | Mailpit (development mail catcher) | `axllent/mailpit:v1.34.0` | SMTP `localhost:1025`, inbox `http://localhost:8025` | 128 MB |
+| `all`       | SQL Server, MongoDB, Redis and Kafka | | | about 5 GB in total |
 
 ```bash
 docker compose --profile sqlserver up -d --wait     # start one component and wait for healthy
@@ -81,3 +82,19 @@ Services will receive connection settings through configuration and environment 
 ## Not included yet
 
 The observability stack (OpenTelemetry Collector, Prometheus, Grafana, Loki) is planned for a later phase and will be added as separate profiles (for example `observability`).
+
+## Development mail sink (Identity security emails)
+
+Identity sends confirmation emails through the Notification integration. Notification is not implemented yet, so in
+Development you can route them to a local mail catcher instead (ADR-018 section 4):
+
+```bash
+docker compose --profile mailsink up -d --wait
+# Debug build of Identity.Api, Development environment, explicit opt-in (never committed):
+Identity__DevelopmentMailSink__Enabled=true dotnet run --project src/Services/Identity/EnterpriseCommerce.Identity.Api --launch-profile https
+# Open http://localhost:8025 to read the emails.
+docker compose --profile mailsink down
+```
+
+The sink is accepted only on loopback or the Compose host `mailpit`. Release builds do not contain it, and outside
+Development Identity refuses to start if its settings or assembly are present.

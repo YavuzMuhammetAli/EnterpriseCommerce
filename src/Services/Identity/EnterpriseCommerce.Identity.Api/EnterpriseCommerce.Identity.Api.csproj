@@ -13,6 +13,14 @@
     <ProjectReference Include="..\EnterpriseCommerce.Identity.Infrastructure\EnterpriseCommerce.Identity.Infrastructure.csproj" />
   </ItemGroup>
 
+  <!--
+    ADR-018 section 4, isolation layer 1: the development mail sink is referenced in Debug builds only, so it is never
+    compiled into, or published with, a Release build. Verified by the architecture tests and the CI publish check.
+  -->
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <ProjectReference Include="..\EnterpriseCommerce.Identity.DevMailSink\EnterpriseCommerce.Identity.DevMailSink.csproj" />
+  </ItemGroup>
+
   <ItemGroup>
     <InternalsVisibleTo Include="EnterpriseCommerce.Identity.IntegrationTests" />
     <InternalsVisibleTo Include="EnterpriseCommerce.Identity.UnitTests" />

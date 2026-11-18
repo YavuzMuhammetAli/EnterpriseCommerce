@@ -55,6 +55,14 @@ jobs:
       - name: Build (warnings are errors)
         run: dotnet build EnterpriseCommerce.sln --configuration Release --no-restore
 
+      - name: Verify the Release publish output has no development adapter (ADR-018 section 4)
+        run: |
+          dotnet publish src/Services/Identity/EnterpriseCommerce.Identity.Api/EnterpriseCommerce.Identity.Api.csproj             --configuration Release --no-build --output publish/identity
+          if find publish/identity -iname '*DevMailSink*' | grep -q .; then
+            echo "::error::The development mail sink is present in the Release publish output."
+            exit 1
+          fi
+
       - name: Test (unit, integration, architecture)
         env:
           EC_TEST_SQLSERVER: "Server=127.0.0.1,1433;User ID=sa;Password=CiOnly_Ephemeral_Pa55word!;TrustServerCertificate=true"
@@ -86,7 +94,7 @@ jobs:
       - name: Validate every profile with placeholder environment
         run: |
           cp .env.example .env
-          for profile in sqlserver mongodb redis kafka all; do
+          for profile in sqlserver mongodb redis kafka mailsink all; do
             echo "Validating profile: $profile"
             docker compose --profile "$profile" config --quiet
           done

@@ -1,7 +1,9 @@
 using EnterpriseCommerce.Identity.Application.Security;
 using EnterpriseCommerce.Identity.Domain.Accounts;
 using EnterpriseCommerce.Identity.Domain.Security;
+using EnterpriseCommerce.Identity.Domain.SecurityEmails;
 using EnterpriseCommerce.Identity.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using OpenIddict.Abstractions;
 
@@ -14,7 +16,8 @@ namespace EnterpriseCommerce.Identity.Infrastructure.Security;
 /// </summary>
 internal sealed class AuthoritativeSecurityUnit(
     IdentityServiceDbContext context,
-    IOpenIddictAuthorizationManager authorizations) : IAuthoritativeSecurityUnit
+    IOpenIddictAuthorizationManager authorizations,
+    UserManager<ApplicationUser> users) : IAuthoritativeSecurityUnit
 {
     public async Task<AccountSignInState?> ReadAccountStateAsync(string userId, CancellationToken cancellationToken)
     {
@@ -116,13 +119,136 @@ internal sealed class AuthoritativeSecurityUnit(
         return consumedBy.Count == 1 ? consumedBy[0] : null;
     }
 
-    public Task<int> SupersedeSecurityTokensAsync(string userId, DateTimeOffset now, CancellationToken cancellationToken)
+    public Task<int> SupersedeSecurityTokensAsync(string userId, SecurityTokenPurpose? purpose, DateTimeOffset now, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(userId);
 
-        return context.AccountSecurityTokens
-            .Where(token => token.UserId == userId && token.ConsumedAt == null && token.SupersededAt == null)
-            .ExecuteUpdateAsync(setters => setters.SetProperty(token => token.SupersededAt, now), cancellationToken);
+        var outstanding = context.AccountSecurityTokens
+            .Where(token => token.UserId == userId && token.ConsumedAt == null && token.SupersededAt == null);
+        if (purpose is { } onlyPurpose)
+        {
+            outstanding = outstanding.Where(token => token.Purpose == onlyPurpose);
+        }
+
+        return outstanding.ExecuteUpdateAsync(setters => setters.SetProperty(token => token.SupersededAt, now), cancellationToken);
+    }
+
+    public async Task<AccountCreation> CreateAccountAsync(string email, string password, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(email);
+        ArgumentNullException.ThrowIfNull(password);
+
+        var user = new ApplicationUser
+        {
+            UserName = email,
+            Email = email,
+            EmailConfirmed = false,
+            Status = AccountStatus.Active,
+            CreatedAt = now,
+        };
+
+        IdentityResult result;
+        try
+        {
+            // Applies the password policy, normalizes user name and email, and inserts the user.
+            result = await users.CreateAsync(user, password);
+        }
+        catch (Exception exception) when (SqlServerErrors.IsUniqueViolation(exception))
+        {
+            // A concurrent registration won the unique index. Forget the failed insert so that the rest of the
+            // transaction does not try it again.
+            context.ChangeTracker.Clear();
+            return new AccountCreation(AccountCreationStatus.DuplicateEmail, null);
+        }
+
+        if (!result.Succeeded)
+        {
+            context.ChangeTracker.Clear();
+            return new AccountCreation(
+                result.Errors.Any(error => error.Code is "DuplicateEmail" or "DuplicateUserName")
+                    ? AccountCreationStatus.DuplicateEmail
+                    : AccountCreationStatus.Rejected,
+                null);
+        }
+
+        context.SecurityVersions.Add(new SecurityVersionRecord { UserId = user.Id, Version = SecurityVersionPolicy.InitialVersion });
+        await context.SaveChangesAsync(cancellationToken);
+        return new AccountCreation(AccountCreationStatus.Created, user.Id);
+    }
+
+    public async Task<AccountByEmail?> FindAccountByEmailAsync(string normalizedEmail, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(normalizedEmail);
+
+        var account = await context.Users
+            .AsNoTracking()
+            .Where(user => user.NormalizedEmail == normalizedEmail)
+            .Select(user => new { user.Id, user.Status, user.EmailConfirmed })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return account is null ? null : new AccountByEmail(account.Id, new AccountSignInState(account.Status, account.EmailConfirmed));
+    }
+
+    public async Task<bool> ConfirmEmailAsync(string userId, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+
+        var concurrencyStamp = Guid.NewGuid().ToString();
+        var updated = await context.Users
+            .Where(user => user.Id == userId && user.Status == AccountStatus.Active && !user.EmailConfirmed)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(user => user.EmailConfirmed, true)
+                    .SetProperty(user => user.ConcurrencyStamp, concurrencyStamp),
+                cancellationToken);
+        return updated == 1;
+    }
+
+    public async Task<DateTime?> LockAccountForSecurityEmailAsync(string userId, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+
+        var now = await context.Database
+            .SqlQuery<DateTime>($"SELECT SYSUTCDATETIME() AS [Value] FROM [SecurityVersions] WITH (UPDLOCK, ROWLOCK) WHERE [UserId] = {userId}")
+            .ToListAsync(cancellationToken);
+        return now.Count == 0 ? null : now[0];
+    }
+
+    public async Task<IReadOnlyList<DateTime>> ReadSecurityEmailRequestTimesAsync(
+        string userId,
+        SecurityTokenPurpose purpose,
+        DateTime since,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+
+        return await context.SecurityEmailDeliveries
+            .AsNoTracking()
+            .Where(delivery => delivery.UserId == userId && delivery.Purpose == purpose && delivery.CreatedAt >= since)
+            .Select(delivery => delivery.CreatedAt)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<Guid> CreateSecurityEmailDeliveryAsync(string userId, SecurityTokenPurpose purpose, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+
+        var id = Guid.NewGuid();
+        var purposeValue = purpose.ToString();
+        var queued = nameof(SecurityEmailDeliveryStatus.Queued);
+        await context.Database.ExecuteSqlAsync(
+            $"INSERT INTO [SecurityEmailDeliveries] ([Id], [UserId], [Purpose], [Status], [AttemptCount]) VALUES ({id}, {userId}, {purposeValue}, {queued}, 0)",
+            cancellationToken);
+        return id;
+    }
+
+    public async Task<bool> LinkSecurityEmailTokenAsync(Guid deliveryId, Guid tokenId, CancellationToken cancellationToken)
+    {
+        var dispatching = nameof(SecurityEmailDeliveryStatus.Dispatching);
+        var updated = await context.Database.ExecuteSqlAsync(
+            $"UPDATE [SecurityEmailDeliveries] SET [SecurityTokenId] = {tokenId} WHERE [Id] = {deliveryId} AND [Status] = {dispatching}",
+            cancellationToken);
+        return updated == 1;
     }
 
     public async Task<bool> TryRevokeAuthorizationAsync(string authorizationId, CancellationToken cancellationToken)

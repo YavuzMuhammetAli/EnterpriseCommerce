@@ -2,6 +2,7 @@ using EnterpriseCommerce.Identity.Api.Accounts;
 using EnterpriseCommerce.Identity.Api.Diagnostics;
 using EnterpriseCommerce.Identity.Api.ExceptionHandling;
 using EnterpriseCommerce.Identity.Api.Protocol;
+using EnterpriseCommerce.Identity.Api.SecurityEmails;
 using EnterpriseCommerce.Identity.Application;
 using EnterpriseCommerce.Identity.Application.Tokens;
 using EnterpriseCommerce.Identity.Infrastructure;
@@ -11,12 +12,15 @@ using Serilog.Events;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Structured logging: configured from the "Serilog" configuration section.
-builder.Services.AddSerilog((services, logger) => logger
-    .ReadFrom.Configuration(builder.Configuration)
-    .ReadFrom.Services(services)
-    .Enrich.FromLogContext()
-    .Enrich.WithProperty("Service", "Identity"));
+// Structured logging: configured from the "Serilog" configuration section. The host owns its logger instead of the
+// process-wide static Log.Logger, so every host instance (including test hosts) keeps its own sinks.
+builder.Services.AddSerilog(
+    (services, logger) => logger
+        .ReadFrom.Configuration(builder.Configuration)
+        .ReadFrom.Services(services)
+        .Enrich.FromLogContext()
+        .Enrich.WithProperty("Service", "Identity"),
+    preserveStaticLogger: true);
 
 // Global exception handling: unhandled exceptions become RFC 9457 problem details.
 builder.Services.AddProblemDetails(options =>
@@ -35,6 +39,9 @@ var adminConsoleClientId = builder.Configuration[$"{IdentityServerSettings.Secti
 builder.Services
     .AddIdentityApplication(new RefreshReuseSettings(adminConsoleClientId))
     .AddIdentityInfrastructure(builder.Configuration);
+// The security email guard runs first: outside Development a development mail sink must stop the host before
+// anything else is composed (ADR-018 section 4).
+builder.AddSecurityEmailDelivery();
 builder.AddIdentityProtocolServer();
 builder.AddTrustedProxy();
 

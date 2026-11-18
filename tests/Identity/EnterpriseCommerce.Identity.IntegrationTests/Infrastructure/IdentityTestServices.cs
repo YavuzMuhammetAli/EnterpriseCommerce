@@ -22,6 +22,8 @@ internal static class IdentityTestServices
         var values = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
             ["ConnectionStrings:IdentityDatabase"] = database.ConnectionString,
+            ["Identity:Issuer"] = "https://localhost/",
+            ["Identity:SecurityEmail:RetryBaseDelay"] = "00:00:00.010",
         };
 
         foreach (var (key, value) in settings ?? new Dictionary<string, string?>())
@@ -41,7 +43,7 @@ internal static class IdentityTestServices
     }
 
     /// <summary>Creates an active, confirmed user with its security-version record, as registration will.</summary>
-    public static async Task<string> CreateUserAsync(IServiceProvider services, long securityVersion = SecurityVersionPolicy.InitialVersion)
+    public static async Task<string> CreateUserAsync(IServiceProvider services, long securityVersion = SecurityVersionPolicy.InitialVersion, bool emailConfirmed = true)
     {
         await using var scope = services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<IdentityServiceDbContext>();
@@ -55,7 +57,7 @@ internal static class IdentityTestServices
             NormalizedUserName = email.ToUpperInvariant(),
             Email = email,
             NormalizedEmail = email.ToUpperInvariant(),
-            EmailConfirmed = true,
+            EmailConfirmed = emailConfirmed,
             LockoutEnabled = true,
             SecurityStamp = Guid.NewGuid().ToString(),
             Status = AccountStatus.Active,

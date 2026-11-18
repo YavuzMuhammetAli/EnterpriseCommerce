@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    DEVELOPMENT ONLY: delivers Identity security emails to a local mail catcher (Compose profile "mailsink").
+    ADR-018 section 4 isolation layers:
+      1. separate project, referenced by Identity.Api only when Configuration is Debug;
+      2. registration compiled only under #if DEBUG;
+      3. runtime guard: Development environment, explicit opt-in, loopback or approved Compose host;
+      4. Identity.Api fails at startup outside Development if this assembly or its settings are present;
+      5. architecture tests and the CI Release publish check verify its absence.
+  -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EnterpriseCommerce.Identity.Application\EnterpriseCommerce.Identity.Application.csproj" />
+  </ItemGroup>
+
+</Project>

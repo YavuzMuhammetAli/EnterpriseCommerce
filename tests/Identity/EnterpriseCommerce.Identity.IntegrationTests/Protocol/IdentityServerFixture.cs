@@ -11,6 +11,9 @@ using EnterpriseCommerce.Identity.IntegrationTests.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using EnterpriseCommerce.Identity.Application.SecurityEmails;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
@@ -95,6 +98,9 @@ public partial class IdentityServerFixture : IAsyncLifetime
 
     public TestClient Service { get; } = new("svc-test-orders", audience: null);
 
+    /// <summary>Replaces the Notification integration; records every security email handover.</summary>
+    public CapturingSecurityEmailDispatcher Dispatcher { get; } = new();
+
     public WebApplicationFactory<Program> Factory => _factory ?? throw new InvalidOperationException("SQL Server is not configured.");
 
     public IServiceProvider Services => Factory.Services;
@@ -135,6 +141,12 @@ public partial class IdentityServerFixture : IAsyncLifetime
             builder.UseSetting(service + "JsonWebKeySet", Service.JsonWebKeySet);
             builder.UseSetting(service + "ServiceScopes:0:Scope", "svc.inventory.reservations");
             builder.UseSetting(service + "ServiceScopes:0:Audience", "inventory-api");
+            builder.UseSetting("Identity:SecurityEmail:RetryBaseDelay", "00:00:00.020");
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<ISecurityEmailDispatcher>();
+                services.AddSingleton<ISecurityEmailDispatcher>(Dispatcher);
+            });
             ConfigureHost(builder);
         });
 
@@ -234,6 +246,27 @@ public partial class IdentityServerFixture : IAsyncLifetime
 
         return await browser.SendAsync(request, ct);
     }
+
+    /// <summary>Loads an Identity page, then submits its form with the antiforgery token and a same-origin Origin header.</summary>
+    public async Task<HttpResponseMessage> SubmitPageFormAsync(HttpClient browser, string pageUrl, Dictionary<string, string> fields)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var page = await browser.GetStringAsync(pageUrl, ct);
+        fields["__RequestVerificationToken"] = WebUtility.HtmlDecode(AntiforgeryField().Match(page).Groups[1].Value);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, pageUrl) { Content = new FormUrlEncodedContent(fields) };
+        request.Headers.Add("Origin", "https://localhost");
+        return await browser.SendAsync(request, ct);
+    }
+
+    /// <summary>Registers through the Identity registration page.</summary>
+    public async Task<HttpResponseMessage> RegisterAsync(HttpClient browser, string email, string password = Password) =>
+        await SubmitPageFormAsync(browser, "/account/register", new Dictionary<string, string>
+        {
+            ["Input.Email"] = email,
+            ["Input.Password"] = password,
+            ["Input.ConfirmPassword"] = password,
+        });
 
     /// <summary>Signs in through the Identity login page and returns the authorization code for the client.</summary>
     public async Task<(string Code, string Verifier)> AuthorizeAsync(HttpClient browser, TestClient client, string email)

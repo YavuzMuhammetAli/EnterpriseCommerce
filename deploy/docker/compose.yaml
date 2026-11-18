@@ -62,6 +62,25 @@ services:
     restart: unless-stopped
     logging: *default-logging
 
+  # DEVELOPMENT ONLY: catches security emails from Identity's development mail sink (ADR-018 section 4).
+  # Not part of "all": it is useful only while working on Identity email flows. Messages are not persisted.
+  # Inbox: http://127.0.0.1:8025. SMTP: 127.0.0.1:1025 (no TLS, no authentication, loopback only).
+  mailpit:
+    image: axllent/mailpit:v1.34.0
+    profiles: ["mailsink"]
+    ports:
+      - "127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+    logging: *default-logging
+
   redis:
     image: redis:8.8.4-alpine
     profiles: ["redis", "all"]

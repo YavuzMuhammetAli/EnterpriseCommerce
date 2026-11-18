@@ -1,0 +1,23 @@
+@page "/account/confirm-email"
+@model EnterpriseCommerce.Identity.Api.Pages.Account.ConfirmEmailModel
+@using EnterpriseCommerce.Identity.Application.Accounts
+@{
+    ViewData["Title"] = "Confirm your email address";
+}
+<h1>Confirm your email address</h1>
+
+@if (Model.Result == EmailConfirmationResult.Confirmed)
+{
+    <p role="status">Your email address is confirmed. You can now sign in.</p>
+}
+else if (Model.Result == EmailConfirmationResult.InvalidOrExpired)
+{
+    <p role="alert">This link is invalid or has expired. <a href="/account/resend-confirmation">Request a new email</a>.</p>
+}
+else
+{
+    <form method="post">
+        <input type="hidden" asp-for="Token" />
+        <button type="submit">Confirm my email address</button>
+    </form>
+}

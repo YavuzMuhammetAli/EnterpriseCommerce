@@ -48,7 +48,10 @@ public sealed class DependencyRuleTests
             .Select(layer => $"{SourceProject.RootNamespace}.{project.Service}.{layer}")
             .ToHashSet(StringComparer.Ordinal);
 
+        // References to the service's own development adapter are verified separately and more strictly
+        // (Debug-only, Api-only): DevelopmentAdapterTests.
         var violations = project.ProjectReferences
+            .Where(reference => !IsOwnDevelopmentAdapter(project, reference))
             .Where(reference =>
                 (!allowed.Contains(reference) && !IsBuildingBlock(reference))
                 || IsBuildingBlockForbidden(project, reference))
@@ -108,6 +111,10 @@ public sealed class DependencyRuleTests
 
     private static SourceProject Get(string name) =>
         Repository.SourceProjects.Single(project => project.Name == name);
+
+    private static bool IsOwnDevelopmentAdapter(SourceProject project, string reference) =>
+        Repository.SourceProjects.Any(candidate =>
+            candidate.Kind == ProjectKind.DevelopmentAdapter && candidate.Name == reference && candidate.Service == project.Service);
 
     private static bool IsBuildingBlock(string projectName) =>
         projectName.StartsWith($"{SourceProject.RootNamespace}.BuildingBlocks.", StringComparison.Ordinal);

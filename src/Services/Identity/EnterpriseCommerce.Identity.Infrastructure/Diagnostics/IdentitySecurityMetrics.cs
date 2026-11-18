@@ -28,4 +28,20 @@ internal static class IdentitySecurityMetrics
     /// <summary>Post-commit cleanups that did not complete (tag: <c>operation</c>). The committed decision stands.</summary>
     public static readonly Counter<long> CleanupFailures =
         Meter.CreateCounter<long>("identity.security.cleanup.failures");
+
+    /// <summary>Security email requests that found the in-process queue full (ADR-018 section 3).</summary>
+    public static readonly Counter<long> SecurityEmailQueueSaturated =
+        Meter.CreateCounter<long>("identity.security_email.queue_saturated");
+
+    /// <summary>Deliveries that became Dropped (tag: <c>reason</c>: queue-full or stale-queued).</summary>
+    public static readonly Counter<long> SecurityEmailDropped =
+        Meter.CreateCounter<long>("identity.security_email.dropped");
+
+    /// <summary>Deliveries that became Indeterminate (tag: <c>reason</c>).</summary>
+    public static readonly Counter<long> SecurityEmailIndeterminate =
+        Meter.CreateCounter<long>("identity.security_email.indeterminate");
+
+    /// <summary>Deliveries that became Failed (tag: <c>reason</c>, including retries-exhausted).</summary>
+    public static readonly Counter<long> SecurityEmailFailed =
+        Meter.CreateCounter<long>("identity.security_email.failed");
 }

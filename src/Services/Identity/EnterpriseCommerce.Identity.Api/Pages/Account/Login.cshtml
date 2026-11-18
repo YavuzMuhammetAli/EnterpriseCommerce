@@ -12,7 +12,7 @@
 
 @if (Model.ShowConfirmEmailHint)
 {
-    <p role="status">Confirm your email address to continue. Check your inbox for the confirmation link.</p>
+    <p role="status">Confirm your email address to continue. Check your inbox for the confirmation link, or <a href="/account/resend-confirmation">send it again</a>.</p>
 }
 
 <form method="post">
@@ -23,3 +23,5 @@
     <input asp-for="Input.Password" type="password" autocomplete="current-password" required />
     <button type="submit">Sign in</button>
 </form>
+
+<p><a href="/account/register">Create account</a></p>

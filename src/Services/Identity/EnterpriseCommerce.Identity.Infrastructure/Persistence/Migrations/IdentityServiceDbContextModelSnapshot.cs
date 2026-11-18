@@ -160,6 +160,60 @@ namespace EnterpriseCommerce.Identity.Infrastructure.Persistence.Migrations
                     b.ToTable("RefreshTokenRedemptions", (string)null);
                 });
 
+            modelBuilder.Entity("EnterpriseCommerce.Identity.Infrastructure.Persistence.SecurityEmailDeliveryRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ClaimedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("ErrorCategory")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<Guid?>("SecurityTokenId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SecurityTokenId");
+
+                    b.HasIndex("Status", "ClaimedAt");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.HasIndex("UserId", "Purpose", "CreatedAt");
+
+                    b.ToTable("SecurityEmailDeliveries", (string)null);
+                });
+
             modelBuilder.Entity("EnterpriseCommerce.Identity.Infrastructure.Persistence.SecurityVersionRecord", b =>
                 {
                     b.Property<string>("UserId")
@@ -453,6 +507,20 @@ namespace EnterpriseCommerce.Identity.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("EnterpriseCommerce.Identity.Domain.Security.AccountSecurityToken", b =>
                 {
+                    b.HasOne("EnterpriseCommerce.Identity.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("EnterpriseCommerce.Identity.Infrastructure.Persistence.SecurityEmailDeliveryRecord", b =>
+                {
+                    b.HasOne("EnterpriseCommerce.Identity.Domain.Security.AccountSecurityToken", null)
+                        .WithMany()
+                        .HasForeignKey("SecurityTokenId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("EnterpriseCommerce.Identity.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")

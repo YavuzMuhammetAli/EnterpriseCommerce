@@ -2,6 +2,7 @@ using System.Data;
 using EnterpriseCommerce.Identity.Application.Security;
 using EnterpriseCommerce.Identity.Infrastructure.Diagnostics;
 using EnterpriseCommerce.Identity.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -66,9 +67,10 @@ internal sealed partial class AuthoritativeSecurityTransaction(
         await using var scope = scopeFactory.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<IdentityServiceDbContext>();
         var authorizations = scope.ServiceProvider.GetRequiredService<IOpenIddictAuthorizationManager>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
         await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
-        var decision = await work(new AuthoritativeSecurityUnit(context, authorizations), cancellationToken);
+        var decision = await work(new AuthoritativeSecurityUnit(context, authorizations, users), cancellationToken);
 
         if (decision.ShouldCommit)
         {
