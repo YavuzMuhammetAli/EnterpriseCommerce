@@ -10,7 +10,7 @@ How this document relates to the others:
 
 **Change policy:** a decision in this document changes only through a new ADR that supersedes or amends the old one. This document is then updated in the same change. If this document and an ADR disagree, stop and resolve the inconsistency. Never guess.
 
-Last consolidated: 2026-11-17 (Phase 1 final audit). Updated 2026-11-17 for Phase 2.1 (Identity provider selection, [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)).
+Last consolidated: 2026-11-17 (Phase 1 final audit). Updated 2026-11-17 for Phase 2.1 (Identity provider selection, [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)). Updated 2026-11-18 for Phase 2.2 (browser client architecture, token and session strategy, account security tokens: [ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md), [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md), [ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)).
 
 ---
 
@@ -47,7 +47,8 @@ The architecture prioritizes **maintainability, scalability, security, separatio
 | Cache | Redis | Local container available |
 | Messaging | Apache Kafka (KRaft) | Local container available |
 | API Gateway | YARP | In use |
-| Identity provider | ASP.NET Core Identity (user store) with OpenIddict (OAuth 2.0 / OpenID Connect server), [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md) | Accepted; not yet implemented |
+| Identity provider | ASP.NET Core Identity (user store) with OpenIddict 7.9.0 or later (OAuth 2.0 / OpenID Connect server), [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md), [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md) | Accepted; implementation authorized (Phase 2.3) |
+| Browser clients | Backend-for-frontend for every front end: one ASP.NET Core codebase deployed once per front end, behind the Gateway, [ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md) | Accepted; not yet implemented |
 | Containers | Docker | In use |
 | Local orchestration | Docker Compose (profiles) | In use |
 | Logging | Serilog | In use |
@@ -147,6 +148,7 @@ Governing ADRs: [ADR-003](../decisions/ADR-003-database-per-service.md), [ADR-00
 - Each service owns its data. **A service never accesses another service's database directly.**
 - In local development, one SQL Server instance may host several logically separate service databases. This does not remove service-level data ownership.
 - Redis is never a system of record. For Cart it accelerates access and short-lived operations, while SQL Server holds the durable cart. Redis is never the source of truth for orders or payments.
+- BFF session tickets live in a **dedicated Redis instance** with `maxmemory-policy noeviction`, never shared with cache workloads. Losing it signs users out and corrupts no business data ([ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md)).
 - Detailed per-service schemas are designed in each service's phase.
 
 ## 7. Multi-tenancy
@@ -164,7 +166,7 @@ Governing ADR: [ADR-014](../decisions/ADR-014-logical-tenant-isolation.md).
 - **The initial tenancy model is accepted. It is not an open decision.** That covers logical isolation, no database per tenant, Tenant & Merchant as owner of the tenant and merchant lifecycle, service-enforced tenant-level and resource-level authorization, and the rule that claims are not proof.
 - **Open:** only the exact naming conventions, including whether `TenantMerchant` is the right project name (section 13).
 - **Design-level details within the accepted model** are worked out in later phases and must conform to ADR-014. They are not open architectural decisions:
-  - the tenant context claim shape (Phase 2 token strategy)
+  - the tenant context claim shape: resolved by [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md). Access tokens carry no tenant claim, and the tenant is an explicit request parameter validated by the owning service
   - the membership data shared with other services (Tenant & Merchant design)
   - the per-service enforcement technique, for example EF Core query filters versus explicit scoping (each service's design)
 
@@ -213,9 +215,16 @@ Governing ADRs: [ADR-005](../decisions/ADR-005-kafka-for-asynchronous-communicat
   - Marketplace authorization is never delegated to OpenIddict.
   - ASP.NET Core Identity roles are **not authoritative** for platform roles (Admin) or merchant roles (Tenant & Merchant).
   - The Resource Owner Password Credentials grant and the implicit flow are **rejected**.
-  - Client flows, the access token format, lifetimes and the browser client architecture (public SPA client versus backend-for-frontend) are decided in Phase 2.2. The recommendations are in ADR-015.
-  - The Phase 0.3 API baseline and the proposed claims are in [IDENTITY_API_CONTRACT.md](../api/IDENTITY_API_CONTRACT.md).
-- **Intended direction:** services validate JWTs **locally** (signature, issuer, audience, expiry). They don't call Identity on every request. The details are evaluated in Phase 2 ([section 7.4.1 of the brief](PHASE_2_IDENTITY_DESIGN_BRIEF.md#741-token-validation-architecture)).
+- **Browser clients (accepted, [ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md)):** every front end uses a backend-for-frontend behind the Gateway. Tokens never reach browser JavaScript. Authorization code + PKCE `S256`, `private_key_jwt` in deployed environments, server-side session tickets, layered CSRF defense, HTTPS everywhere. Real Safari behaviour is a verification gate before production-like deployment.
+- **Tokens and sessions (accepted, [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md)):**
+  - RS256-signed JWT access tokens with `typ: at+jwt` and minimal claims (including `ec_ptype`). No role or tenant claims.
+  - One audience per front-end client for user tokens. Per-service audiences for service tokens. The `svc-` client ID prefix is reserved for service clients.
+  - Services validate tokens **locally** with the standard ASP.NET Core JWT bearer handler (issuer, audience, algorithm, `typ`, 30-second skew). They don't call Identity on every request.
+  - Rotated refresh tokens with no reuse leeway, a mandatory redemption ledger, and a presenter-checked reuse policy.
+  - The per-user **security version** and the authorization status are the authoritative revocation state. Authoritative changes commit in one short transaction with a whole-transaction retry on deadlock. OpenIddict bulk revocation is post-commit cleanup.
+  - Every credential entry happens on Identity-hosted pages.
+- **Account security tokens and email (accepted, [ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)):** hashed, single-use confirmation and reset tokens consumed atomically with the account change. Notification owns production email delivery, and Identity hands emails over through a bounded in-process queue with status-only reconciliation.
+- The Identity API contract is in [IDENTITY_API_CONTRACT.md](../api/IDENTITY_API_CONTRACT.md).
 - **Service-level authorization is mandatory.** Gateway authorization does not replace it.
 - A tenant ID is not sufficient proof of access rights.
 - Secrets are never committed. Local secrets live in a gitignored `.env`.
@@ -270,11 +279,10 @@ These are **open**. They must not be decided silently. Each one is decided throu
 
 | Decision | Planned resolution |
 |---|---|
-| Detailed Identity data model | Phase 2 |
-| Exact token and session strategy (lifetimes, refresh token rotation parameters, revocation behaviour, claim set) | Phase 2.2 |
-| Browser client architecture: public SPA client versus backend-for-frontend, per front end (a backend-for-frontend needs its own ADR) | Phase 2.2 |
-| Access token format and resource-server token validation approach | Phase 2.2 |
-| Signing key storage and rotation, and Data Protection key storage, outside local development | Phase 2.2 (direction); deployment phase (concrete store) |
+| Detailed Identity data model (within ADR-015, ADR-017 and ADR-018) | Phase 2.3 implementation |
+| Concrete signing key store and Data Protection key store outside local development (the direction is in ADR-017) | Deployment phase |
+| Per-service user access token audiences ([ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md) section 3) | When a concrete need appears |
+| Opaque-reference security email handoff (E3, [ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)) | After the outbox design is approved |
 | Kafka client library | First event-flow phase |
 | Outbox implementation details | First event-flow phase |
 | Mediator library selection (if any) | When the first service needs it ([ADR-009](../decisions/ADR-009-selective-cqrs.md)) |
@@ -288,3 +296,6 @@ These are **open**. They must not be decided silently. Each one is decided throu
 **Resolved since the Phase 1 audit:**
 
 - Identity protocol and provider: OAuth 2.0 / OpenID Connect with ASP.NET Core Identity and OpenIddict ([ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md), Phase 2.1).
+- Browser client architecture: a backend-for-frontend for every front end ([ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md), Phase 2.2).
+- Token and session strategy, access token format, resource-server validation, and the direction for signing key storage and rotation ([ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md), Phase 2.2).
+- Email confirmation and password reset token semantics, and security email delivery ([ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md), Phase 2.2).

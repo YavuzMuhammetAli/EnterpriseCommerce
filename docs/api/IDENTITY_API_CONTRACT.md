@@ -1,34 +1,31 @@
-# Identity API Contract (Baseline)
+# Identity API Contract
 
-- **Status:** **preserved baseline, not a final implementation specification.**
-- **Origin:** the Phase 0.3 API design, which is the agreed baseline for the endpoint areas, API conventions and JWT claims.
-- **Review:** this contract is re-evaluated in Phase 2 ([PHASE_2_IDENTITY_DESIGN_BRIEF.md](../architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md)) against the selected protocol and provider.
-  - **Provider (selected in Phase 2.1):** ASP.NET Core Identity with OpenIddict, using OAuth 2.0 and OpenID Connect ([ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)).
-  - **This baseline text predates that decision.** The endpoints marked *Provider-dependent* are mapped to the standard protocol endpoints in the Phase 2.2 API contract proposal. Until then, the text below is unchanged.
-  - **Phase 2.2 proposal (awaiting approval):** the endpoint mapping, the claim set and the confirmation and reset token semantics are proposed in [PHASE_2_2_AUTHENTICATION_FLOWS.md](../architecture/PHASE_2_2_AUTHENTICATION_FLOWS.md) (sections 5.6.3, 6.1 and 8). This contract is updated only after that proposal is approved.
-- **Implementation:** none. These endpoints do not exist yet.
+- **Status:** **Accepted (Phase 2.2 revision).** It applies [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md) (protocol, tokens, credential entry, routing) and [ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md) (account security tokens and email) to the Phase 0.3 baseline. The endpoint mapping comes from [PHASE_2_2_AUTHENTICATION_FLOWS.md section 8](../architecture/PHASE_2_2_AUTHENTICATION_FLOWS.md#8-endpoint-mapping-proposal).
+- **Origin:** the Phase 0.3 API design, the baseline for the endpoint areas, API conventions and JWT claims. [Section 5](#5-changes-from-the-phase-03-baseline) lists what changed.
+- **Implementation:** Phase 2.3 implements this contract incrementally. An endpoint exists only once its slice is merged.
 
 ### How to read this document
 
 | Marker | Meaning |
 |---|---|
-| **Baseline** | Agreed in Phase 0.3: endpoint areas, conventions and the claim set |
-| **Reconstructed** | Exact paths and payload fields written down for this baseline, because the original Phase 0.3 text is not in the repository. **Confirm them against the Phase 0.3 design during Phase 2 review.** |
-| **Provider-dependent** | May change or be replaced by standard protocol endpoints, depending on the Phase 2 protocol and provider decision |
+| **Baseline** | Agreed in Phase 0.3 and unchanged |
+| **Accepted** | Decided by ADR-017 or ADR-018 |
+| **Reconstructed** | Exact paths and payload fields written down for the baseline, because the original Phase 0.3 text is not in the repository. Kept unless the implementation needs a change, which is then recorded here. |
 
 ---
 
 ## 1. Conventions (Baseline)
 
-### 1.1 Base path and versioning
+### 1.1 Base path, host and versioning
 
-- All Identity endpoints live under **`/api/v1`**.
+- **Accepted:** Identity has **its own host name** per environment (for example `id.<environment domain>`), routed by host through the Gateway **without** a path prefix. Protocol endpoints, discovery, the account pages and the REST API all live on that host. The issuer, the discovery URLs and the URLs used by browsers and services therefore match without rewriting.
+- The custom REST endpoints live under **`/api/v1`** on the Identity host.
+- The Phase 1 Gateway route with the `/identity` path prefix stays for development diagnostics only. It is never used for issuer or protocol URLs.
 - Versioning uses a **URL path segment** (`v1`, `v2`, …). A new major version is introduced only for breaking changes. Additive changes stay in the current version.
-- Through the Gateway, the service is reached with the `identity` route prefix: `/identity/api/v1/...` → Identity `/api/v1/...` (the Gateway removes the prefix; see [ADR-007](../decisions/ADR-007-yarp-api-gateway.md)). The public routing convention is subject to Phase 2 review.
 
 ### 1.2 Resource naming
 
-- Lowercase paths, with **kebab-case** for multi-word segments (for example `logout-all`, `password-reset`).
+- Lowercase paths, with **kebab-case** for multi-word segments (for example `logout-all`).
 - Plural nouns for collections (`sessions`). `me` stands for the authenticated user.
 - Authentication actions that are not resources are grouped under `/auth`.
 - JSON property names use **camelCase**.
@@ -37,15 +34,15 @@
 
 | Header | Direction | Rule |
 |---|---|---|
-| `Authorization` | Request | `Bearer <access token>` on every authenticated endpoint. Never sent to anonymous endpoints, where it is ignored. |
-| `Content-Type` | Request and response | `application/json` for request bodies and success responses. `application/problem+json` for errors. |
+| `Authorization` | Request | `Bearer <access token>` on every authenticated REST endpoint. Never sent to anonymous endpoints, where it is ignored. |
+| `Content-Type` | Request and response | `application/json` for request bodies and success responses. `application/problem+json` for errors. Protocol endpoints use the content types required by OAuth 2.0 and OpenID Connect. |
 | `Accept` | Request | Clients send `application/json`. The server returns `406 Not Acceptable` for unsupported media types. |
 | `X-Correlation-ID` | Request and response | Optional on requests. If absent, the server generates one. It is always echoed in the response, written to logs, and propagated to downstream calls and messages. Format: a client-generated opaque string (UUID recommended), length-limited. |
-| `Idempotency-Key` | Request | Required **where applicable** (see the endpoint tables). The client generates a unique key per logical operation. A retry with the same key and the same payload returns the original outcome without repeating side effects. The same key with a different payload returns `422`. Retention period: subject to Phase 2 review. |
+| `Idempotency-Key` | Request | Required **where applicable** (see the endpoint tables). The client generates a unique key per logical operation. A retry with the same key and the same payload returns the original outcome without repeating side effects. The same key with a different payload returns `422`. Retention period: decided when the first endpoint that needs it is implemented. |
 
 ### 1.4 Errors: RFC 9457 Problem Details
 
-All errors use `application/problem+json`, compatible with [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457):
+REST endpoints return errors as `application/problem+json`, compatible with [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457). Protocol endpoints return OAuth 2.0 error responses (`invalid_grant`, `invalid_client`, …) as their specifications require.
 
 ```json
 {
@@ -53,18 +50,18 @@ All errors use `application/problem+json`, compatible with [RFC 9457](https://ww
   "title": "One or more validation errors occurred.",
   "status": 400,
   "detail": "The request contains invalid fields.",
-  "instance": "POST /api/v1/auth/register",
+  "instance": "POST /api/v1/auth/logout-all",
   "traceId": "00-…",
   "correlationId": "…",
   "errors": {
-    "email": ["The email address is not valid."]
+    "field": ["The value is not valid."]
   }
 }
 ```
 
 - `type` URIs identify stable error categories. The URI scheme above is **Reconstructed** and is a placeholder domain.
 - `errors` appears only for validation failures.
-- Responses **never** reveal whether an account exists where that would enable account enumeration (registration, login, email confirmation resend, password reset). Exception details are never returned.
+- Responses **never** reveal whether an account exists where that would enable account enumeration. Exception details are never returned.
 
 Common status codes:
 
@@ -77,135 +74,152 @@ Common status codes:
 | 409 | conflict, for example a concurrent state change |
 | 422 | `Idempotency-Key` reused with a different payload |
 | 429 | rate limited (`Retry-After` header) |
+| 503 | the authoritative security state cannot be confirmed (for example the Identity database is unavailable). No token is issued and no success is reported. |
 
 ## 2. Endpoints
 
-**Paths and fields: Reconstructed. Endpoint areas: Baseline.**
-
 ### 2.1 Summary
 
-| Area | Method and path | Auth | Idempotency-Key | Provider-dependent |
-|---|---|---|---|---|
-| Registration | `POST /api/v1/auth/register` | Anonymous | Required | Partly |
-| Login | `POST /api/v1/auth/login` | Anonymous | No | **Yes** (may become a standard token endpoint) |
-| Refresh token | `POST /api/v1/auth/refresh` | Refresh token | No (rotation semantics apply) | **Yes** (may become a standard token endpoint) |
-| Logout | `POST /api/v1/auth/logout` | Bearer | No (naturally idempotent) | **Yes** (session or end-session semantics) |
-| Logout all | `POST /api/v1/auth/logout-all` | Bearer | No (naturally idempotent) | Partly |
-| Email confirmation | `POST /api/v1/auth/email-confirmation` | Anonymous (token in body) | No (naturally idempotent) | Partly |
-| Email confirmation resend | `POST /api/v1/auth/email-confirmation/resend` | Anonymous | Required | Partly |
-| Password reset request | `POST /api/v1/auth/password-reset` | Anonymous | Required | Partly |
-| Password reset confirm | `POST /api/v1/auth/password-reset/confirm` | Anonymous (token in body) | Required | Partly |
-| Current user | `GET /api/v1/users/me` | Bearer | n/a | Partly (may overlap with an OIDC UserInfo endpoint) |
-| List sessions | `GET /api/v1/users/me/sessions` | Bearer | n/a | Partly |
-| Revoke session | `DELETE /api/v1/users/me/sessions/{sessionId}` | Bearer | n/a (naturally idempotent) | Partly |
+**Accepted** (ADR-017 section 9): every credential entry happens on an **Identity-hosted page**. No client application or BFF ever sends a password to a JSON endpoint.
 
-### 2.2 Registration
+| Area | Endpoint | Kind | Auth |
+|---|---|---|---|
+| Discovery | `GET /.well-known/openid-configuration`, JWKS | Protocol | Anonymous |
+| Authorization (login) | `GET /connect/authorize` with the Identity-hosted login page | Protocol and page | Identity SSO cookie |
+| Token (code exchange, refresh, client credentials) | `POST /connect/token` | Protocol | Client authentication (`private_key_jwt` in deployed environments) |
+| Token revocation | `POST /connect/revoke` | Protocol | Client authentication |
+| End session | `/connect/endsession` (`id_token_hint`, registered `post_logout_redirect_uri`, `state`) | Protocol | Identity SSO cookie |
+| UserInfo | `/connect/userinfo` | Protocol | Bearer |
+| Registration | Identity-hosted registration page | Page (credential entry) | Anonymous, antiforgery |
+| Email confirmation | Identity-hosted confirmation page (link target), submitted by POST | Page | Anonymous, antiforgery |
+| Email confirmation resend | Identity-hosted page, neutral response | Page | Anonymous, antiforgery |
+| Password reset request | Identity-hosted page, neutral response | Page | Anonymous, antiforgery |
+| Password reset confirmation | Identity-hosted page (link target), submitted by POST | Page (credential entry) | Anonymous, antiforgery |
+| Password change | Identity-hosted page | Page (credential entry) | Identity SSO cookie, antiforgery |
+| Logout all | `POST /api/v1/auth/logout-all` | REST | Bearer |
+| Current user | `GET /api/v1/users/me` | REST | Bearer |
+| List sessions | `GET /api/v1/users/me/sessions` | REST | Bearer |
+| Revoke session | `DELETE /api/v1/users/me/sessions/{sessionId}` | REST | Bearer |
+| Account disable and reactivate | Internal endpoints for Admin | REST (internal) | Service token only (`svc-` client with a dedicated scope) |
 
-`POST /api/v1/auth/register`
+Page paths are implementation details of Identity.Api and are not a client contract. Clients reach the pages through `/connect/authorize` or through links that Identity issues.
 
-- **Request:** `email`, `password`, and optional profile fields such as `displayName` (final field list: Phase 2).
-- **Response:** `202 Accepted`, with a neutral message that the confirmation instructions have been sent. The response is identical whether or not the email is already registered (enumeration resistance).
-- **Notes:**
-  - Registration creates an **identity only**. Tenant, merchant and membership creation belong to Tenant & Merchant ([SERVICE_CATALOG.md](../architecture/SERVICE_CATALOG.md)).
-  - Whether login is allowed before the email is confirmed is decided in Phase 2.
+### 2.2 Registration (page)
 
-### 2.3 Login
+- **Fields:** email, password, and optional profile fields such as a display name (final field list: implementation).
+- **Outcome:** the same neutral "check your inbox" page whether or not the email is already registered (enumeration resistance). A new account is created with an unconfirmed email. An existing address receives a "someone tried to register with your address" email.
+- Registration creates an **identity only**. Tenant, merchant and membership creation belong to Tenant & Merchant ([SERVICE_CATALOG.md](../architecture/SERVICE_CATALOG.md)).
+- **Accepted:** an account cannot sign in before its email is confirmed.
 
-`POST /api/v1/auth/login` (**Provider-dependent**)
+### 2.3 Login and token issuance (protocol)
 
-- **Request:** `email` and `password`.
-- **Response `200`:** `accessToken`, `tokenType` (`Bearer`), `expiresIn` (seconds), and `refreshToken` (see delivery note).
-- **Errors:**
-  - `401`, with one generic message for unknown accounts and wrong passwords
-  - `429` when rate limited or locked out
-- **Notes:**
-  - If Phase 2 selects an OAuth 2.0 / OpenID Connect server, interactive login may move to the authorization code + PKCE flow, and token issuance to the provider's standard token endpoint. In that case this endpoint is removed or changes meaning.
-  - **Refresh token delivery** (response body versus `HttpOnly` secure cookie for browser clients) is a Phase 2 decision.
+- Interactive login is the authorization code flow with PKCE `S256` through `/connect/authorize`. The user enters credentials only on the Identity-hosted login page.
+- The BFF exchanges the code at `/connect/token`. The response contains the access token, the ID token and, when `offline_access` was granted, a refresh token. Tokens never reach browser JavaScript ([ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md)).
+- **Errors on the login page:** one generic message for unknown accounts, wrong passwords, locked accounts and disabled accounts. "Confirm your email" is shown only after a correct password. Rate limiting returns `429` with `Retry-After`.
 
-### 2.4 Refresh token
+### 2.4 Refresh (protocol)
 
-`POST /api/v1/auth/refresh` (**Provider-dependent**)
+- `POST /connect/token` with `grant_type=refresh_token` and client authentication.
+- Every refresh returns a **new** refresh token (rotation). There is no reuse leeway.
+- `invalid_grant` for an invalid, expired, revoked or **reused** refresh token, for a stale security version, and for a token presented by a client other than the one it was issued to. A reuse revokes the affected session (for the admin console, every session of the user). A presenter mismatch revokes nothing.
+- `503` when the security state or the redemption ledger cannot be confirmed. Nothing is revoked, and the caller must treat the outcome as unknown and never retry with the same refresh token.
 
-- **Request:** `refreshToken`, or the cookie, depending on the delivery decision.
-- **Response `200`:** the same shape as login, including a **new** refresh token (rotation).
-- **Errors:** `401` for an invalid, expired, revoked or **reused** refresh token. Reuse revokes the whole token family (Phase 2 token strategy).
+### 2.5 Logout (protocol)
 
-### 2.5 Logout
-
-`POST /api/v1/auth/logout`
-
-- Ends the current session and revokes its refresh token(s).
-- **Response:** `204 No Content`. It is repeatable: logging out an already ended session also returns `204`.
-- Access tokens already issued stay valid until they expire, unless Phase 2 introduces revocation for them (see the [token validation considerations](../architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md#741-token-validation-architecture)).
+- The BFF revokes its refresh token at `/connect/revoke`. Identity also revokes the authorization the token belongs to, with all of its tokens.
+- The browser is then sent to `/connect/endsession` to end the Identity SSO session.
+- Repeatable: logging out an already ended session also succeeds.
+- Access tokens already issued stay valid until they expire (ADR-017 section 6).
 
 ### 2.6 Logout all
 
 `POST /api/v1/auth/logout-all`
 
-- Ends **all** of the user's sessions and revokes every refresh token. It is also used after a password change or a security event.
-- **Response:** `204 No Content`.
+- Raises the user's security version in the authoritative transaction, so no session of the user can refresh afterwards. Every authorization and token of the user is then revoked as cleanup.
+- **Response:** `204 No Content`. `503` if the security version could not be raised. Logout-all never reports success without the committed security-version change.
 
 ### 2.7 Email confirmation
 
-| Endpoint | Request | Response |
-|---|---|---|
-| `POST /api/v1/auth/email-confirmation` | `userId` or `email`, plus the confirmation `token` | `204` on success. `400` for an invalid or expired token, with a generic message. |
-| `POST /api/v1/auth/email-confirmation/resend` | `email` | Always `202`, with a neutral message. |
+Identity-hosted pages.
 
-Confirmation tokens are single-use, time-limited and stored hashed (Phase 2 security design).
 
-### 2.8 Password reset
+- The link carries only a random token, never the user ID or email address.
+- Opening the link (GET) shows a page with a button. **Only the POST consumes the token.**
+- Confirmation tokens are **single-use, time-limited and stored hashed** ([ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)). An invalid, expired, superseded or consumed token gets one generic error with a link to request a new email.
+- **Resend:** always the same neutral response. It issues a new token and supersedes the previous one, within the resend limits.
 
-| Endpoint | Request | Response |
-|---|---|---|
-| `POST /api/v1/auth/password-reset` | `email` | Always `202`, with a neutral message (enumeration resistance) |
-| `POST /api/v1/auth/password-reset/confirm` | `email` or `userId`, the reset `token`, and `newPassword` | `204` on success. `400` for an invalid or expired token, or a password that fails policy. |
+### 2.8 Password reset (pages)
 
-A successful reset **invalidates all sessions** (equivalent to logout all).
+- **Request:** always the same neutral response. A confirmed account receives a reset link, an unconfirmed account a confirmation link, and an unknown address nothing.
+- **Confirmation:** the link opens a page where the user enters the new password and submits it by POST. Consuming the token, setting the password, raising the security version and superseding other tokens commit in **one transaction**.
+- A successful reset **invalidates all sessions** of the user.
 
-### 2.9 Current user
+### 2.9 Password change (page)
+
+- Requires the current and the new password on an Identity-hosted page.
+- Revokes every **other** session of the user. The current browser session continues, and its Identity login cookie is reissued.
+
+### 2.10 Current user
 
 `GET /api/v1/users/me`
 
-- **Response `200`:** `id`, `email`, `emailConfirmed`, `displayName`, and `createdAt`. The final field set is decided in Phase 2.
+- **Response `200`:** `id`, `email`, `emailConfirmed`, `displayName`, and `createdAt`. The final field set is decided in the implementation.
 - Returns **identity data only**. Tenant and merchant memberships come from Tenant & Merchant, and platform administrator assignments from Admin.
 
-### 2.10 Session management
+### 2.11 Session management
 
 | Endpoint | Response |
 |---|---|
-| `GET /api/v1/users/me/sessions` | `200`: a list of sessions with `id`, `createdAt`, `lastSeenAt`, `current` (boolean), and coarse client information such as user agent and approximate location. Raw IP retention is decided in Phase 2. |
-| `DELETE /api/v1/users/me/sessions/{sessionId}` | `204`. Revokes that session's refresh tokens. Returns `404` if the session doesn't belong to the caller (never reveals other users' sessions). |
+| `GET /api/v1/users/me/sessions` | `200`: the caller's valid sessions (one per login per client) with an opaque `id`, `createdAt`, `lastSeenAt`, `current` (boolean), and coarse client information. Raw IP retention is decided with the data model. |
+| `DELETE /api/v1/users/me/sessions/{sessionId}` | `204`. Revokes that session's authorization and tokens. Returns `404` if the session doesn't belong to the caller (never reveals other users' sessions). |
 
-## 3. JWT access token claims (Baseline)
+<a id="3-jwt-access-token-claims-baseline"></a>
 
-The proposed claim set is listed below. Claim names and formats are **Provider-dependent** and are confirmed in the Phase 2 token strategy.
+## 3. JWT access token claims (Accepted)
+
+Access tokens are RS256-signed JWTs with `typ: at+jwt` in the header ([ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md) section 2).
 
 | Claim | Meaning | Notes |
 |---|---|---|
-| `sub` | Subject: the stable, opaque user identifier | Never an email address |
-| `iss` | Issuer: the Identity service's issuer URI | Validated by every service |
-| `aud` | Audience: the intended API(s) | Validated by every service. Per-service versus shared audience is decided in Phase 2 |
-| `exp` | Expiration time | Short-lived access tokens; the lifetime is decided in Phase 2 |
-| `iat` | Issued-at time | |
-| `jti` | Unique token identifier | Supports auditing and optional denylisting |
-| `roles` | Coarse role names | **Not authorization proof on its own.** Platform roles are owned by Admin, and merchant roles by Tenant & Merchant ([ADR-014](../decisions/ADR-014-logical-tenant-isolation.md)) |
-| `tenant_context` | Tenant (and possibly merchant) context, **when applicable** | **Never sufficient proof of access.** The owning service validates tenant and resource ownership. Its shape is a Phase 2 decision |
-| `amr` | Authentication methods references (for example `pwd`, `mfa`) | Lets services require stronger authentication for sensitive operations |
+| `iss` | Issuer: the Identity service's public issuer URI | Exact match in every service |
+| `sub` | Subject: the stable, opaque user identifier. For service tokens, the client ID. | Never an email address |
+| `aud` | Audience | User tokens: the front end's audience (`ec-storefront`, `ec-merchant` or `ec-admin`). Service tokens: the called service. |
+| `exp`, `iat`, `nbf` | Validity | Short-lived. Validated with at most 30 seconds of clock skew. |
+| `jti` | Unique token identifier | Auditing, and an optional denylist later |
+| `client_id` | The client the token was issued to | `svc-` prefixed IDs are service clients |
+| `scope` | Granted scopes | |
+| `amr` | Authentication methods references (`pwd`, later `mfa`) | Present when known |
+| `ec_ptype` | Principal type: `user` or `service` | |
+
+**Not included:** `roles`, `tenant_context`, email, name or other personal data. Platform roles are owned by Admin, and merchant roles by Tenant & Merchant. The tenant is an explicit request parameter validated by the owning service ([ADR-014](../decisions/ADR-014-logical-tenant-isolation.md)).
 
 Rules:
 
 - Tokens carry **no secrets and no unnecessary personal data**.
-- Services validate the signature, `iss`, `aud`, `exp` and the algorithm locally ([token validation considerations](../architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md#741-token-validation-architecture)).
+- Services validate the signature, `iss`, `aud`, `exp`, `nbf`, the algorithm (`RS256` only) and `typ` locally, with the standard ASP.NET Core JWT bearer handler.
+- Services never depend on OpenIddict-internal `oi_*` claims.
 
-## 4. Open items for Phase 2 review
+<a id="4-open-items-for-phase-2-review"></a>
 
-1. Confirm the **Reconstructed** paths and fields against the original Phase 0.3 design.
-2. Map every **Provider-dependent** endpoint to the selected protocol and provider. Standard endpoints (for example token, authorize, end-session, discovery, JWKS, UserInfo) may replace custom ones. The provider is OpenIddict with ASP.NET Core Identity ([ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md), open question O12).
-3. Refresh token delivery for browser clients: body or `HttpOnly` cookie, and a backend-for-frontend option.
-4. Idempotency-Key retention, storage and scope.
-5. The `tenant_context` and `roles` claim shape, and the strategy for stale claims.
-6. Rate limiting and lockout responses (Gateway versus service).
-7. The final error `type` URI scheme.
+## 4. Remaining open items
 
-Out of scope for this baseline: multi-factor authentication enrolment, external logins (for example social providers), administrative user management, and service-to-service credential endpoints. These are evaluated in Phase 2.
+1. Confirm the **Reconstructed** REST fields (`users/me`, sessions) during implementation.
+2. `Idempotency-Key` retention, storage and scope, decided with the first endpoint that requires it.
+3. The final error `type` URI scheme.
+4. Internal Admin endpoints for account disablement and reactivation: exact paths and the service scope name.
+
+Out of scope for this contract: MFA enrolment, external logins (social providers), and the internal Notification handoff endpoint (owned by Notification).
+
+## 5. Changes from the Phase 0.3 baseline
+
+| Baseline endpoint | Now | Reason |
+|---|---|---|
+| `POST /api/v1/auth/register` | Identity-hosted registration page | Credential entry only on Identity pages (ADR-017 section 9) |
+| `POST /api/v1/auth/login` | `/connect/authorize` with the Identity login page, then `/connect/token` | OAuth 2.0 / OpenID Connect (ADR-015, ADR-017) |
+| `POST /api/v1/auth/refresh` | `/connect/token` with `grant_type=refresh_token` | Standard protocol endpoint |
+| `POST /api/v1/auth/logout` | `/connect/revoke` plus `/connect/endsession` | Standard protocol endpoints, with custom session revocation |
+| `POST /api/v1/auth/email-confirmation` and `/resend` | Identity-hosted pages, token consumed only by POST | ADR-018 |
+| `POST /api/v1/auth/password-reset` and `/confirm` | Identity-hosted pages | Credential entry only on Identity pages, ADR-018 |
+| `POST /api/v1/auth/logout-all`, `GET /api/v1/users/me`, sessions | Kept | Custom REST |
+| `/identity/api/v1/...` through the Gateway prefix | A dedicated Identity host, routed by host | Issuer and URL consistency (ADR-017 section 10) |
+| Claims `roles` and `tenant_context` | Removed | ADR-017 section 2, ADR-014 |

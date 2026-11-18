@@ -1,11 +1,11 @@
 # Phase 2 Design Brief: Identity
 
-- **Phase type:** design only. **No authentication code, no entities, no tables, no migrations.**
-- **Status:** in progress.
+- **Phase type:** design (Phases 2.1 and 2.2), then implementation (Phase 2.3).
+- **Status:**
   - **Phase 2.1 (provider selection) is complete:** ASP.NET Core Identity with OpenIddict, recorded in [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md).
-  - **Phase 2.2 (authentication flows and security design) is proposed and awaiting review:** [PHASE_2_2_AUTHENTICATION_FLOWS.md](PHASE_2_2_AUTHENTICATION_FLOWS.md). Nothing in it is accepted until approved and recorded in ADRs.
-  - **Phase 2.3 has not started** and requires explicit authorization after review of Phase 2.2.
-- **Exit gate:** Phase 2 ends with a design review and an explicit approval request. Implementation starts only after approval.
+  - **Phase 2.2 (authentication flows and security design) is complete:** approved on 2026-11-18 and recorded in [ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md) (BFF), [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md) (tokens, sessions, protocol) and [ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md) (account security tokens and email). Rationale, residual risks and the test plan: [PHASE_2_2_AUTHENTICATION_FLOWS.md](PHASE_2_2_AUTHENTICATION_FLOWS.md#11-decisions-and-implementation-plan).
+  - **Phase 2.3 (Identity implementation) is authorized and in progress.** It implements the accepted ADRs in small vertical slices.
+- **Exit gate:** the design exit gate was passed with the Phase 2.2 approval.
 
 This brief defines the scope, questions and evaluation criteria for designing the Identity microservice.
 
@@ -200,13 +200,13 @@ Evaluate and specify:
 |---|---|---|
 | 1 | Identity architecture proposal | Partly done: the component boundaries are in [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md) |
 | 2 | Provider comparison (7.2 criteria, verified facts, recommendation) | **Done** (ADR-015) |
-| 3 | Authentication protocol decision | Partly done: OAuth 2.0 and OpenID Connect are accepted, ROPC and implicit are rejected. The client flows are **proposed** in [PHASE_2_2_AUTHENTICATION_FLOWS.md](PHASE_2_2_AUTHENTICATION_FLOWS.md), awaiting approval |
-| 4 | Token strategy, including the token validation architecture (7.4.1) | **Proposed** in [PHASE_2_2_AUTHENTICATION_FLOWS.md](PHASE_2_2_AUTHENTICATION_FLOWS.md) (sections 5.4, 6 and 7), awaiting approval |
-| 5 | Logical data model | Open. ADR-015 section 4 gives the persistence boundaries |
-| 6 | Authorization model (including tenant context propagation) | Open |
-| 7 | API contract proposal (`docs/api/`) | Open |
-| 8 | Security considerations | Partly proposed: authentication security, the failure and threat matrix and abuse protection are in [PHASE_2_2_AUTHENTICATION_FLOWS.md](PHASE_2_2_AUTHENTICATION_FLOWS.md), awaiting approval. ADR-015 records the baseline rules |
-| 9 | ADRs for each decision taken: at minimum the protocol, the provider and the token strategy | Provider and protocol family: **done** (ADR-015). Token strategy: open |
-| 10 | Updates to [PROJECT_DECISIONS.md](PROJECT_DECISIONS.md) section 13 (resolved items move out of "deferred") | Done for the provider and protocol |
+| 3 | Authentication protocol decision | **Done:** OAuth 2.0 and OpenID Connect (ADR-015). Client flows and browser architecture: [ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md) and [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md) |
+| 4 | Token strategy, including the token validation architecture (7.4.1) | **Done:** [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md) |
+| 5 | Logical data model | Designed in the Phase 2.3 implementation within ADR-015 section 4, ADR-017 and ADR-018 |
+| 6 | Authorization model (including tenant context propagation) | Token side done: no role or tenant claims, and the tenant is an explicit, service-validated request parameter (ADR-017). Service-side enforcement is designed per service. |
+| 7 | API contract proposal (`docs/api/`) | **Done:** [IDENTITY_API_CONTRACT.md](../api/IDENTITY_API_CONTRACT.md) |
+| 8 | Security considerations | **Done:** the failure and threat matrix, residual risks and required tests in [PHASE_2_2_AUTHENTICATION_FLOWS.md](PHASE_2_2_AUTHENTICATION_FLOWS.md#10-failure-and-threat-matrix). Rules in ADR-015 to ADR-018 |
+| 9 | ADRs for each decision taken: at minimum the protocol, the provider and the token strategy | **Done:** ADR-015 to ADR-018 |
+| 10 | Updates to [PROJECT_DECISIONS.md](PROJECT_DECISIONS.md) section 13 (resolved items move out of "deferred") | **Done** |
 
-Phase 2 ends with a **design review and an explicit approval request**. No implementation begins before approval.
+The design review and approval took place on 2026-11-18. Phase 2.3 implements the accepted decisions.

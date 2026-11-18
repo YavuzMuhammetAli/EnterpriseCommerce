@@ -10,7 +10,7 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
 
 | # | Service | Planned project prefix | Data store | Status |
 |---|---|---|---|---|
-| 1 | Identity | `EnterpriseCommerce.Identity` | SQL Server | Skeleton (Phase 1); design is Phase 2 |
+| 1 | Identity | `EnterpriseCommerce.Identity` | SQL Server | Design accepted (Phase 2.2); implementation in Phase 2.3 |
 | 2 | Tenant & Merchant | `EnterpriseCommerce.TenantMerchant` *(provisional name)* | SQL Server | Planned |
 | 3 | Catalog | `EnterpriseCommerce.Catalog` | MongoDB | Planned |
 | 4 | Inventory | `EnterpriseCommerce.Inventory` | SQL Server | Planned |
@@ -21,6 +21,7 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
 | 9 | Notification | `EnterpriseCommerce.Notification` | SQL Server | Planned |
 | 10 | Admin | `EnterpriseCommerce.Admin` | SQL Server | Planned |
 | — | API Gateway (infrastructure) | `EnterpriseCommerce.Gateway` | none | Skeleton (Phase 1) |
+| — | Backend-for-frontend (infrastructure, one codebase, one deployment per front end) | decided in the Phase 2.3 BFF slice | Dedicated Redis for session tickets (ephemeral) | Accepted ([ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md)); not yet implemented |
 
 ## 1. Identity
 
@@ -38,8 +39,10 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
 - Provider and protocol (decided in Phase 2.1):
   - ASP.NET Core Identity with OpenIddict, using OAuth 2.0 and OpenID Connect ([ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)).
   - ASP.NET Core Identity roles are not authoritative for platform or merchant roles.
-- Open decisions: the client flows and browser client architecture, the token and session strategy, and the data model. These are scoped in [PHASE_2_IDENTITY_DESIGN_BRIEF.md](PHASE_2_IDENTITY_DESIGN_BRIEF.md).
-- API baseline: [IDENTITY_API_CONTRACT.md](../api/IDENTITY_API_CONTRACT.md) (Phase 0.3, subject to Phase 2 review).
+- Token, session and protocol strategy (decided in Phase 2.2, [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md)): Identity has its own host behind the Gateway, hosts the account UI for every credential entry, and owns the per-user security version and the refresh-token redemption ledger.
+- Account security tokens ([ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)): Identity creates, hashes and consumes confirmation and reset tokens, and hands security emails to Notification through a bounded in-process queue. It does not own email delivery.
+- Open: the detailed data model, designed in the Phase 2.3 implementation within these ADRs.
+- API contract: [IDENTITY_API_CONTRACT.md](../api/IDENTITY_API_CONTRACT.md).
 - Phase 1 state: a compilable four-layer skeleton with a health endpoint, OpenAPI, exception handling and structured logging. **No identity features.**
 
 ## 2. Tenant & Merchant
@@ -130,6 +133,7 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
   - notification delivery status
   - retry and failure handling
 - Mostly event-driven. It must not become a place where other services' business rules live.
+- Security emails (confirmation and password reset links) arrive through an authenticated internal endpoint called by Identity with a service token, never through Kafka. Notification never persists the link or the rendered body of a security email ([ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)).
 
 ## 10. Admin
 
@@ -147,3 +151,5 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
 ## API Gateway (infrastructure)
 
 `EnterpriseCommerce.Gateway` is a YARP reverse proxy and the single external entry point ([ADR-007](../decisions/ADR-007-yarp-api-gateway.md)). It routes requests and applies edge concerns only. It contains no business logic, and its authorization never replaces service-level authorization. See [SOLUTION_STRUCTURE.md](SOLUTION_STRUCTURE.md#gateway-responsibility).
+
+It routes Identity and each backend-for-frontend by host name, and it is the only proxy whose forwarded headers Identity trusts ([ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md), [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md)).

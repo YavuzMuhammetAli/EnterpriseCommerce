@@ -20,6 +20,9 @@ The consolidated, current view of all decisions is [PROJECT_DECISIONS.md](../arc
 | [ADR-012](ADR-012-transactional-outbox-and-asynchronous-commands.md) | Transactional Outbox and Asynchronous Commands | Accepted (direction; implementation deferred) | |
 | [ADR-013](ADR-013-saga-based-workflow-coordination.md) | Saga-Based Workflow Coordination | Accepted (direction; detailed design deferred) | |
 | [ADR-014](ADR-014-logical-tenant-isolation.md) | Logical Tenant Isolation | Accepted | |
-| [ADR-015](ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md) | Identity Provider: ASP.NET Core Identity with OpenIddict | Accepted | |
+| [ADR-015](ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md) | Identity Provider: ASP.NET Core Identity with OpenIddict | Accepted (amended) | ADR-017 |
+| [ADR-016](ADR-016-browser-client-architecture-backend-for-frontend.md) | Browser Client Architecture: Backend-for-Frontend | Accepted | |
+| [ADR-017](ADR-017-token-session-and-protocol-strategy.md) | Token, Session and Protocol Strategy | Accepted | |
+| [ADR-018](ADR-018-account-security-tokens-and-security-email-delivery.md) | Account Security Tokens and Security Email Delivery | Accepted | |
 
 New ADRs use the next number and the same four sections: Context, Decision, Consequences and Alternatives considered.

@@ -1,10 +1,10 @@
 # Phase 2.2: Authentication Flows and Security Design
 
-- **Status:** **Proposed. Awaiting architectural review and explicit approval.** Nothing in this document is accepted until it is approved and recorded in an ADR.
+- **Status:** **Accepted (revision 3).** The owner approved the decisions on 2026-11-18. They are recorded in [ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md), [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md) and [ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md). **The ADRs are the decision source.** Sections 1 to 10 keep the revision 2 analysis as rationale. Where they say "Recommended", "Proposal" or "Open", read [section 11](#11-decisions-and-implementation-plan) and the ADRs for the outcome.
 - **Phase:** 2.2 (authentication flows, browser client architecture, token and session strategy). Design only.
-- **Date:** 2026-11-18. **Revision 2** (same day) applies the architectural review corrections summarized in [Architectural Review Corrections](#architectural-review-corrections).
+- **Date:** 2026-11-18. **Revision 2** (same day) applies the architectural review corrections summarized in [Architectural Review Corrections](#architectural-review-corrections). **Revision 3** (same day) records the owner decisions and the proof-of-concept evidence ([Revision 3: owner decisions](#revision-3-owner-decisions)).
 - **Builds on:** [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md) (accepted), [PHASE_2_IDENTITY_DESIGN_BRIEF.md](PHASE_2_IDENTITY_DESIGN_BRIEF.md), [IDENTITY_API_CONTRACT.md](../api/IDENTITY_API_CONTRACT.md), [ADR-007](../decisions/ADR-007-yarp-api-gateway.md), [ADR-014](../decisions/ADR-014-logical-tenant-isolation.md), [ADR-006](../decisions/ADR-006-redis-usage-boundaries.md), [PROJECT_DECISIONS.md](PROJECT_DECISIONS.md).
-- **Implementation:** none. No code, packages, projects, infrastructure or ADRs are created by this phase.
+- **Implementation:** Phase 2.3, authorized. This document creates no code. The implementation follows the ADRs and the test plan in [section 11.5](#115-required-implementation-tests).
 
 ## How to read this document
 
@@ -13,8 +13,8 @@ Decision tiers, as in ADR-015:
 | Marker | Meaning |
 |---|---|
 | **Accepted** | Already decided by an accepted ADR. Restated only by reference. |
-| **Recommended** | The proposed direction of this document. It becomes binding only after approval and an ADR. |
-| **Open** | Needs a decision. Listed in [section 11](#11-decisions-requiring-approval). |
+| **Recommended** | The proposed direction of revision 2. The binding outcome is in [section 11.1](#111-decision-outcomes) and the ADRs. |
+| **Open** | Needed a decision in revision 2. Every item now has an outcome in [section 11](#11-decisions-and-implementation-plan). |
 | **Proposal** | A concrete value or data field suggested for review (for example a lifetime or a column). Not a decision. |
 
 Responsibility markers, used wherever behaviour is described:
@@ -35,6 +35,7 @@ Responsibility markers, used wherever behaviour is described:
 ## Table of contents
 
 - [Architectural Review Corrections](#architectural-review-corrections) (revision 2)
+- [Revision 3: owner decisions](#revision-3-owner-decisions)
 
 1. [Scope, accepted decisions and non-goals](#1-scope-accepted-decisions-and-non-goals)
 2. [Document consistency findings](#2-document-consistency-findings)
@@ -46,7 +47,7 @@ Responsibility markers, used wherever behaviour is described:
 8. [Endpoint mapping proposal](#8-endpoint-mapping-proposal)
 9. [Sequence diagrams](#9-sequence-diagrams)
 10. [Failure and threat matrix](#10-failure-and-threat-matrix)
-11. [Decisions requiring approval](#11-decisions-requiring-approval)
+11. [Decisions and implementation plan](#11-decisions-and-implementation-plan)
 12. [Sources](#12-sources)
 
 ---
@@ -72,6 +73,21 @@ Also updated:
 - **Threat matrix:** rows T6, T7 and T11 changed. Rows T21 to T23 added.
 - **Decisions:** D3, D5, D9, D10, D11 and D15 revised. D22 to D27 added.
 - **Consistency findings:** F2, F3 and F6 now point to these resolutions.
+
+## Revision 3: owner decisions
+
+The owner reviewed revision 2 and the proof-of-concept (PoC) evidence and approved the decisions on 2026-11-18. Every D-item now has an outcome ([section 11.1](#111-decision-outcomes)). Where the approved model differs from revision 2, the ADR wins. Read the body of this document with these substitutions:
+
+| Revision 2 term or proposal | Accepted outcome | Record |
+|---|---|---|
+| Per-user **session epoch** (a timestamp, D25) | Per-user **security version**: a counter in a dedicated record, checked on Identity cookie validation, authorization, code exchange and refresh. A missing record fails closed. | ADR-017 section 7 |
+| Optional **strict rotation guard** (D24) | **Mandatory refresh-token redemption ledger**: a unique row per redeemed refresh token entry, inserted before native redemption | ADR-017 section 5 |
+| Admin-console reuse scope: open (D24) | Admin-console reuse raises the security version and invalidates **all** of the user's sessions. Other clients revoke only the affected authorization. | ADR-017 section 5 |
+| Reuse detection triggered by any presenter | **Presenter check first:** a token presented by a different client is rejected with no revocation (PoC-13e, threat [T24](#10-failure-and-threat-matrix)) | ADR-017 section 5 |
+| Epoch raised "in its own committed transaction", revocation afterwards (D9) | **One short authoritative transaction** (account change, token consumption, security version, single authorization state). Whole-transaction retry on deadlock 1205. OpenIddict bulk revocation as idempotent post-commit cleanup (PoC-13d, threat [T25](#10-failure-and-threat-matrix)). | ADR-017 section 8 |
+| E2 synchronous handoff from the request (D11) | A **bounded in-process queue** in Identity, whose worker performs the authenticated handoff to Notification, with status-only reconciliation | ADR-018 section 3 |
+| Audiences "from the requested scopes" | **One audience per front-end client** for user tokens (Option B). Per-service audiences for service tokens only. Per-service user audiences deferred. | ADR-017 section 3 |
+| Development client secrets for BFFs | `private_key_jwt` in deployed environments. Development may use non-committed development credentials. | ADR-016 section 2 |
 
 ---
 
@@ -1391,44 +1407,130 @@ Logging rule for every row: structured Serilog events with correlation ID, `sub`
 | T21 | Concurrent replay of a confirmation or reset token | Persisted single-use tokens: exactly one conditional update succeeds. The other request gets the generic error, and its transaction changes nothing ([section 5.6.3](#563-email-confirmation-and-password-reset-tokens)). | Low | `SecurityTokenRejected` event with purpose and `sub`, never token material | The user requests a new link if needed |
 | T22 | Uncertain refresh outcome (timeout after sending, `5xx`, expired lease) | No retry with the same refresh token. The session continues until the access token expires, then ends ([section 5.4.5](#545-uncertain-refresh-outcomes)). | Availability (forced sign-in) | `RefreshOutcomeUncertain` metric and log entry | The user signs in again. A high rate triggers a review of timeouts, or of the leeway decision (D5). |
 | T23 | Leakage of confirmation or reset links (logs, traces, `Referer`, email scanners) | Query strings redacted in Gateway, Identity and Notification logs and traces. `Referrer-Policy: no-referrer`. Tokens consumed only by POST. Short lifetimes. Supersession on resend ([section 5.6.4](#564-delivery-of-security-emails)). | Medium if leaked | Automated redaction tests. Alerts on repeated token failures for one user. | Issue a new link. The leaked link expires or is superseded. |
+| T24 | Redeemed refresh token replayed by a **different** confidential client (PoC-13e) | Without a presenter check, the reuse policy ran and revoked the **victim's** session: a denial of service across clients. Accepted design: the reuse hook compares the authenticated client with the token's client **first**. On a mismatch it returns `invalid_grant` and revokes nothing. | Medium (cross-client denial of service) if absent | `RefreshTokenPresenterMismatch` security event with both client IDs, never token material | None needed. The victim's session is unaffected. |
+| T25 | Deadlock between the security-version increment and OpenIddict bulk revocation in one transaction (PoC-13d) | In one large transaction: 13 of 20 races ended with `500`, and one left the version unchanged while sessions stayed usable (**fail open**). Accepted design: one short authoritative transaction, whole-transaction retry on error 1205 with a bounded count, then idempotent bulk revocation after commit. Exhausted retries fail the request and issue no token. | High (fail open) if absent | Deadlock retry and exhaustion log events and metrics | Automatic retry. Cleanup is retried separately. A failed cleanup never reverses the committed decision. |
 
 ---
 
-## 11. Decisions requiring approval
+## 11. Decisions and implementation plan
 
-None of these is accepted. Each needs explicit approval before Phase 2.3 and is then recorded in the ADR named in the last column. ADR numbers are provisional.
+The owner approved the decisions on 2026-11-18. **The ADRs are the decision source.** This section maps every item to its outcome and lists the constraints, deferred items, residual risks and tests that the Phase 2.3 implementation must respect.
 
-| # | Decision | Recommendation | ADR-015 ref | ADR after approval |
-|---|---|---|---|---|
-| D1 | Browser architecture for the admin console and merchant portal | BFF for both | O1 | ADR-016 Browser client architecture (BFF) |
-| D2 | Browser architecture for the storefront | BFF (public SPA with the listed conditions as the alternative) | O1 | ADR-016 |
-| D3 | BFF placement and session store | Behind the Gateway (F7), serving its front end's static files. Server-side session tickets with an atomic refresh lease, with Redis as the candidate store under ADR-006. | O1, O8 | ADR-016 |
-| D4 | Token and session lifetimes | [Section 6.4](#64-proposed-lifetimes) | O2 | ADR-017 Token and session strategy |
-| D5 | Refresh token reuse leeway | **None** (`null`). Single-flight refresh across BFF instances ([5.4.4](#544-refresh-coordination)), with no retry after an unknown outcome ([5.4.5](#545-uncertain-refresh-outcomes)). Trade-off: occasional forced sign-in, measured, with a revisit trigger. | O2 | ADR-017 |
-| D6 | Absolute session cap mechanism | Custom token endpoint handler, session deadline in a private claim | O2 | ADR-017 |
-| D7 | Access token claims | Minimal set. No `roles`, no `tenant_context`, no personal data (F1) | O5, O6 | ADR-017, then an IDENTITY_API_CONTRACT update |
-| D8 | Signing algorithm allow-list and validation library | RS256 only, RSA at least 3072 bits. Standard JWT bearer handler, 30-second skew. | O3, O4 | ADR-017 |
-| D9 | Revocation semantics | Revoking a refresh token revokes its authorization. Reuse revokes the complete session. Password change revokes the other sessions. Reset, logout-all and disablement raise the session epoch and revoke all sessions. No binding to the security stamp. | O2 | ADR-017 |
-| D10 | Confirmation and reset token design | **Option A:** persisted, hashed, single-use tokens, consumed atomically with the account change ([5.6.3](#563-email-confirmation-and-password-reset-tokens)). No contract change (F2). | O9 | ADR-018 Account security tokens and security email delivery |
-| D11 | Delivery of credential-bearing emails | **Notification keeps delivery.** E2 (authenticated synchronous handoff) first, E3 (opaque reference) once the event flow exists. E1 (Identity sends directly) only with an approved ownership change ([5.6.4](#564-delivery-of-security-emails), F6). | O9, O13 | ADR-018 |
-| D12 | Confirmed email required before sign-in | Yes, for every account | (Contract 2.2) | ADR-017 or the API contract update |
-| D13 | Account disablement representation | A dedicated account status (proposal for the data model), not lockout | O10 | Phase 2 data model |
-| D14 | Invitation acceptance email match | Minimum: possession of the single-use invitation secret. Email match to be decided with Tenant & Merchant. | — | Tenant & Merchant design |
-| D15 | Endpoint mapping, issuer and routing | The mapping in [section 8](#8-endpoint-mapping-proposal). A dedicated Identity host name, routed by host through the Gateway. Credential entry is decided by D27. | O11, O12 | ADR-017, then an IDENTITY_API_CONTRACT update |
-| D16 | Lockout and SSO cookie parameters | 5 failures, 15 minutes. Optional owner email on lockout. Security stamp validation every 5 minutes. | — | ADR-017 |
-| D17 | MFA before production-like deployment for administrators | Required before any production-like deployment. Designed in a later phase. | — | Later MFA ADR |
-| D18 | Token and authorization pruning | Decide between `OpenIddict.Quartz` (new dependency) and a hosted service calling the prune APIs | — | Implementation phase package review |
-| D19 | Data Protection key ring and deployed key storage | Persistent and shared per deployable, separate from OpenIddict keys. Concrete store per environment. | O8 | Deployment phase |
-| D20 | Sender-constrained tokens | None for the MVP. Re-evaluate DPoP when OpenIddict supports it. mTLS optional for service clients later. | O7 | ADR-017 |
-| D21 | Minimum OpenIddict version | 7.9.0 or later (V18) | — | Implementation phase package review |
-| D22 | BFF deployment topology | T1: one BFF codebase, deployed once per front end. The isolation requirements of [4.5](#45-bff-topology-security-boundaries-versus-deployment-boundaries) apply to every topology. | O1 | ADR-016 |
-| D23 | Cookie, CSRF and HTTPS strategy for the BFFs and Identity | `__Host-Http-` session cookie with every attribute set explicitly. Layered CSRF defense. `Lax` correlation and SSO cookies. HTTPS everywhere, including local development ([4.6](#46-cookies-csrf-and-https)). | O1 | ADR-016 |
-| D24 | Strict rotation guard, and the scope of reuse revocation | Enable the guard. By default, reuse ends only the affected session. Decide whether admin-console reuse ends all of the user's sessions. | O2 | ADR-017 |
-| D25 | Per-user session epoch | Adopt it, written in the same transaction as user-wide security events. Proposal for the data model. | O2, O10 | ADR-017 and the Phase 2 data model |
-| D26 | Refresh outcome policy | Retry only when the request was provably not processed. Never retry after an unknown outcome. Measure forced sign-ins. | O2 | ADR-017 |
-| D27 | Scope of ADR-015 R1 for credential entry | Identity-hosted account UI. R1 covers login, registration, password change, password reset confirmation and later MFA. No password-bearing JSON endpoints for client applications (F3). ADR-015 itself is not edited. | O12 | ADR-017, or an ADR amending ADR-015 R1, then an IDENTITY_API_CONTRACT update |
+### 11.1 Decision outcomes
 
-Phase 2.3 does not start until these decisions are reviewed.
+| # | Decision | Outcome | Record |
+|---|---|---|---|
+| D1 | Browser architecture for the admin console and merchant portal | **Accepted:** BFF for both | [ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md) |
+| D2 | Browser architecture for the storefront | **Accepted:** BFF. The public SPA alternative is rejected. | ADR-016 |
+| D3 | BFF placement and session store | **Accepted:** behind the Gateway, serving its static files. Server-side session tickets in a **dedicated `noeviction` Redis**, with startup validation and atomic leases. | ADR-016 |
+| D4 | Token and session lifetimes | **Accepted** as initial configured values: [section 6.4](#64-proposed-lifetimes) | [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md) section 12 |
+| D5 | Refresh token reuse leeway | **Accepted:** none | ADR-017 section 5 |
+| D6 | Absolute session cap | **Accepted:** session deadline in a private claim, enforced at refresh (PoC-3c) | ADR-017 section 5 |
+| D7 | Access token claims | **Accepted:** minimal, plus `ec_ptype`. No roles, no tenant context, no personal data. | ADR-017 section 2 |
+| D8 | Algorithm and validation library | **Accepted:** RS256 with RSA of at least 3072 bits, `typ: at+jwt`, standard JWT bearer handler, 30-second skew | ADR-017 sections 2 and 4 |
+| D9 | Revocation semantics | **Accepted, revised:** security version plus authorization status are the authority. Authoritative transaction plus post-commit cleanup. | ADR-017 sections 6 to 8 |
+| D10 | Confirmation and reset tokens | **Accepted:** Option A (persisted, hashed, single use, atomic consumption) | [ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md) |
+| D11 | Delivery of credential-bearing emails | **Accepted, revised:** Notification delivers. Identity hands emails over through a bounded in-process queue (E2 in the worker). E3 is deferred. | ADR-018 |
+| D12 | Confirmed email before sign-in | **Accepted:** yes, for every account | ADR-017 section 9, ADR-018 |
+| D13 | Account disablement representation | **Accepted:** a dedicated account status, not lockout | ADR-017 section 9, ADR-018 |
+| D14 | Invitation acceptance email match | **Deferred** to the Tenant & Merchant design | [11.3](#113-deferred-decisions) |
+| D15 | Endpoint mapping, issuer and routing | **Accepted:** the [section 8](#8-endpoint-mapping-proposal) mapping. A dedicated Identity host behind the Gateway. | ADR-017 section 10, [IDENTITY_API_CONTRACT.md](../api/IDENTITY_API_CONTRACT.md) |
+| D16 | Lockout and SSO cookie parameters | **Accepted:** 5 failures, 15 minutes. Security stamp validation every 5 minutes. | ADR-017 section 9 |
+| D17 | MFA for administrators before production-like deployment | **Deferred** (required before any production-like deployment) | [11.3](#113-deferred-decisions) |
+| D18 | Token and authorization pruning | **Accepted:** a hosted service calling the prune APIs. No Quartz dependency. | ADR-017 section 12 |
+| D19 | Data Protection and deployed key storage | **Deferred** to the deployment phase (direction in ADR-017) | [11.3](#113-deferred-decisions) |
+| D20 | Sender-constrained tokens | **Accepted:** none for the MVP (R0) | ADR-017 section 1 |
+| D21 | Minimum OpenIddict version | **Accepted:** 7.9.0 or later | ADR-017 section 1 |
+| D22 | BFF deployment topology | **Accepted:** T1, one codebase deployed once per front end | ADR-016 |
+| D23 | Cookie, CSRF and HTTPS strategy | **Accepted:** `__Host-Http-` session cookie with a `__Host-` fallback, `Lax` correlation and SSO cookies, layered CSRF, HTTPS everywhere | ADR-016 |
+| D24 | Rotation guard and reuse scope | **Accepted, revised:** a mandatory redemption ledger, a presenter check, admin-console reuse ends all sessions, other clients one session | ADR-017 section 5 |
+| D25 | Per-user session epoch | **Accepted, revised:** a counter-based security version | ADR-017 section 7 |
+| D26 | Refresh outcome policy | **Accepted:** never retry an unknown outcome with the same refresh token | ADR-016 section 4, ADR-017 section 5 |
+| D27 | Scope of ADR-015 R1 | **Accepted:** every credential entry is on Identity-hosted pages | ADR-017 section 9 (amends ADR-015 R1) |
+
+### 11.2 Implementation constraints
+
+- **Layers** (ADR-002, ADR-015 A6): framework types (ASP.NET Core Identity, OpenIddict, EF Core) stay in Identity.Infrastructure and Identity.Api. Domain holds pure rules. Application holds use cases and ports. No generic repository.
+- **Authoritative transaction** (ADR-017 section 8): a fresh unit of work per attempt, a whole-transaction retry on SQL Server error 1205 only, a bounded count with backoff, and no token issuance when retries are exhausted. OpenIddict bulk revocation runs only after commit.
+- **Token endpoint order:** security version check, then the absolute deadline, then the ledger insert (a duplicate means reuse, any other error returns `503` with no revocation), then native redemption. The reuse hook runs before `ValidateTokenEntry` and checks the presenter first.
+- **Fail closed:** a missing security-version record, an unreadable security state or an exhausted retry never issues a token. A database outage returns `503` without clearing the Identity cookie.
+- **Forwarded headers** are applied explicitly before authentication (PoC-14). Only the Gateway is trusted, with `ForwardLimit = 1` and host filtering.
+- **Secrets:** no plaintext passwords, refresh tokens or security tokens are stored. Nothing secret appears in responses or logs. Secrets are compared in constant time.
+- **Email:** Identity cannot start outside Development without a production delivery adapter. The development mail sink follows the five isolation layers of ADR-018.
+- **Packages:** OpenIddict 7.9.0 or later. ASP.NET Core Identity and EF Core on the pinned .NET 10 servicing release. Everything goes through Central Package Management.
+
+### 11.3 Deferred decisions
+
+| Item | Planned resolution |
+|---|---|
+| D14: invitation acceptance email match | Tenant & Merchant design |
+| D17: MFA for administrators | A later MFA design, before any production-like deployment |
+| D19: concrete Data Protection and signing key stores | Deployment phase |
+| E3: opaque-reference email handoff through the outbox | After the ADR-012 outbox design |
+| Per-service user access token audiences | When a concrete need appears (ADR-017 section 3) |
+| Sender-constrained tokens (DPoP, mTLS-bound) | When OpenIddict supports DPoP, or for service clients in deployed environments |
+| Optional BFF notification on session revocation, and back-channel logout | Later. Not relied on (U2). |
+| Identity integration events (user registered, user disabled; ADR-015 O13) | First event-flow phase |
+
+### 11.4 Residual risks
+
+| Risk | Mitigation and status |
+|---|---|
+| **Real Safari behaviour is not verified.** Safari does not enforce `__Host-Http-`, and PoC-9 ran Playwright WebKit, which is not Safari. | Every cookie attribute is set explicitly, and CSRF does not depend on the prefix. **Gate:** real Safari on macOS and iOS before production-like deployment (ADR-016 section 8). |
+| Forced sign-in after an unknown refresh outcome | Accepted. Measured with an `uncertain refresh` metric. Revisit trigger in [section 5.4.1](#541-desired-policy). |
+| Access tokens stay valid for up to their lifetime after revocation | Short lifetimes. A denylist or introspection stays a later option. |
+| A queued security email is lost on a process restart | The status record shows `Dropped` or `Indeterminate`. The user requests a new email. |
+| Redis replica failover can lose recent session writes (PoC-11 R5, not executed) | Sessions are ephemeral, so the worst case is a sign-out or an unknown refresh outcome. Re-evaluate when a replicated Redis is deployed. |
+| Identity cannot run outside Development until Notification exists | Accepted (ADR-018). |
+| U1 (PKCE downgrade rejection, `iss` attachment) and V26 (key pre-publication) are not verified at the tag | Covered by implementation tests ([11.5](#115-required-implementation-tests)). |
+
+### 11.5 Required implementation tests
+
+These belong to the normal automated test suite of Phase 2.3. They are not separate PoCs. SQL-backed tests run against a real SQL Server.
+
+| Area | Test |
+|---|---|
+| Refresh | Concurrent refresh with the same token: exactly one success, and ledger uniqueness |
+| Refresh | Reuse from the correct presenter applies the reuse policy |
+| Refresh | Cross-client replay is rejected with no revocation of the victim's session (T24) |
+| Refresh | Admin-console reuse raises the security version and invalidates every session |
+| Refresh | A missing security-version record fails closed. A stale version rejects the refresh. |
+| Transactions | Deadlock 1205 causes a whole-transaction retry. Retry exhaustion fails the request with no token issued (T25). |
+| Transactions | Post-commit cleanup failure leaves the committed decision intact and reported correctly |
+| Transactions | Password reset concurrent with refresh. Logout-all concurrent with refresh. |
+| Security tokens | Single-use consumption race (exactly one winner), rollback on policy failure, no raw token persisted, supersession on resend |
+| Email | **Worker claim versus status-only reconciliation (the planned PoC-15, never executed as a PoC)** |
+| Email | The five isolation layers of the development mail sink (architecture tests, publish-output check) |
+| Routing | Forwarded headers applied before authentication. Host-header spoofing does not influence discovery. |
+| Tokens | Service-side validation of issuer, audience, algorithm, `typ` and skew. PKCE downgrade rejected (U1). Signing key pre-publication (V26). |
+| Logging | Sensitive-log redaction over full flows, plus a CI scan of test logs for secret patterns |
+| BFF | Redis `noeviction` startup validation. Lease single-flight. CSRF layers. Cookie attributes. |
+| Browser gate | Real Safari (manual or device automation) before production-like deployment |
+
+### 11.6 Proof-of-concept evidence summary
+
+The PoCs were throwaway programs run by the owner against OpenIddict 7.9.0 and ASP.NET Core Identity 10.0.15, on SQL Server LocalDB 2019 (run 1) and SQL Server 2022 (run 2). Only the outcomes are recorded here. Raw logs and evidence files are not part of the repository.
+
+| PoC | Question | Outcome |
+|---|---|---|
+| PoC-1a, 1b | Simultaneous refreshes without a ledger | Session fork reproduced (V41 confirmed) |
+| PoC-1c, 1d | Redemption ledger | Exactly one success. The loser is rejected and the session revoked. No fork in 100 trials. |
+| PoC-1e | Non-duplicate ledger error | `503`, no revocation, the token stays usable |
+| PoC-2a to 2d | In-flight refresh against revocation or a version increment | Observed. This informed the authoritative-state rule. |
+| PoC-3a to 3i | Private claims, handler order, deadline cap, failures around redemption, security version | Passed. Missing version fails closed. Stale version revokes. |
+| PoC-5 | Conditional token consumption in one transaction | Exactly one consumer under concurrency. Full rollback on policy failure. |
+| PoC-8 | Confidential client authentication matrix | Observed per case |
+| PoC-9 | Cookie prefixes, SameSite, Fetch Metadata and CORS in Chromium, Firefox and Playwright WebKit | Observed. **Not evidence for real Safari.** |
+| PoC-10 | Log flow at baseline and verbose levels | Executed. This informed the logging rules in ADR-017 section 11. |
+| PoC-11 R1 to R3 | Redis lease contention, owner-only store, expired-lease takeover | Passed |
+| PoC-11 R4 | Eviction under memory pressure | `noeviction` keeps sessions. LRU policies evict them silently. |
+| PoC-11 R5 | Replica failover write loss | **Not executed** (residual risk) |
+| PoC-12 | Service-side validation with the standard JWT bearer handler | Passed. A token for another audience is rejected. |
+| PoC-13a to 13c, 13f | Reuse policy per client, no false positives, no token material in audit records | Passed |
+| PoC-13d | Admin-console race with one large transaction | **Failed:** deadlocks, `500`s, and one fail-open trial. Version-first with post-commit cleanup passed 20 of 20. Recorded as T25. |
+| PoC-13e | Redeemed token replayed by another client | **Threat:** the victim's session was revoked. Recorded as T24. Fixed by the presenter check. |
+| PoC-14 | Forwarded headers and host filtering through the Gateway | With minimal hosting, forwarded headers must be applied explicitly before authentication. Host filtering plus a single trusted proxy keeps spoofed headers from influencing discovery. |
+| PoC-15 | Email worker claim versus reconciliation | **Not executed.** Moved to the implementation test plan ([11.5](#115-required-implementation-tests)). |
 
 ---
 

@@ -1,6 +1,6 @@
 # ADR-015: Identity Provider: ASP.NET Core Identity with OpenIddict
 
-- **Status:** Accepted
+- **Status:** Accepted. Amended by [ADR-017](ADR-017-token-session-and-protocol-strategy.md): the scope of R1 covers every credential entry (Identity-hosted pages only), and the reuse, leeway and revocation semantics of R4 are replaced by ADR-017 sections 5 to 8. The recommendations R2, R3, R5 and R7 and open questions O1 to O9, O11 and O12 are resolved by [ADR-016](ADR-016-browser-client-architecture-backend-for-frontend.md), ADR-017 and [ADR-018](ADR-018-account-security-tokens-and-security-email-delivery.md).
 - **Date:** 2026-11-17
 - **Phase:** 2.1 (Identity provider selection)
 - **Resolves:** "Identity protocol and provider" in [PROJECT_DECISIONS.md section 13](../architecture/PROJECT_DECISIONS.md#13-explicitly-deferred-decisions). It supersedes no earlier ADR.
