@@ -1532,6 +1532,17 @@ The PoCs were throwaway programs run by the owner against OpenIddict 7.9.0 and A
 | PoC-14 | Forwarded headers and host filtering through the Gateway | With minimal hosting, forwarded headers must be applied explicitly before authentication. Host filtering plus a single trusted proxy keeps spoofed headers from influencing discovery. |
 | PoC-15 | Email worker claim versus reconciliation | **Not executed.** Moved to the implementation test plan ([11.5](#115-required-implementation-tests)). |
 
+### 11.7 Implementation findings (Phase 2.3)
+
+Facts confirmed by the Phase 2.3 integration tests against OpenIddict 7.9.0. They refine [section 3](#3-verified-framework-behaviour) and do not change any decision.
+
+| # | Finding | Consequence |
+|---|---|---|
+| I1 | OpenIddict accepts `code_challenge_method=plain` by default. | Identity restricts the server to `S256` explicitly. A test rejects `plain` and missing PKCE. |
+| I2 | Client assertions (`private_key_jwt`) without the `typ` header `client-authentication+jwt` are rejected (error ID2089). | Every BFF and service client must set `typ: client-authentication+jwt` and use the issuer as `aud`. |
+| I3 | Replaying an authorization code revokes every token issued from it, including refresh tokens already rotated (V17). | Expected. A BFF must never retry a code exchange. |
+| I4 | Discovery endpoint URLs come from the request, not from the configured issuer (PoC-14). | Host filtering and the trusted-proxy configuration are required in every deployed environment. Identity fails fast without them. |
+
 ---
 
 ## 12. Sources
