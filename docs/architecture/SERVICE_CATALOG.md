@@ -20,7 +20,7 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
 | 8 | Fulfillment | `EnterpriseCommerce.Fulfillment` | SQL Server | Planned |
 | 9 | Notification | `EnterpriseCommerce.Notification` | SQL Server | Planned |
 | 10 | Admin | `EnterpriseCommerce.Admin` | SQL Server | Planned |
-| — | API Gateway (infrastructure) | `EnterpriseCommerce.Gateway` | none | Skeleton (Phase 1) |
+| — | API Gateway (infrastructure) | `EnterpriseCommerce.Gateway` | none | Configuration-based routing, internal-path blocking and edge rate limiting implemented (Phase 1, Phase 2.3 S5 and S6). Deployed routing configuration is deferred. |
 | — | Backend-for-frontend (infrastructure, one codebase, one deployment per front end) | `EnterpriseCommerce.Bff` (`src/Bff`) | Dedicated `noeviction` Redis for server-side sessions (`redis-sessions`, profile `bff`) | Implemented in Phase 2.3 S7 ([ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md), [BFF_API_CONTRACT.md](../api/BFF_API_CONTRACT.md)); real Safari gate open |
 
 ## 1. Identity
@@ -47,7 +47,7 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
   - **Authentication (S2):** the Identity-hosted login page with lockout, a progressive per-account delay and rate limiting. Authorization code with PKCE `S256`. A confirmed email is required.
   - **Token handling (S2):**
     - RS256 `at+jwt` access tokens with minimal claims and one audience per front end
-    - client credentials for `svc-` service clients
+    - client credentials for `svc-` service clients, with 5-minute access tokens by default (finding I38)
     - rotated refresh tokens without leeway, the redemption ledger and the presenter-checked reuse policy
     - the absolute session cap, and the security version checked at every grant
   - **Registration and email confirmation (S3):** hashed, single-use confirmation tokens, resend limits, and security email delivery records with a bounded queue, a worker and status-only reconciliation.
@@ -73,7 +73,6 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
   - a shared Data Protection volume with a multi-instance rolling restart, and rotation of the Data Protection key-encryption certificate
   - administrator MFA, and real Safari
   - the retention decision for security tokens and delivery records
-  - the service access token lifetime discrepancy (finding I38)
 
   The full list is in [IDENTITY_OPERATIONS.md section 7](../security/IDENTITY_OPERATIONS.md#7-verification-level-and-remaining-production-gates).
 - API contract: [IDENTITY_API_CONTRACT.md](../api/IDENTITY_API_CONTRACT.md).
@@ -187,3 +186,29 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
 `EnterpriseCommerce.Gateway` is a YARP reverse proxy and the single external entry point ([ADR-007](../decisions/ADR-007-yarp-api-gateway.md)). It routes requests and applies edge concerns only. It contains no business logic, and its authorization never replaces service-level authorization. See [SOLUTION_STRUCTURE.md](SOLUTION_STRUCTURE.md#gateway-responsibility).
 
 It routes Identity and each backend-for-frontend by host name, and it is the only proxy whose forwarded headers Identity trusts ([ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md), [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md)).
+
+**Implemented** (`src/Gateway/EnterpriseCommerce.Gateway`):
+
+- **Routing from configuration only.** YARP routes and clusters come from the `ReverseProxy` section. The development route set (`appsettings.Development.json`) contains:
+  - Identity by host name (`id.localhost:7000`)
+  - each BFF by host name (`storefront`, `merchant` and `admin.localhost:7000`), with `X-Forwarded` set
+  - a `/identity` path-prefix route to Identity, for development diagnostics only (ADR-017 section 10)
+- **Internal paths are never forwarded.** `/internal/**` answers `404` on every host, case-insensitively (IDENTITY_API_CONTRACT.md section 2.12).
+- **Edge rate limiting** for the Identity account pages: the `identity-account` policy, a fixed window per client IP (default 30 requests per minute), answering `429` with `Retry-After`. Counters are kept in memory per instance. Identity applies its own limits as well.
+- **Its own `/health` liveness,** never proxied. Problem details for errors, and Serilog request logging with YARP logs at Warning.
+- **No token validation and no authorization.** Services authorize every request themselves (ADR-007, ADR-017 section 4).
+
+**Verification:**
+
+- **Tested:** internal-path blocking and the forwarding of other paths (`EdgeRoutingTests`).
+- **Tested on the Identity side only:** Identity's trust of the Gateway's forwarded headers is tested against a stand-in proxy (`TrustedProxyTests`), not through the real Gateway.
+- **Not covered by an automated test:** the rate limiter.
+- **Not verified:** the full local flow through the Gateway (finding I29).
+
+**Deferred** (deployment concerns, not implemented):
+
+- production routes and clusters: `appsettings.json` defines none
+- public host names and TLS certificates per environment (locally, finding I29)
+- the Gateway's network address configured as the only trusted proxy of Identity and the BFFs
+- a rate-limit store shared across Gateway instances
+- optional early token validation, which ADR-017 section 4 allows

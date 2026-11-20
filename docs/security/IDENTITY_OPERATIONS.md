@@ -363,4 +363,3 @@ None of these is complete.
 | Real Safari on macOS and iOS | Open (ADR-016 section 8). Playwright WebKit is no evidence (finding I26). |
 | A metrics exporter, dashboards, alerting and operational monitoring | Observability phase. The alert candidates are in section 6. |
 | Retention periods for account security tokens and delivery records | Open decision (I35, PROJECT_DECISIONS section 13) |
-| Service access token lifetime: 10 minutes by default, while the accepted initial value is 5 minutes | Open discrepancy (finding I38). It needs an implementation change or a deliberate configuration decision. |

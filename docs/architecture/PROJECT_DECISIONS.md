@@ -57,7 +57,7 @@ The architecture prioritizes **maintainability, scalability, security, separatio
 | Dashboards | Grafana | Planned (observability phase) |
 | Log aggregation | Loki | Planned (observability phase) |
 | Testing | xUnit (v3) | In use |
-| CI/CD | GitHub Actions | Workflow defined, not yet executed (no remote) |
+| CI/CD | GitHub Actions | In use: runs on every push and pull request to `main` (build and test with SQL Server 2022 and the session Redis, Playwright browser tests, Docker Compose validation). All six runs from 2026-11-17 to 2026-11-20 succeeded. Commits that are not pushed are not CI-verified. |
 | Source control | Git | In use |
 
 Rules:
