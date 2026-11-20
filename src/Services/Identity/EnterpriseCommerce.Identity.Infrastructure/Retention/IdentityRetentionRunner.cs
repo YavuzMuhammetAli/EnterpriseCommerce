@@ -1,4 +1,5 @@
 using System.Data;
+using EnterpriseCommerce.Identity.Application.Diagnostics;
 using EnterpriseCommerce.Identity.Infrastructure.Diagnostics;
 using EnterpriseCommerce.Identity.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
@@ -26,34 +27,6 @@ public enum RetentionRunOutcome
 /// <summary>Result of one retention run: the outcome and the deleted rows per category.</summary>
 public sealed record RetentionRunResult(RetentionRunOutcome Outcome, long LedgerRows, long OpenIddictTokens, long OpenIddictAuthorizations);
 
-/// <summary>The last retention run of this instance, for readiness reporting.</summary>
-public sealed class RetentionWorkerState
-{
-    private long _lastRunTicks;
-    private long _lastSuccessTicks;
-
-    /// <summary>When the last run ended, whatever its outcome.</summary>
-    public DateTimeOffset? LastRunAt => Read(ref _lastRunTicks);
-
-    /// <summary>When the last run ended with <see cref="RetentionRunOutcome.Completed"/> or <see cref="RetentionRunOutcome.Skipped"/>.</summary>
-    public DateTimeOffset? LastSuccessAt => Read(ref _lastSuccessTicks);
-
-    internal void Record(RetentionRunOutcome outcome, DateTimeOffset at)
-    {
-        Interlocked.Exchange(ref _lastRunTicks, at.UtcTicks);
-        if (outcome != RetentionRunOutcome.Failed)
-        {
-            Interlocked.Exchange(ref _lastSuccessTicks, at.UtcTicks);
-        }
-    }
-
-    private static DateTimeOffset? Read(ref long ticks)
-    {
-        var value = Interlocked.Read(ref ticks);
-        return value == 0 ? null : new DateTimeOffset(value, TimeSpan.Zero);
-    }
-}
-
 /// <summary>
 /// One retention run (Phase 2.3 S6). Deletes only records that can no longer reject any token:
 /// <list type="number">
@@ -75,7 +48,7 @@ internal sealed partial class IdentityRetentionRunner(
     IServiceScopeFactory scopeFactory,
     IOptions<IdentityDatabaseOptions> database,
     IOptions<IdentityRetentionOptions> options,
-    RetentionWorkerState state,
+    BackgroundWorkerHeartbeats heartbeats,
     TimeProvider timeProvider,
     ILogger<IdentityRetentionRunner> logger)
 {
@@ -87,8 +60,8 @@ internal sealed partial class IdentityRetentionRunner(
         var settings = options.Value;
         var result = await RunLockedAsync(settings, cancellationToken);
 
-        state.Record(result.Outcome, timeProvider.GetUtcNow());
-        IdentitySecurityMetrics.RetentionRuns.Add(1, new KeyValuePair<string, object?>("outcome", OutcomeTag(result.Outcome)));
+        heartbeats.Retention.Record(result.Outcome != RetentionRunOutcome.Failed, timeProvider.GetUtcNow());
+        IdentityMetrics.RetentionRuns.Add(1, new KeyValuePair<string, object?>("outcome", OutcomeTag(result.Outcome)));
         Record("refresh-redemption-ledger", result.LedgerRows);
         Record("openiddict-tokens", result.OpenIddictTokens);
         Record("openiddict-authorizations", result.OpenIddictAuthorizations);
@@ -275,7 +248,7 @@ internal sealed partial class IdentityRetentionRunner(
             }
             catch (Exception exception) when (SqlServerErrors.IsTransient(exception) && attempt < settings.MaxAttempts)
             {
-                IdentitySecurityMetrics.RetentionRetries.Add(1, new KeyValuePair<string, object?>("category", category));
+                IdentityMetrics.RetentionRetries.Add(1, new KeyValuePair<string, object?>("category", category));
                 LogRetry(logger, category, attempt, settings.MaxAttempts);
                 await Task.Delay(TimeSpan.FromMilliseconds(100 * attempt * attempt), timeProvider, cancellationToken);
             }
@@ -292,7 +265,7 @@ internal sealed partial class IdentityRetentionRunner(
     {
         if (rows > 0)
         {
-            IdentitySecurityMetrics.RetentionDeleted.Add(rows, new KeyValuePair<string, object?>("category", category));
+            IdentityMetrics.RetentionDeleted.Add(rows, new KeyValuePair<string, object?>("category", category));
         }
     }
 

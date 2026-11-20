@@ -7,7 +7,7 @@ using EnterpriseCommerce.Bff.Security;
 using EnterpriseCommerce.Bff.Sessions;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
-using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Serilog;
 using Serilog.Events;
@@ -47,11 +47,8 @@ builder.Services.AddSingleton(cookieNames);
 
 // Data Protection: protects the OAuth state, the nonce cookie and the session record contents. One key ring per
 // deployment (its own application name), shared by that deployment's instances.
-var dataProtection = builder.Services.AddDataProtection().SetApplicationName($"EnterpriseCommerce.Bff.{settings.Deployment}");
-if (!string.IsNullOrWhiteSpace(settings.DataProtectionKeyDirectory))
-{
-    dataProtection.PersistKeysToFileSystem(new DirectoryInfo(Environment.ExpandEnvironmentVariables(settings.DataProtectionKeyDirectory)));
-}
+// Encrypted at rest with a certificate outside Development (Phase 2.3 S6.4).
+DataProtectionSetup.Configure(builder.Services, settings);
 
 // The dedicated session Redis (ADR-016 section 3); the host refuses to start unless it uses noeviction.
 builder.Services.AddSingleton<IRedisConnection>(_ => new RedisConnection(sessionStoreConnection!));
@@ -84,7 +81,8 @@ builder.Services.AddAntiforgery(options =>
 builder.Services.AddSingleton<IAntiforgeryAdditionalDataProvider, SessionBoundAntiforgeryData>();
 
 builder.Services.AddApiForwarding(settings);
-builder.Services.AddHealthChecks().AddCheck<SessionStoreHealthCheck>("session-store");
+// Readiness depends on the session store; liveness on the process only (Phase 2.3 S6.5).
+builder.Services.AddHealthChecks().AddCheck<SessionStoreHealthCheck>("session-store", tags: ["ready"], timeout: TimeSpan.FromSeconds(5));
 builder.AddTrustedProxy();
 
 var app = builder.Build();
@@ -120,7 +118,10 @@ app.UseAuthentication();
 app.UseBrowserRequestProtection();
 app.UseAuthorization();
 
+// /health keeps its S7 meaning (session store included). Responses carry the status word only.
 app.MapHealthChecks("/health");
+app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
+app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
 app.MapBffEndpoints();
 app.MapApiForwarding();
 if (app.Environment.WebRootFileProvider.GetFileInfo("index.html").Exists)

@@ -1,7 +1,7 @@
 using EnterpriseCommerce.Identity.Application.SecurityEmails;
 using EnterpriseCommerce.Identity.Domain.Accounts;
 using EnterpriseCommerce.Identity.Domain.SecurityEmails;
-using EnterpriseCommerce.Identity.Infrastructure.Diagnostics;
+using EnterpriseCommerce.Identity.Application.Diagnostics;
 using EnterpriseCommerce.Identity.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -67,10 +67,10 @@ internal sealed class SecurityEmailDeliveryStore(IdentityServiceDbContext contex
             switch (status)
             {
                 case SecurityEmailDeliveryStatus.Failed:
-                    IdentitySecurityMetrics.SecurityEmailFailed.Add(1, reason);
+                    IdentityMetrics.SecurityEmailFailed.Add(1, reason);
                     break;
                 case SecurityEmailDeliveryStatus.Indeterminate:
-                    IdentitySecurityMetrics.SecurityEmailIndeterminate.Add(1, reason);
+                    IdentityMetrics.SecurityEmailIndeterminate.Add(1, reason);
                     break;
             }
         }
@@ -91,7 +91,7 @@ internal sealed class SecurityEmailDeliveryStore(IdentityServiceDbContext contex
 
         if (marked)
         {
-            IdentitySecurityMetrics.SecurityEmailDropped.Add(1, new KeyValuePair<string, object?>("reason", errorCategory));
+            IdentityMetrics.SecurityEmailDropped.Add(1, new KeyValuePair<string, object?>("reason", errorCategory));
         }
 
         return marked;
@@ -123,12 +123,12 @@ internal sealed class SecurityEmailDeliveryStore(IdentityServiceDbContext contex
 
         if (staleQueued > 0)
         {
-            IdentitySecurityMetrics.SecurityEmailDropped.Add(staleQueued, new KeyValuePair<string, object?>("reason", "stale-queued"));
+            IdentityMetrics.SecurityEmailDropped.Add(staleQueued, new KeyValuePair<string, object?>("reason", "stale-queued"));
         }
 
         if (staleDispatching > 0)
         {
-            IdentitySecurityMetrics.SecurityEmailIndeterminate.Add(staleDispatching, new KeyValuePair<string, object?>("reason", "stale-dispatching"));
+            IdentityMetrics.SecurityEmailIndeterminate.Add(staleDispatching, new KeyValuePair<string, object?>("reason", "stale-dispatching"));
         }
 
         return new SecurityEmailReconciliation(staleQueued, staleDispatching);

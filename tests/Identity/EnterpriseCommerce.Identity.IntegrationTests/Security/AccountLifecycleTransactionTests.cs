@@ -2,7 +2,7 @@ using EnterpriseCommerce.Identity.Application.Accounts;
 using EnterpriseCommerce.Identity.Application.Security;
 using EnterpriseCommerce.Identity.Domain.Accounts;
 using EnterpriseCommerce.Identity.Domain.Security;
-using EnterpriseCommerce.Identity.Infrastructure.Diagnostics;
+using EnterpriseCommerce.Identity.Application.Diagnostics;
 using EnterpriseCommerce.Identity.Infrastructure.Persistence;
 using EnterpriseCommerce.Identity.IntegrationTests.Infrastructure;
 using Microsoft.Data.SqlClient;
@@ -128,7 +128,7 @@ public sealed class AccountLifecycleTransactionTests(SqlServerTestDatabase datab
         database.RequireAvailable();
         await using var services = IdentityTestServices.Build(database);
         var userId = await IdentityTestServices.CreateUserAsync(services);
-        using var metrics = new MetricCollector(IdentitySecurityMetrics.MeterName);
+        using var metrics = new MetricCollector(IdentityMetrics.MeterName);
 
         var (result, error) = await RunDisableIntoDeadlockAsync(services, userId);
 
@@ -147,7 +147,7 @@ public sealed class AccountLifecycleTransactionTests(SqlServerTestDatabase datab
             database,
             new Dictionary<string, string?> { ["Identity:SecurityTransactions:MaxAttempts"] = "1" });
         var userId = await IdentityTestServices.CreateUserAsync(services);
-        using var metrics = new MetricCollector(IdentitySecurityMetrics.MeterName);
+        using var metrics = new MetricCollector(IdentityMetrics.MeterName);
 
         var (_, error) = await RunDisableIntoDeadlockAsync(services, userId);
 

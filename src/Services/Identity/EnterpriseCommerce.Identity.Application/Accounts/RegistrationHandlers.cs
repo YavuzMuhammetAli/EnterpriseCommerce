@@ -1,3 +1,4 @@
+using EnterpriseCommerce.Identity.Application.Diagnostics;
 using EnterpriseCommerce.Identity.Application.Security;
 using EnterpriseCommerce.Identity.Application.SecurityEmails;
 using EnterpriseCommerce.Identity.Domain.Accounts;
@@ -164,6 +165,7 @@ public sealed partial class ConfirmEmailHandler(
     {
         if (!SecurityTokenCodec.HasValidFormat(rawToken))
         {
+            RecordConsumption("rejected");
             return EmailConfirmationResult.InvalidOrExpired;
         }
 
@@ -188,13 +190,21 @@ public sealed partial class ConfirmEmailHandler(
 
         if (userId is null)
         {
+            RecordConsumption("rejected");
             LogRejected(logger);
             return EmailConfirmationResult.InvalidOrExpired;
         }
 
+        RecordConsumption("consumed");
         LogConfirmed(logger, userId);
         return EmailConfirmationResult.Confirmed;
     }
+
+    private static void RecordConsumption(string outcome) =>
+        IdentityMetrics.SecurityTokenConsumption.Add(
+            1,
+            IdentityMetrics.Tag("purpose", nameof(SecurityTokenPurpose.EmailConfirmation)),
+            IdentityMetrics.Tag("outcome", outcome));
 
     [LoggerMessage(EventId = 3410, Level = LogLevel.Information, Message = "Security event EmailConfirmed for subject {Subject}")]
     private static partial void LogConfirmed(ILogger logger, string subject);

@@ -45,6 +45,15 @@ internal sealed class BffSettings
     /// <summary>The Data Protection key directory. Required outside Development; the production key store is deferred (D19).</summary>
     public string? DataProtectionKeyDirectory { get; set; }
 
+    /// <summary>
+    /// A PKCS#12 file whose certificate encrypts the Data Protection keys at rest (a mounted secret). Required outside
+    /// Development. The production key store itself is deferred (D19).
+    /// </summary>
+    public string? DataProtectionCertificatePath { get; set; }
+
+    /// <summary>The password of <see cref="DataProtectionCertificatePath"/>, from a protected store or the environment.</summary>
+    public string? DataProtectionCertificatePassword { get; set; }
+
     /// <summary>The Redis key namespace of this deployment. Defaults to <c>bff:{Deployment}</c>.</summary>
     public string? RedisKeyPrefix { get; set; }
 
@@ -221,6 +230,11 @@ internal static class BffSettingsValidation
             if (string.IsNullOrWhiteSpace(settings.DataProtectionKeyDirectory))
             {
                 yield return "Bff:DataProtectionKeyDirectory is required outside Development (shared by the instances of one deployment).";
+            }
+
+            if (string.IsNullOrWhiteSpace(settings.DataProtectionCertificatePath) || string.IsNullOrEmpty(settings.DataProtectionCertificatePassword))
+            {
+                yield return "Bff:DataProtectionCertificatePath and its password are required outside Development (keys are encrypted at rest).";
             }
 
             if (hasPem)

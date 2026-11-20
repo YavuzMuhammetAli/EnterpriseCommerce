@@ -100,7 +100,7 @@ public sealed partial class LogRedactionTests(LoggingBffTestEnvironment environm
         {
             var leaked = secrets.FirstOrDefault(secret => entry.Contains(secret, StringComparison.Ordinal));
             Assert.True(leaked is null, $"Secret starting '{leaked?[..6]}' (length {leaked?.Length}) in: {Regex.Replace(entry, "eyJ[A-Za-z0-9_.-]+", "<jwt>")}");
-            Assert.False(JwtLike().IsMatch(entry) || SensitiveParameter().IsMatch(entry) || TokenParameter().IsMatch(entry), entry);
+            Assert.False(JwtLike().IsMatch(entry) || SensitiveParameter().IsMatch(entry) || TokenParameter().IsMatch(entry) || PrivateKey().IsMatch(entry), entry);
         }
     }
 
@@ -112,4 +112,8 @@ public sealed partial class LogRedactionTests(LoggingBffTestEnvironment environm
 
     [GeneratedRegex(@"(code_verifier|client_assertion|refresh_token|id_token_hint|code)=[^&\s]{8,}")]
     private static partial Regex SensitiveParameter();
+
+    /// <summary>PEM private keys: the client assertion key and the Data Protection certificate.</summary>
+    [GeneratedRegex(@"-----BEGIN [A-Z ]*PRIVATE KEY-----")]
+    private static partial Regex PrivateKey();
 }

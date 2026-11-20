@@ -2,7 +2,7 @@ using EnterpriseCommerce.Identity.Application.Security;
 using EnterpriseCommerce.Identity.Application.SecurityEmails;
 using EnterpriseCommerce.Identity.Domain.Security;
 using EnterpriseCommerce.Identity.Domain.SecurityEmails;
-using EnterpriseCommerce.Identity.Infrastructure.Diagnostics;
+using EnterpriseCommerce.Identity.Application.Diagnostics;
 using EnterpriseCommerce.Identity.Infrastructure.Persistence;
 using EnterpriseCommerce.Identity.IntegrationTests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -26,7 +26,7 @@ public sealed class SecurityEmailDeliveryTests(SqlServerTestDatabase database) :
         database.RequireAvailable();
         var dispatcher = new CapturingSecurityEmailDispatcher();
         await using var services = Build(dispatcher, new Dictionary<string, string?> { ["Identity:SecurityEmail:QueueCapacity"] = "1" });
-        using var metrics = new MetricCollector(IdentitySecurityMetrics.MeterName);
+        using var metrics = new MetricCollector(IdentityMetrics.MeterName);
         var userId = await IdentityTestServices.CreateUserAsync(services, emailConfirmed: false);
         var first = await CreateDeliveryAsync(services, userId);
         var second = await CreateDeliveryAsync(services, userId);

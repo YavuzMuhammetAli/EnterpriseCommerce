@@ -1,6 +1,7 @@
 using EnterpriseCommerce.Identity.Application.Accounts;
 using EnterpriseCommerce.Identity.Application.Security;
 using EnterpriseCommerce.Identity.Application.SecurityEmails;
+using EnterpriseCommerce.Identity.Infrastructure.Diagnostics;
 using EnterpriseCommerce.Identity.Infrastructure.Persistence;
 using EnterpriseCommerce.Identity.Infrastructure.Retention;
 using EnterpriseCommerce.Identity.Infrastructure.Security;
@@ -71,6 +72,7 @@ public static class DependencyInjection
             .AddEntityFrameworkStores<IdentityServiceDbContext>();
 
         services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton<BackgroundWorkerHeartbeats>();
         services.AddSingleton<IAuthoritativeSecurityTransaction, AuthoritativeSecurityTransaction>();
         services.AddSingleton<ISessionRevocationCleanup, SessionRevocationCleanup>();
         services.AddScoped<IAccountPasswordPolicy, AccountPasswordPolicy>();

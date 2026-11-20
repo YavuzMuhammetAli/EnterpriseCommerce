@@ -172,6 +172,8 @@ public sealed class BffSettingsValidationTests
         PublicOrigin = "https://storefront.example.test",
         ClientKey = new BffClientKeySettings { PrivateKeyPath = "/run/secrets/bff.pem", KeyId = "k1" },
         DataProtectionKeyDirectory = "/var/bff/keys",
+        DataProtectionCertificatePath = "/run/secrets/bff-dp.pfx",
+        DataProtectionCertificatePassword = "from-the-secret-store",
     };
 
     [Fact]
@@ -199,6 +201,8 @@ public sealed class BffSettingsValidationTests
         ["lease shorter than request"] = s => s.Refresh.LeaseDuration = TimeSpan.FromSeconds(1),
         ["external post-logout landing"] = s => s.PostLogoutLandingPath = "//evil.example",
         ["no key ring outside development"] = s => s.DataProtectionKeyDirectory = null,
+        ["unencrypted key ring outside development"] = s => s.DataProtectionCertificatePath = null,
+        ["key ring certificate without password"] = s => s.DataProtectionCertificatePassword = null,
         ["metadata cached too long"] = s => s.Metadata.RefreshInterval = TimeSpan.FromDays(2),
         ["metadata refreshed too often"] = s => s.Metadata.RefreshInterval = TimeSpan.FromMinutes(1),
         ["minimum refresh above the interval"] = s => s.Metadata.MinimumRefreshInterval = TimeSpan.FromHours(2),

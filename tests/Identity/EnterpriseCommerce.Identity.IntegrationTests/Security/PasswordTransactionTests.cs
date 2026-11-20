@@ -3,7 +3,7 @@ using EnterpriseCommerce.Identity.Application.Security;
 using EnterpriseCommerce.Identity.Application.SecurityEmails;
 using EnterpriseCommerce.Identity.Domain.Security;
 using EnterpriseCommerce.Identity.Domain.SecurityEmails;
-using EnterpriseCommerce.Identity.Infrastructure.Diagnostics;
+using EnterpriseCommerce.Identity.Application.Diagnostics;
 using EnterpriseCommerce.Identity.Infrastructure.Persistence;
 using EnterpriseCommerce.Identity.IntegrationTests.Infrastructure;
 using Microsoft.Data.SqlClient;
@@ -142,7 +142,7 @@ public sealed class PasswordTransactionTests(SqlServerTestDatabase database) : I
     {
         database.RequireAvailable();
         await using var services = IdentityTestServices.Build(database);
-        using var metrics = new MetricCollector(IdentitySecurityMetrics.MeterName);
+        using var metrics = new MetricCollector(IdentityMetrics.MeterName);
         var userId = await IdentityTestServices.CreateUserAsync(services);
         var token = await IssueAsync(services, userId, SecurityTokenPurpose.PasswordReset);
 

@@ -59,6 +59,9 @@ public sealed class AuthorizationCodeFlowTests(IdentityServerFixture identity) :
         using var ready = await client.GetAsync(new Uri("/health/ready", UriKind.Relative), TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, ready.StatusCode);
+
+        // Database, keys, delivery adapter and workers are all fine in the test host.
+        Assert.Equal("Healthy", await ready.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]

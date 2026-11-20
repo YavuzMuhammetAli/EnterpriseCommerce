@@ -26,6 +26,9 @@ public sealed class ApiFoundationTests(IdentityApiFactory factory) : IClassFixtu
 
         Assert.Equal(HttpStatusCode.OK, live.StatusCode);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, ready.StatusCode);
+
+        // The status word only: no check names, descriptions, exceptions or connection details.
+        Assert.Equal("Unhealthy", await ready.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]

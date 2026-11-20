@@ -1,6 +1,6 @@
 using System.Data;
 using EnterpriseCommerce.Identity.Application.Security;
-using EnterpriseCommerce.Identity.Infrastructure.Diagnostics;
+using EnterpriseCommerce.Identity.Application.Diagnostics;
 using EnterpriseCommerce.Identity.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -39,7 +39,7 @@ internal sealed partial class AuthoritativeSecurityTransaction(
             }
             catch (Exception exception) when (SqlServerErrors.IsDeadlock(exception) && attempt < maxAttempts)
             {
-                IdentitySecurityMetrics.TransactionDeadlockRetries.Add(1, new KeyValuePair<string, object?>("operation", operation));
+                IdentityMetrics.TransactionDeadlockRetries.Add(1, new KeyValuePair<string, object?>("operation", operation));
                 LogDeadlockRetry(logger, operation, attempt, maxAttempts);
                 await Task.Delay(options.Value.DelayBeforeAttempt(attempt + 1), cancellationToken);
             }
@@ -85,7 +85,7 @@ internal sealed partial class AuthoritativeSecurityTransaction(
     }
 
     private static void RecordFailure(string operation, string reason) =>
-        IdentitySecurityMetrics.TransactionFailures.Add(
+        IdentityMetrics.TransactionFailures.Add(
             1,
             new KeyValuePair<string, object?>("operation", operation),
             new KeyValuePair<string, object?>("reason", reason));

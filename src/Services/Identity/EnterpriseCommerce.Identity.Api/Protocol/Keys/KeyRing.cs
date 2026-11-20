@@ -1,3 +1,5 @@
+using System.Diagnostics.Metrics;
+using EnterpriseCommerce.Identity.Application.Diagnostics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Options;
@@ -369,8 +371,17 @@ internal sealed class ActiveKeysFirst(KeyRing ring) : IPostConfigureOptions<Open
 /// <summary>Logs the key ring once at startup: key IDs, states and validity only (public information).</summary>
 internal sealed partial class KeyRingReporter(KeyRing ring, ILogger<KeyRingReporter> logger) : IHostedService
 {
+    private ObservableGauge<int>? _gauge;
+
     public Task StartAsync(CancellationToken cancellationToken)
     {
+        _gauge ??= IdentityMetrics.ObserveKeys(() => ring.Keys
+            .GroupBy(key => (key.Use, key.Status))
+            .Select(group => new Measurement<int>(
+                group.Count(),
+                IdentityMetrics.Tag("use", group.Key.Use.ToString().ToLowerInvariant()),
+                IdentityMetrics.Tag("state", group.Key.Status.ToString().ToLowerInvariant()))));
+
         if (ring.IsEphemeral)
         {
             LogEphemeral(logger);
@@ -383,6 +394,7 @@ internal sealed partial class KeyRingReporter(KeyRing ring, ILogger<KeyRingRepor
 
         foreach (var key in ring.Dropped)
         {
+            IdentityMetrics.KeysRetiredDropped.Add(1, IdentityMetrics.Tag("use", key.Use.ToString().ToLowerInvariant()));
             LogDropped(logger, key.Use, key.KeyId, key.RetiredAt);
         }
 

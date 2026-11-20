@@ -67,7 +67,6 @@ public static class RetentionServiceCollectionExtensions
                 $"{IdentityRetentionOptions.SectionName} is out of range, or the replay protection window was not computed by the host.")
             .ValidateOnStart();
 
-        services.TryAddSingleton<RetentionWorkerState>();
         services.AddSingleton<IdentityRetentionRunner>();
         services.AddHostedService<IdentityRetentionWorker>();
         return services;

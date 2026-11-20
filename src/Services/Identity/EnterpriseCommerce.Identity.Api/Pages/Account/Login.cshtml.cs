@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using EnterpriseCommerce.Identity.Api.Protocol;
+using EnterpriseCommerce.Identity.Application.Diagnostics;
 using EnterpriseCommerce.Identity.Application.Security;
 using EnterpriseCommerce.Identity.Domain.Accounts;
 using EnterpriseCommerce.Identity.Infrastructure.Persistence;
@@ -53,6 +54,7 @@ public sealed partial class LoginModel(
         {
             // Equalize timing with the existing-account path.
             users.PasswordHasher.VerifyHashedPassword(new ApplicationUser(), DummyPasswordHash.Value, Input.Password);
+            Record("failed");
             return Failure();
         }
 
@@ -60,6 +62,7 @@ public sealed partial class LoginModel(
         {
             // The password is not checked while locked, so brute force cannot continue during lockout.
             LogLockedOutAttempt(logger, user.Id);
+            Record("locked_out");
             return Failure();
         }
 
@@ -70,6 +73,7 @@ public sealed partial class LoginModel(
         {
             await users.AccessFailedAsync(user);
             LogLoginFailed(logger, user.Id);
+            Record("failed");
             return Failure();
         }
 
@@ -78,6 +82,7 @@ public sealed partial class LoginModel(
         if (user.Status != AccountStatus.Active)
         {
             LogLoginFailed(logger, user.Id);
+            Record("not_allowed");
             return Failure();
         }
 
@@ -85,6 +90,7 @@ public sealed partial class LoginModel(
         {
             // Shown only after a correct password, so it reveals nothing to someone who does not know it.
             ShowConfirmEmailHint = true;
+            Record("email_unconfirmed");
             return Page();
         }
 
@@ -99,9 +105,13 @@ public sealed partial class LoginModel(
             IdentityServerSetup.CreateSsoPrincipal(user.Id, version),
             new AuthenticationProperties { IsPersistent = false, IssuedUtc = DateTimeOffset.UtcNow });
         LogLoginSucceeded(logger, user.Id);
+        Record("succeeded");
 
         return LocalRedirect(Url.IsLocalUrl(ReturnUrl) ? ReturnUrl! : "/");
     }
+
+    private static void Record(string outcome) =>
+        IdentityMetrics.AuthenticationAttempts.Add(1, IdentityMetrics.Tag("outcome", outcome));
 
     private PageResult Failure()
     {

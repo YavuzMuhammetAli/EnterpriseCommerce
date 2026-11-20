@@ -1,3 +1,4 @@
+using EnterpriseCommerce.Identity.Application.Diagnostics;
 using EnterpriseCommerce.Identity.Application.Security;
 using EnterpriseCommerce.Identity.Domain.Accounts;
 using EnterpriseCommerce.Identity.Domain.Security;
@@ -115,7 +116,12 @@ public sealed partial class SecurityEmailDeliveryProcessor(
                     LogRetriesExhausted(logger, message.DeliveryId, attempt, outcome);
                 }
 
-                await CompleteAsync(message.DeliveryId, decision.FinalStatus, decision.ErrorCategory, cancellationToken);
+                if (await CompleteAsync(message.DeliveryId, decision.FinalStatus, decision.ErrorCategory, cancellationToken)
+                    && decision.FinalStatus == SecurityEmailDeliveryStatus.Sent)
+                {
+                    IdentityMetrics.SecurityEmailSent.Add(1, IdentityMetrics.Tag("purpose", message.Purpose.ToString()));
+                }
+
                 return;
             }
 
@@ -124,10 +130,11 @@ public sealed partial class SecurityEmailDeliveryProcessor(
         }
     }
 
-    private async Task CompleteAsync(Guid deliveryId, SecurityEmailDeliveryStatus status, string? errorCategory, CancellationToken cancellationToken)
+    private async Task<bool> CompleteAsync(Guid deliveryId, SecurityEmailDeliveryStatus status, string? errorCategory, CancellationToken cancellationToken)
     {
         var recorded = await store.CompleteAsync(deliveryId, status, errorCategory, cancellationToken);
         LogCompleted(logger, deliveryId, status, errorCategory, recorded);
+        return recorded;
     }
 
     private static Uri BuildLink(Uri page, string rawToken) =>

@@ -1,3 +1,4 @@
+using EnterpriseCommerce.Identity.Application.Diagnostics;
 using EnterpriseCommerce.Identity.Application.Security;
 using EnterpriseCommerce.Identity.Application.SecurityEmails;
 using EnterpriseCommerce.Identity.Domain.Accounts;
@@ -109,6 +110,10 @@ public sealed partial class ResetPasswordHandler(
     {
         if (!SecurityTokenCodec.HasValidFormat(rawToken))
         {
+            IdentityMetrics.SecurityTokenConsumption.Add(
+                1,
+                IdentityMetrics.Tag("purpose", nameof(SecurityTokenPurpose.PasswordReset)),
+                IdentityMetrics.Tag("outcome", "rejected"));
             LogRejected(logger);
             return PasswordUpdateResult.Rejected;
         }
@@ -145,6 +150,16 @@ public sealed partial class ResetPasswordHandler(
                 return TransactionDecision.Commit(new ResetAttempt(ResetOutcome.Committed, owner, newVersion));
             },
             cancellationToken);
+
+        IdentityMetrics.SecurityTokenConsumption.Add(
+            1,
+            IdentityMetrics.Tag("purpose", nameof(SecurityTokenPurpose.PasswordReset)),
+            IdentityMetrics.Tag("outcome", outcome switch
+            {
+                ResetOutcome.Committed => "consumed",
+                ResetOutcome.Rejected => "rejected",
+                _ => "failed",
+            }));
 
         switch (outcome)
         {

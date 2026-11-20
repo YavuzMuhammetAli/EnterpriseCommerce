@@ -1,6 +1,6 @@
 using EnterpriseCommerce.Identity.Application.Security;
 using EnterpriseCommerce.Identity.Domain.Security;
-using EnterpriseCommerce.Identity.Infrastructure.Diagnostics;
+using EnterpriseCommerce.Identity.Application.Diagnostics;
 using EnterpriseCommerce.Identity.IntegrationTests.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -108,7 +108,7 @@ public sealed class AuthoritativeSecurityTransactionTests(SqlServerTestDatabase 
     {
         database.RequireAvailable();
         await using var services = IdentityTestServices.Build(database);
-        using var metrics = new MetricCollector(IdentitySecurityMetrics.MeterName);
+        using var metrics = new MetricCollector(IdentityMetrics.MeterName);
         var transaction = services.GetRequiredService<IAuthoritativeSecurityTransaction>();
         var first = await IdentityTestServices.CreateUserAsync(services);
         var second = await IdentityTestServices.CreateUserAsync(services);
@@ -130,7 +130,7 @@ public sealed class AuthoritativeSecurityTransactionTests(SqlServerTestDatabase 
         await using var services = IdentityTestServices.Build(
             database,
             new Dictionary<string, string?> { ["Identity:SecurityTransactions:MaxAttempts"] = "1" });
-        using var metrics = new MetricCollector(IdentitySecurityMetrics.MeterName);
+        using var metrics = new MetricCollector(IdentityMetrics.MeterName);
         var transaction = services.GetRequiredService<IAuthoritativeSecurityTransaction>();
         var first = await IdentityTestServices.CreateUserAsync(services);
         var second = await IdentityTestServices.CreateUserAsync(services);

@@ -1,3 +1,4 @@
+using EnterpriseCommerce.Identity.Application.Diagnostics;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 using EnterpriseCommerce.Identity.Api.Protocol.Keys;
@@ -262,6 +263,7 @@ internal static class IdentityServerSetup
 
         if (principal is null || userId is null || issued is null || DateTimeOffset.UtcNow - issued > SsoAbsoluteLifetime)
         {
+            IdentityMetrics.SsoSessionRejections.Add(1, IdentityMetrics.Tag("reason", "absolute_lifetime"));
             await RejectAsync(context);
             return;
         }
@@ -271,6 +273,7 @@ internal static class IdentityServerSetup
 
         if (!state.AllowsSession(principal.GetSecurityVersion()))
         {
+            IdentityMetrics.SsoSessionRejections.Add(1, IdentityMetrics.Tag("reason", state.Account is { CanSignIn: true } ? "stale_session" : "account_not_allowed"));
             await RejectAsync(context);
         }
 

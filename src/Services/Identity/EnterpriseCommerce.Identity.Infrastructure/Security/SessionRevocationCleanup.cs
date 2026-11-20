@@ -1,5 +1,5 @@
 using EnterpriseCommerce.Identity.Application.Security;
-using EnterpriseCommerce.Identity.Infrastructure.Diagnostics;
+using EnterpriseCommerce.Identity.Application.Diagnostics;
 using EnterpriseCommerce.Identity.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -65,14 +65,14 @@ internal sealed partial class SessionRevocationCleanup(
             }
             catch (Exception exception) when (SqlServerErrors.IsDeadlock(exception) && attempt < maxAttempts)
             {
-                IdentitySecurityMetrics.CleanupDeadlockRetries.Add(1, new KeyValuePair<string, object?>("operation", operation));
+                IdentityMetrics.CleanupDeadlockRetries.Add(1, new KeyValuePair<string, object?>("operation", operation));
                 LogCleanupDeadlockRetry(logger, operation, attempt, maxAttempts);
                 await Task.Delay(options.Value.DelayBeforeAttempt(attempt + 1), cancellationToken);
             }
             catch (Exception exception)
             {
                 // Deliberately broad: a cleanup failure must never surface as a failure of the committed decision.
-                IdentitySecurityMetrics.CleanupFailures.Add(1, new KeyValuePair<string, object?>("operation", operation));
+                IdentityMetrics.CleanupFailures.Add(1, new KeyValuePair<string, object?>("operation", operation));
                 LogCleanupFailed(logger, exception, operation, attempt);
                 return CleanupOutcome.Failed;
             }

@@ -1,4 +1,5 @@
 using System.Data;
+using EnterpriseCommerce.Identity.Application.Diagnostics;
 using EnterpriseCommerce.Identity.Infrastructure.Diagnostics;
 using EnterpriseCommerce.Identity.Infrastructure.Persistence;
 using EnterpriseCommerce.Identity.Infrastructure.Retention;
@@ -43,7 +44,7 @@ public sealed class RetentionTests(SqlServerTestDatabase database) : IClassFixtu
         var marker = Guid.NewGuid().ToString("N");
         await InsertLedgerRowsAsync(marker + "-old", 2500, TimeSpan.FromDays(3));
         await InsertLedgerRowsAsync(marker + "-new", 10, TimeSpan.FromHours(2));
-        using var metrics = new MetricCollector(IdentitySecurityMetrics.MeterName);
+        using var metrics = new MetricCollector(IdentityMetrics.MeterName);
 
         var first = await RunAsync(services);
 
@@ -70,7 +71,7 @@ public sealed class RetentionTests(SqlServerTestDatabase database) : IClassFixtu
         });
         var marker = Guid.NewGuid().ToString("N");
         await InsertLedgerRowsAsync(marker, 3, TimeSpan.FromDays(3));
-        using var metrics = new MetricCollector(IdentitySecurityMetrics.MeterName);
+        using var metrics = new MetricCollector(IdentityMetrics.MeterName);
 
         await using (var connection = new SqlConnection(database.ConnectionString))
         {
@@ -168,12 +169,12 @@ public sealed class RetentionTests(SqlServerTestDatabase database) : IClassFixtu
         database.RequireAvailable();
         var unreachable = new SqlConnectionStringBuilder(database.ConnectionString) { DataSource = "tcp:127.0.0.1,1", ConnectTimeout = 2 }.ConnectionString;
         await using var services = IdentityTestServices.Build(database, new Dictionary<string, string?> { ["ConnectionStrings:IdentityDatabase"] = unreachable });
-        using var metrics = new MetricCollector(IdentitySecurityMetrics.MeterName);
+        using var metrics = new MetricCollector(IdentityMetrics.MeterName);
 
         var result = await RunAsync(services).WaitAsync(TimeSpan.FromSeconds(30), Ct);
 
         Assert.Equal(RetentionRunOutcome.Failed, result.Outcome);
-        var state = services.GetRequiredService<RetentionWorkerState>();
+        var state = services.GetRequiredService<BackgroundWorkerHeartbeats>().Retention;
         Assert.NotNull(state.LastRunAt);
         Assert.Null(state.LastSuccessAt);
     }
@@ -199,7 +200,7 @@ public sealed class RetentionTests(SqlServerTestDatabase database) : IClassFixtu
         await worker.StartAsync(Ct);
         await worker.StopAsync(Ct).WaitAsync(TimeSpan.FromSeconds(5), Ct);
 
-        Assert.Null(services.GetRequiredService<RetentionWorkerState>().LastRunAt);
+        Assert.Null(services.GetRequiredService<BackgroundWorkerHeartbeats>().Retention.LastRunAt);
     }
 
     private static async Task<RetentionRunResult> RunAsync(IServiceProvider services) =>

@@ -1,3 +1,4 @@
+using EnterpriseCommerce.Identity.Application.Diagnostics;
 using EnterpriseCommerce.Identity.Application.Security;
 using EnterpriseCommerce.Identity.Domain.Security;
 using Microsoft.Extensions.Logging;
@@ -33,6 +34,15 @@ public sealed partial class RefreshTokenReuseHandler(
         ArgumentNullException.ThrowIfNull(reuse);
 
         var action = RefreshReusePolicy.Decide(reuse.TokenClientId, reuse.PresentingClientId, settings.AdminConsoleClientId);
+        IdentityMetrics.RefreshReuseDetected.Add(
+            1,
+            IdentityMetrics.Tag("source", reuse.Source),
+            IdentityMetrics.Tag("action", action switch
+            {
+                RefreshReuseAction.RejectPresenterMismatch => "presenter_mismatch",
+                RefreshReuseAction.RevokeAllSessions => "revoke_all_sessions",
+                _ => "revoke_session",
+            }));
 
         switch (action)
         {

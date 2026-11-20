@@ -1,3 +1,4 @@
+using EnterpriseCommerce.Identity.Application.Diagnostics;
 using EnterpriseCommerce.Identity.Application.Security;
 using EnterpriseCommerce.Identity.Domain.Accounts;
 using Microsoft.Extensions.Logging;
@@ -93,19 +94,25 @@ public sealed partial class DisableAccountHandler(
         switch (attempt.Step)
         {
             case Step.NotFound:
+                Record("disable", "not_found");
                 return AccountLifecycleResult.NotFound;
 
             case Step.MissingSecurityVersion:
+                Record("disable", "failed");
                 LogMissingSecurityVersion(logger, change.AccountId);
                 throw new SecurityStateUnavailableException("The security-version record of the user is missing.");
         }
 
         var changed = attempt.Step == Step.Committed;
+        Record("disable", changed ? "changed" : "unchanged");
         var cleanupOutcome = await cleanup.RevokeAllForSubjectAsync(change.AccountId, cancellationToken);
         LogAccountDisabled(logger, change.AccountId, changed, change.Reason, change.CallerClientId, change.ActorReference, attempt.Version, cleanupOutcome);
 
         return new AccountLifecycleResult(changed ? AccountLifecycleOutcome.Changed : AccountLifecycleOutcome.Unchanged, AccountStatus.Disabled, attempt.Version);
     }
+
+    internal static void Record(string action, string outcome) =>
+        IdentityMetrics.AccountLifecycle.Add(1, IdentityMetrics.Tag("action", action), IdentityMetrics.Tag("outcome", outcome));
 
     private enum Step
     {
@@ -168,6 +175,13 @@ public sealed partial class ReactivateAccountHandler(
                     : TransactionDecision.Rollback(AccountLifecycleOutcome.Unchanged);
             },
             cancellationToken);
+
+        DisableAccountHandler.Record("reactivate", outcome switch
+        {
+            AccountLifecycleOutcome.Changed => "changed",
+            AccountLifecycleOutcome.Unchanged => "unchanged",
+            _ => "not_found",
+        });
 
         if (outcome == AccountLifecycleOutcome.NotFound)
         {

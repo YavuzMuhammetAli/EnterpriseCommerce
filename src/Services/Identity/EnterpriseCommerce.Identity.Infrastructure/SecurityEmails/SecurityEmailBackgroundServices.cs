@@ -1,6 +1,7 @@
 using System.Threading.Channels;
 using EnterpriseCommerce.Identity.Application.SecurityEmails;
 using EnterpriseCommerce.Identity.Infrastructure.Diagnostics;
+using EnterpriseCommerce.Identity.Application.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -30,7 +31,7 @@ internal sealed partial class SecurityEmailQueue(IOptions<SecurityEmailDeliveryO
             return true;
         }
 
-        IdentitySecurityMetrics.SecurityEmailQueueSaturated.Add(1);
+        IdentityMetrics.SecurityEmailQueueSaturated.Add(1);
         LogSaturated(logger, options.Value.QueueCapacity);
         return false;
     }
@@ -78,6 +79,8 @@ internal sealed partial class SecurityEmailDeliveryWorker(
 internal sealed partial class SecurityEmailReconciler(
     IServiceScopeFactory scopeFactory,
     IOptions<SecurityEmailDeliveryOptions> options,
+    BackgroundWorkerHeartbeats heartbeats,
+    TimeProvider timeProvider,
     ILogger<SecurityEmailReconciler> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -94,9 +97,12 @@ internal sealed partial class SecurityEmailReconciler(
                 {
                     LogReconciled(logger, result.Dropped, result.Indeterminate);
                 }
+
+                heartbeats.SecurityEmailReconciliation.Record(succeeded: true, timeProvider.GetUtcNow());
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
+                heartbeats.SecurityEmailReconciliation.Record(succeeded: false, timeProvider.GetUtcNow());
                 LogReconciliationFailed(logger, exception.GetType().Name);
             }
         }

@@ -1,6 +1,6 @@
 using EnterpriseCommerce.Identity.Application.Security;
 using EnterpriseCommerce.Identity.Application.Sessions;
-using EnterpriseCommerce.Identity.Infrastructure.Diagnostics;
+using EnterpriseCommerce.Identity.Application.Diagnostics;
 using EnterpriseCommerce.Identity.IntegrationTests.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using OpenIddict.Abstractions;
@@ -86,7 +86,7 @@ public sealed class LogoutAllSessionsTests(SqlServerTestDatabase database) : ICl
             {
                 ["ConnectionStrings:IdentityDatabase"] = "Server=tcp:127.0.0.1,1;Database=unreachable;Connect Timeout=2;TrustServerCertificate=true;Integrated Security=true",
             });
-        using var metrics = new MetricCollector(IdentitySecurityMetrics.MeterName);
+        using var metrics = new MetricCollector(IdentityMetrics.MeterName);
 
         var outcome = await services.GetRequiredService<ISessionRevocationCleanup>()
             .RevokeAllForSubjectAsync(Guid.NewGuid().ToString(), TestContext.Current.CancellationToken);

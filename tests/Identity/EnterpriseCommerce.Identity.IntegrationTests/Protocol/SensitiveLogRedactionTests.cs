@@ -87,6 +87,7 @@ public sealed partial class SensitiveLogRedactionTests(LogCapturingIdentityServe
 
         Assert.DoesNotContain(events, entry => JwtLike().IsMatch(entry));
         Assert.DoesNotContain(events, entry => SensitiveParameter().IsMatch(entry));
+        Assert.DoesNotContain(events, entry => PrivateKey().IsMatch(entry));
     }
 
     [Fact]
@@ -193,8 +194,43 @@ public sealed partial class SensitiveLogRedactionTests(LogCapturingIdentityServe
         Assert.DoesNotContain(events, entry => JwtLike().IsMatch(entry) || SensitiveParameter().IsMatch(entry) || TokenParameter().IsMatch(entry));
     }
 
+    [Fact]
+    public async Task AdministrativeAndOperationalFlows_NeverLogTokensAssertionsOrKeyMaterial()
+    {
+        identity.RequireAvailable();
+        var email = await identity.CreateUserAsync();
+        var userId = await identity.GetUserIdAsync(email);
+        var session = await identity.SignInAsync(identity.Storefront, email);
+        var serviceToken = await identity.ServiceTokenAsync(identity.AccountAdmin);
+        var assertion = identity.AccountAdmin.CreateAssertion(IdentityServerFixture.Issuer);
+
+        // Internal account lifecycle (allowed and refused callers), a refused refresh, and a retention run.
+        Assert.Equal(HttpStatusCode.OK, (await identity.CallAccountLifecycleAsync("disable", userId, serviceToken)).Status);
+        Assert.Equal(HttpStatusCode.Forbidden, (await identity.CallAccountLifecycleAsync("reactivate", userId, session.AccessToken)).Status);
+        Assert.Equal(HttpStatusCode.OK, (await identity.CallAccountLifecycleAsync("reactivate", userId, serviceToken)).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await identity.RefreshAsync(identity.Storefront, session.RefreshToken!)).Status);
+        await identity.Services.GetRequiredService<EnterpriseCommerce.Identity.Infrastructure.Retention.IdentityRetentionRunner>().RunOnceAsync(TestContext.Current.CancellationToken);
+
+        var events = identity.Sink.Events.ToList();
+        foreach (var expected in new[] { "AccountDisabled", "AccountReactivated", "Retention run" })
+        {
+            Assert.Contains(events, entry => entry.Contains(expected, StringComparison.Ordinal));
+        }
+
+        foreach (var secret in new[] { serviceToken, assertion, session.AccessToken!, session.RefreshToken!, IdentityServerFixture.Password })
+        {
+            Assert.DoesNotContain(events, entry => entry.Contains(secret, StringComparison.Ordinal));
+        }
+
+        Assert.DoesNotContain(events, entry => JwtLike().IsMatch(entry) || SensitiveParameter().IsMatch(entry) || PrivateKey().IsMatch(entry));
+    }
+
     [GeneratedRegex(@"token=[A-Za-z0-9_-]{20,}")]
     private static partial Regex TokenParameter();
+
+    /// <summary>PEM private keys (signing, encryption, client or Data Protection certificates).</summary>
+    [GeneratedRegex(@"-----BEGIN [A-Z ]*PRIVATE KEY-----")]
+    private static partial Regex PrivateKey();
 
     /// <summary>Compact JWS/JWE serializations: access, ID and refresh tokens, codes and client assertions.</summary>
     [GeneratedRegex(@"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}")]

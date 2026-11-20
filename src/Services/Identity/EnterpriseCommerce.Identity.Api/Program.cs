@@ -1,6 +1,7 @@
 using EnterpriseCommerce.Identity.Api.Accounts;
 using EnterpriseCommerce.Identity.Api.Diagnostics;
 using EnterpriseCommerce.Identity.Api.ExceptionHandling;
+using EnterpriseCommerce.Identity.Api.Hosting;
 using EnterpriseCommerce.Identity.Api.Protocol;
 using EnterpriseCommerce.Identity.Api.SecurityEmails;
 using EnterpriseCommerce.Identity.Application;
@@ -42,6 +43,7 @@ builder.Services
 // The security email guard runs first: outside Development a development mail sink must stop the host before
 // anything else is composed (ADR-018 section 4).
 builder.AddSecurityEmailDelivery();
+builder.AddIdentityDataProtection();
 builder.AddIdentityProtocolServer();
 builder.AddTrustedProxy();
 

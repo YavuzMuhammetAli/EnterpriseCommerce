@@ -1,3 +1,4 @@
+using EnterpriseCommerce.Identity.Application.Diagnostics;
 using System.Globalization;
 using System.Security.Claims;
 using EnterpriseCommerce.Identity.Application.Security;
@@ -118,7 +119,9 @@ internal static class ProtocolEndpoints
 
         if (request.IsClientCredentialsGrantType())
         {
-            return IssueServiceToken(request, client);
+            var result = IssueServiceToken(request, client, out var issued);
+            RecordGrant("client_credentials", issued ? "none" : "invalid_request");
+            return result;
         }
 
         if (!request.IsAuthorizationCodeGrantType() && !request.IsRefreshTokenGrantType())
@@ -126,34 +129,57 @@ internal static class ProtocolEndpoints
             return Forbid(Errors.UnsupportedGrantType, "The grant type is not supported.");
         }
 
+        var grantType = request.IsRefreshTokenGrantType() ? "refresh_token" : "authorization_code";
         var principal = (await httpContext.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme)).Principal;
         var subject = principal?.GetClaim(Claims.Subject);
         if (principal is null || subject is null || client.Kind != ClientKind.Browser)
         {
+            RecordGrant(grantType, "invalid_grant");
             return Forbid(Errors.InvalidGrant, "The grant is invalid.");
         }
 
         // Defense in depth: OpenIddict already binds the token to its presenters (V42).
         if (!principal.GetPresenters().Contains(client.ClientId, StringComparer.Ordinal))
         {
+            RecordGrant(grantType, "presenter_mismatch");
             return Forbid(Errors.InvalidGrant, "The grant is invalid.");
         }
 
         var remaining = principal.GetSessionDeadline() - timeProvider.GetUtcNow();
         if (remaining is null || remaining <= TimeSpan.Zero)
         {
+            RecordGrant(grantType, "session_expired");
             return Forbid(Errors.InvalidGrant, "The session has expired.");
         }
 
-        var denial = await guard.EvaluateAsync(
-            new TokenGrantRequest(
-                subject,
-                principal.GetAuthorizationId(),
-                principal.GetTokenId(),
-                principal.GetClaim(IdentityClaims.SecurityVersion),
-                request.IsRefreshTokenGrantType(),
-                client.ClientId),
-            cancellationToken);
+        TokenGrantDenial denial;
+        try
+        {
+            denial = await guard.EvaluateAsync(
+                new TokenGrantRequest(
+                    subject,
+                    principal.GetAuthorizationId(),
+                    principal.GetTokenId(),
+                    principal.GetClaim(IdentityClaims.SecurityVersion),
+                    request.IsRefreshTokenGrantType(),
+                    client.ClientId),
+                cancellationToken);
+        }
+        catch (SecurityStateUnavailableException)
+        {
+            // 503 through the exception handler: nothing is issued.
+            RecordGrant(grantType, "unavailable");
+            throw;
+        }
+
+        RecordGrant(grantType, denial switch
+        {
+            TokenGrantDenial.None => "none",
+            TokenGrantDenial.AccountNotAllowed => "account_not_allowed",
+            TokenGrantDenial.StaleSession => "stale_session",
+            TokenGrantDenial.MissingSecurityState => "missing_security_state",
+            _ => "reuse",
+        });
 
         if (denial != TokenGrantDenial.None)
         {
@@ -165,8 +191,17 @@ internal static class ProtocolEndpoints
         return Results.SignIn(principal.WithDestinations(), properties: null, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }
 
-    private static IResult IssueServiceToken(OpenIddictRequest request, ClientRegistration client)
+    /// <summary>Counts a grant decision. <paramref name="reason"/> is <c>none</c> when tokens are issued.</summary>
+    private static void RecordGrant(string grantType, string reason) =>
+        IdentityMetrics.TokenGrants.Add(
+            1,
+            IdentityMetrics.Tag("grant_type", grantType),
+            IdentityMetrics.Tag("outcome", reason == "none" ? "issued" : "denied"),
+            IdentityMetrics.Tag("reason", reason));
+
+    private static IResult IssueServiceToken(OpenIddictRequest request, ClientRegistration client, out bool issued)
     {
+        issued = false;
         if (client.Kind != ClientKind.Service)
         {
             return Forbid(Errors.UnauthorizedClient, "The client may not use this grant.");
@@ -190,6 +225,7 @@ internal static class ProtocolEndpoints
         identity.SetScopes(scopes);
         identity.SetResources(audiences);
 
+        issued = true;
         return Results.SignIn(new ClaimsPrincipal(identity.WithDestinations()), properties: null, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }
 
