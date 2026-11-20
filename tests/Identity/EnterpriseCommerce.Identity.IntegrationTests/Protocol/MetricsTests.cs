@@ -12,6 +12,11 @@ namespace EnterpriseCommerce.Identity.IntegrationTests.Protocol;
 /// Identity's operational metrics (Phase 2.3 S6.6): the security outcomes are counted, and every tag has a bounded value
 /// set: no user, session, client or delivery identifier, email address or token ever becomes a label.
 /// </summary>
+/// <remarks>
+/// The listener sees every measurement of the meter in the test process. Tests that run in parallel record their own
+/// test-only operation names (for example <c>test-deadlock-exhausted-{guid}</c>), so this test runs alone.
+/// </remarks>
+[Collection(nameof(MetricsCollection))]
 public sealed partial class MetricsTests(IdentityServerFixture identity) : IClassFixture<IdentityServerFixture>
 {
     private static readonly HashSet<string> AllowedTagKeys = new(StringComparer.Ordinal)
@@ -104,3 +109,7 @@ public sealed partial class MetricsTests(IdentityServerFixture identity) : IClas
         }
     }
 }
+
+/// <summary>Runs the metrics test without other tests in parallel: its listener is process-wide.</summary>
+[CollectionDefinition(nameof(MetricsCollection), DisableParallelization = true)]
+public sealed class MetricsCollection;
