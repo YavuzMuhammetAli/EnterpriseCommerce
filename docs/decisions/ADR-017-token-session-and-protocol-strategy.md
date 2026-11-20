@@ -1,6 +1,6 @@
 # ADR-017: Token, Session and Protocol Strategy
 
-- **Status:** Accepted
+- **Status:** Accepted. Amended by [ADR-019](ADR-019-signing-and-encryption-key-rollover-and-retirement.md) (2026-11-20): the key rotation procedure that section 12 refers to (Phase 2.2 section 6.5) is replaced by ADR-019, which also sets how long retired signing and encryption keys are kept. The other decisions of section 12 are unchanged.
 - **Date:** 2026-11-18
 - **Phase:** 2.2 (authentication flows and security design)
 - **Resolves:** "Exact token and session strategy" and "Access token format and resource-server token validation approach" in [PROJECT_DECISIONS.md section 13](../architecture/PROJECT_DECISIONS.md#13-explicitly-deferred-decisions), the direction of "Signing key storage and rotation", and ADR-015 open questions O2, O3, O4, O5, O6, O7, O11 and O12. Decisions D4 to D9, D12, D15, D16, D18, D20, D21 and D24 to D27 of [PHASE_2_2_AUTHENTICATION_FLOWS.md](../architecture/PHASE_2_2_AUTHENTICATION_FLOWS.md#11-decisions-and-implementation-plan).

@@ -36,9 +36,12 @@ Inputs: [PROJECT_DECISIONS.md](PROJECT_DECISIONS.md) (especially sections 5, 7 a
 
 **Not verified by S6:**
 
-- A KMS or HSM key provider (none is implemented).
-- A shared Data Protection volume in a production-like environment.
-- The Admin service, which does not exist yet; a test client stands in for it.
+- A KMS or HSM key provider (none is implemented), or an accepted certificate-file alternative (not decided).
+- A shared Data Protection volume and multi-instance rolling restarts in a production-like environment. Rotating the Data Protection key-encryption certificate is not implemented.
+- The Admin service, which does not exist yet; a test client stands in for it. Administrator MFA (D17) is deferred.
+- Notification's security email endpoint, a metrics exporter and monitoring.
+
+The full list of gates is in [IDENTITY_OPERATIONS.md section 7](../security/IDENTITY_OPERATIONS.md#7-verification-level-and-remaining-production-gates). The key rollover policy is [ADR-019](../decisions/ADR-019-signing-and-encryption-key-rollover-and-retirement.md).
 
 **Verified by S7:** the BFF side of logout, logout-all and re-authorization after a password change, in integration tests and in Chromium, Firefox and WebKit (Playwright). **Not verified by S7:** real Safari on macOS and iOS (the ADR-016 gate before any production-like deployment), and the full local flow through the Gateway on a machine without a trusted development certificate (finding I29).
 
@@ -147,7 +150,7 @@ Evaluate and decide:
 | **Local signature validation** | Which signing algorithms are allowed (asymmetric only, for example RS256, PS256 or ES256, with an explicit allow-list and `alg: none` rejected)? How is validation configured consistently in every service without a shared business layer (a technical BuildingBlock may be justified here)? |
 | **Issuer and audience validation** | A single issuer URI per environment. Per-service audiences or a shared API audience. How the Gateway and services each validate `aud`. Allowed clock skew. |
 | **Signing key discovery and distribution** | Does the provider publish an OpenID Connect discovery document and a JWKS endpoint? How do services fetch and cache keys (cache lifetime, refresh on an unknown `kid`, behaviour when Identity is unreachable at startup or at runtime)? Can JWKS be reached through the Gateway or only on the internal network? |
-| **Signing key rotation** | Rotation frequency. Publishing the new key before signing with it, and keeping the old key published for at least the maximum access token lifetime. Emergency rotation after a key compromise. Where private keys are stored (never in the repository). |
+| **Signing key rotation** | Rotation frequency. Publishing the new key before signing with it, and keeping the old key published for at least the maximum access token lifetime (superseded by [ADR-019](../decisions/ADR-019-signing-and-encryption-key-rollover-and-retirement.md): refresh tokens and codes are signed too, so the old key is kept until they have expired). Emergency rotation after a key compromise. Where private keys are stored (never in the repository). |
 | **Token revocation** | With local validation, an issued access token stays valid until it expires. Which trade-off is acceptable? <ul><li>short access token lifetimes plus refresh token revocation (baseline)</li><li>a `jti` denylist distributed to services for high-risk events</li><li>token introspection only for selected high-risk operations</li></ul> How do logout, logout all, password change and account disablement behave within this model? |
 | **Centralized versus distributed validation** | The Gateway may validate tokens as an early rejection layer. **Every service still validates tokens itself and performs its own tenant-level and resource-level authorization** ([ADR-007](../decisions/ADR-007-yarp-api-gateway.md), [ADR-014](../decisions/ADR-014-logical-tenant-isolation.md)). Define what the Gateway validates, what it forwards, and how a service is protected when it is called directly, not through the Gateway. |
 | **Service-to-service tokens** | How internal calls obtain tokens, which audience they target, and how they are validated the same way as user tokens. |

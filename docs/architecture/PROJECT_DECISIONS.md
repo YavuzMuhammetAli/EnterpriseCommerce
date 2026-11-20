@@ -10,7 +10,7 @@ How this document relates to the others:
 
 **Change policy:** a decision in this document changes only through a new ADR that supersedes or amends the old one. This document is then updated in the same change. If this document and an ADR disagree, stop and resolve the inconsistency. Never guess.
 
-Last consolidated: 2026-11-17 (Phase 1 final audit). Updated 2026-11-17 for Phase 2.1 (Identity provider selection, [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)). Updated 2026-11-18 for Phase 2.2 (browser client architecture, token and session strategy, account security tokens: [ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md), [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md), [ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)).
+Last consolidated: 2026-11-17 (Phase 1 final audit). Updated 2026-11-17 for Phase 2.1 (Identity provider selection, [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)). Updated 2026-11-18 for Phase 2.2 (browser client architecture, token and session strategy, account security tokens: [ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md), [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md), [ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)). Updated 2026-11-20 for Phase 2.3 slice S6 (signing and encryption key rollover and retirement, [ADR-019](../decisions/ADR-019-signing-and-encryption-key-rollover-and-retirement.md)).
 
 ---
 
@@ -223,6 +223,12 @@ Governing ADRs: [ADR-005](../decisions/ADR-005-kafka-for-asynchronous-communicat
   - Rotated refresh tokens with no reuse leeway, a mandatory redemption ledger, and a presenter-checked reuse policy.
   - The per-user **security version** and the authorization status are the authoritative revocation state. Authoritative changes commit in one short transaction with a whole-transaction retry on deadlock. OpenIddict bulk revocation is post-commit cleanup.
   - Every credential entry happens on Identity-hosted pages.
+- **Key rollover and retirement (accepted, [ADR-019](../decisions/ADR-019-signing-and-encryption-key-rollover-and-retirement.md)):**
+  - Signing and encryption keys carry an explicit state in configuration: `Pending` (published, never signs), `Active` (exactly one per use) or `Retired` (with `RetiredAt`). Key IDs are SHA-256 thumbprints.
+  - Refresh tokens and authorization codes are signed with the signing key too. A retired key is therefore kept until every token it signed or encrypted has expired, plus the 30-second skew. The strict minimum is the end of the activation rollout plus the longest such token lifetime (7 days with the accepted initial lifetimes of PHASE_2_2 section 6.4) plus 30 seconds.
+  - The implemented rule is longer, deliberately: a retired signing key is kept for the replay protection window (the longest configured lifetime plus a safety margin) + 30 seconds + the validator cache allowance, and a retired encryption key for the window + 30 seconds. With those lifetimes that is 32 days 30 seconds and 31 days 30 seconds after `RetiredAt`.
+  - A refresh-token rotation never extends a token of a retired key: its successor is issued with the Active keys and capped by the absolute session deadline.
+  - Emergency rotation removes a compromised key at once. Early removal always fails closed.
 - **Account security tokens and email (accepted, [ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)):** hashed, single-use confirmation and reset tokens consumed atomically with the account change. Notification owns production email delivery, and Identity hands emails over through a bounded in-process queue with status-only reconciliation.
 - The Identity API contract is in [IDENTITY_API_CONTRACT.md](../api/IDENTITY_API_CONTRACT.md).
 - **Service-level authorization is mandatory.** Gateway authorization does not replace it.
@@ -280,7 +286,8 @@ These are **open**. They must not be decided silently. Each one is decided throu
 | Decision | Planned resolution |
 |---|---|
 | Detailed Identity data model (within ADR-015, ADR-017 and ADR-018) | Phase 2.3 implementation |
-| Concrete signing key store and Data Protection key store outside local development (the direction is in ADR-017) | Deployment phase |
+| Concrete signing key store and Data Protection key store outside local development (the direction is in ADR-017 and ADR-019): a KMS or HSM provider, or an explicitly accepted certificate-file key-management procedure, including the rotation of the Data Protection key-encryption certificate | Deployment phase, before any production-like deployment |
+| Retention periods for expired account security tokens and terminal security email delivery records (finding I35; they are not deleted until then) | Before the first production-like deployment |
 | Per-service user access token audiences ([ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md) section 3) | When a concrete need appears |
 | Opaque-reference security email handoff (E3, [ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)) | After the outbox design is approved |
 | Kafka client library | First event-flow phase |
@@ -299,3 +306,4 @@ These are **open**. They must not be decided silently. Each one is decided throu
 - Browser client architecture: a backend-for-frontend for every front end ([ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md), Phase 2.2).
 - Token and session strategy, access token format, resource-server validation, and the direction for signing key storage and rotation ([ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md), Phase 2.2).
 - Email confirmation and password reset token semantics, and security email delivery ([ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md), Phase 2.2).
+- Signing and encryption key rollover and the retention of retired keys ([ADR-019](../decisions/ADR-019-signing-and-encryption-key-rollover-and-retirement.md), Phase 2.3).

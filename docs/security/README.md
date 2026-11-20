@@ -54,15 +54,18 @@ The threat matrix, residual risks and required security tests are in [PHASE_2_2_
 
 - **Account lifecycle.** Disablement and reactivation through an internal API that only an allow-listed service client with the `svc.identity.account-lifecycle` scope may call. The Gateway never routes `/internal/**`. Disablement raises the security version, rotates the security stamp and supersedes outstanding security tokens in one authoritative transaction. Reactivation restores no session.
 - **Retention.** Redemption ledger rows and OpenIddict entries are deleted only after every token they could reject has expired (the replay protection window). Batches are bounded, there is one runner per cycle across instances, and expiry uses the database clock. Account security tokens and delivery records are kept: their retention period is an open decision.
-- **Key rollover.** An explicit `Pending`, `Active` and `Retired` key ring, with key IDs from SHA-256 thumbprints. A retired signing key is kept for the replay window plus skew plus the validator cache allowance, because refresh tokens are signed too (finding I31). Startup fails closed on any invalid key material.
+- **Key rollover ([ADR-019](../decisions/ADR-019-signing-and-encryption-key-rollover-and-retirement.md)).** An explicit `Pending`, `Active` and `Retired` key ring, with key IDs from SHA-256 thumbprints. A retired signing key is kept for the replay window plus skew plus the validator cache allowance, because refresh tokens are signed too (finding I31). Startup fails closed on any invalid key material.
 - **Data Protection.** Identity and each BFF use an isolated, persistent key ring encrypted at rest with a certificate. Both are required outside Development.
 - **Operations.** Readiness covers the database, keys, the email adapter and the workers, and reports only the status word. Metrics use bounded tags only. CI rejects private keys in test logs and in the Release publish output.
 
-**Verification gates before any production-like deployment:**
+**Verification gates before any production-like deployment.** The S6 behaviour above is implemented and tested locally only. None of it has been verified in a production-like environment. The full list is in [IDENTITY_OPERATIONS.md section 7](IDENTITY_OPERATIONS.md#7-verification-level-and-remaining-production-gates).
 
 - **Real Safari** (macOS and iOS): login, refresh, logout, cookie attributes and CSRF. Playwright WebKit results do not count as Safari evidence (ADR-016 section 8). Still open after S7: Playwright's Windows WebKit does not even implement `SameSite` (finding I26).
-- A shared, protected Data Protection volume per environment and BFF deployment (D19), and per-deployment Redis ACL users for the session store. A KMS or HSM provider for signing, encryption and Data Protection keys is not implemented: only mounted PKCS#12 files are ([IDENTITY_OPERATIONS.md section 7](IDENTITY_OPERATIONS.md#7-remaining-production-deployment-gates)).
+- A shared, protected Data Protection volume per environment and BFF deployment (D19), verified with a multi-instance rolling restart, and per-deployment Redis ACL users for the session store.
+- A KMS or HSM provider for signing, encryption and Data Protection keys, or an explicitly accepted certificate-file key-management procedure. Only mounted PKCS#12 files are implemented (ADR-019 section 8).
+- A rotation procedure for the Data Protection key-encryption certificate (not implemented).
 - The Admin service, which calls the internal account lifecycle API, and a decision on the retention period of account security tokens and delivery records.
+- A metrics exporter, alerting and operational monitoring (observability phase).
 - MFA for platform administrators (Phase 2.2 decision D17, deferred).
 - Notification must implement the internal security email endpoint ([IDENTITY_API_CONTRACT.md section 4a](../api/IDENTITY_API_CONTRACT.md#4a-outbound-security-email-handover-to-notification-internal)). Identity refuses to start outside Development until it is configured.
 
