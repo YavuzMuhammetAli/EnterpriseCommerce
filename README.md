@@ -100,7 +100,15 @@ dotnet run --project src/Services/Identity/EnterpriseCommerce.Identity.Api --lau
 | Endpoint | Description |
 |---|---|
 | `http://localhost:5101/health` | Health check, returns `Healthy` |
+| `http://localhost:5101/health/ready` | Readiness: database, keys, email adapter, background workers (status word only) |
 | `http://localhost:5101/openapi/v1.json` | OpenAPI document (Development only) |
+
+By default, Development uses ephemeral signing keys, so tokens end when Identity restarts. To keep them, and to rehearse the key rollover ([docs/security/IDENTITY_OPERATIONS.md](docs/security/IDENTITY_OPERATIONS.md)), generate a persisted development key ring outside the repository:
+
+```bash
+dotnet run deploy/dev/identity-dev-keys.cs -- init
+. $env:USERPROFILE/.enterprisecommerce/identity-dev/identity-keys.ps1     # or: source ~/.enterprisecommerce/identity-dev/identity-keys.sh
+```
 
 ## Run the Gateway
 

@@ -22,11 +22,23 @@ Inputs: [PROJECT_DECISIONS.md](PROJECT_DECISIONS.md) (especially sections 5, 7 a
 | S2 | Identity-hosted login, authorization code + PKCE, token issuance, redemption ledger, presenter-checked reuse policy | Done |
 | S3 | Registration, email confirmation, resend limits, security email delivery records, bounded queue, worker, status-only reconciliation, Notification adapter, isolated development mail sink | Done |
 | S5 | Gateway routing and trusted forwarded headers | Done |
-| S6 | Log redaction guard, health checks, CI secret scan | Done (first part) |
+| S6 | First part: log redaction guard, health checks, CI secret scan. Second part: account disablement and reactivation (internal API for Admin), retention cleanup of the redemption ledger and OpenIddict entries, signing and encryption key rollover with explicit key states, Data Protection key rings encrypted at rest, readiness checks, bounded-tag metrics. Operations: [IDENTITY_OPERATIONS.md](../security/IDENTITY_OPERATIONS.md) | Done (production key provider and the open retention decision are deployment gates) |
 | S4 | Token revocation and end-session (POST-only browser logout), logout-all endpoint, password reset and change, deterministic reset-versus-refresh and logout-all-versus-refresh race tests | Done |
 | S7 | Backend-for-frontend and the dedicated session Redis: one codebase (`src/Bff`), three deployments; authorization code + PKCE + `private_key_jwt`; server-side sessions in a `noeviction` Redis; single-flight refresh; CSRF layers; logout and logout-all; silent re-authorization after a password change; Playwright browser tests. Contract: [BFF_API_CONTRACT.md](../api/BFF_API_CONTRACT.md) | Done (real Safari gate open) |
 
 **Not verified by S4:** real browsers (the tests drive HTTP directly), delivery of reset emails through Notification (not implemented), and SQL Server versions other than 2022.
+
+**Verified by S6:**
+
+- Account disablement forced against refresh, code exchange, password reset and a second disablement (both orderings each), and reactivation against login, on SQL Server 2022.
+- Retention against real locks and two concurrent instances.
+- Key rollover across Identity restarts with persisted certificates, validated by the standard JWT bearer handler, Identity's own validation and the BFF.
+
+**Not verified by S6:**
+
+- A KMS or HSM key provider (none is implemented).
+- A shared Data Protection volume in a production-like environment.
+- The Admin service, which does not exist yet; a test client stands in for it.
 
 **Verified by S7:** the BFF side of logout, logout-all and re-authorization after a password change, in integration tests and in Chromium, Firefox and WebKit (Playwright). **Not verified by S7:** real Safari on macOS and iOS (the ADR-016 gate before any production-like deployment), and the full local flow through the Gateway on a machine without a trusted development certificate (finding I29).
 

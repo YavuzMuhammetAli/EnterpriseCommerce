@@ -101,7 +101,7 @@ Common status codes:
 | Current user | `GET /api/v1/users/me` | REST | Bearer |
 | List sessions | `GET /api/v1/users/me/sessions` | REST | Bearer |
 | Revoke session | `DELETE /api/v1/users/me/sessions/{sessionId}` | REST | Bearer |
-| Account disable and reactivate | Internal endpoints for Admin | REST (internal) | Service token only (`svc-` client with a dedicated scope) |
+| Account disable and reactivate | `POST /internal/v1/accounts/{accountId}/disable`, `POST /internal/v1/accounts/{accountId}/reactivate` ([section 2.12](#212-account-disablement-and-reactivation-internal)) | REST (internal) | Service token only (allow-listed `svc-` client, scope `svc.identity.account-lifecycle`) |
 
 Page paths are implementation details of Identity.Api and are not a client contract. Clients reach the pages through `/connect/authorize` or through links that Identity issues.
 
@@ -233,6 +233,42 @@ Access tokens already issued stay valid until they expire (ADR-017 section 6). T
 | `GET /api/v1/users/me/sessions` | `200`: the caller's valid sessions (one per login per client) with an opaque `id`, `createdAt`, `lastSeenAt`, `current` (boolean), and coarse client information. Raw IP retention is decided with the data model. |
 | `DELETE /api/v1/users/me/sessions/{sessionId}` | `204`. Revokes that session's authorization and tokens. Returns `404` if the session doesn't belong to the caller (never reveals other users' sessions). |
 
+### 2.12 Account disablement and reactivation (internal)
+
+**Implemented (Phase 2.3 S6).** Called by Admin, which authorizes its platform administrators first ([PHASE_2_2_AUTHENTICATION_FLOWS.md section 5.6.6](../architecture/PHASE_2_2_AUTHENTICATION_FLOWS.md#566-account-disablement-and-reactivation)). The Gateway never routes `/internal/**`; the endpoints are reachable on the internal network only. Behaviour, audit and concurrency: [IDENTITY_OPERATIONS.md section 1](../security/IDENTITY_OPERATIONS.md#1-account-disablement-and-reactivation).
+
+| Endpoint | Effect |
+|---|---|
+| `POST /internal/v1/accounts/{accountId}/disable` | In one authoritative transaction: status `Disabled`, new security stamp, security version + 1, every outstanding security token superseded. Afterwards, every authorization and token of the user is revoked as cleanup. |
+| `POST /internal/v1/accounts/{accountId}/reactivate` | Status `Active`. The security version is unchanged, and nothing revoked earlier becomes valid again. |
+
+- **Authentication:** `Authorization: Bearer <access token>` from the client credentials grant. Identity accepts the token only if all of these hold:
+  - `ec_ptype=service`
+  - the audience `Identity:AccountAdministration:Audience` (default `identity-api`)
+  - the scope `svc.identity.account-lifecycle`
+  - a `client_id` that has the `svc-` prefix and is listed in `Identity:AccountAdministration:AllowedClientIds`
+
+  An empty list denies every caller. Identity authorizes the calling client, never an administrator role.
+- `accountId` is the user's `sub`.
+- **Body (JSON):**
+
+  | Field | Rule |
+  |---|---|
+  | `reason` | One of `Administrative`, `PolicyViolation`, `SecurityConcern`, `UserRequest` |
+  | `actorReference` | Admin's opaque reference to the administrator: 1 to 128 characters of letters, digits, `.`, `_`, `:` or `-`. Recorded for audit only; never authorizes anything. |
+
+- **Idempotent:** a repeated request returns `changed: false`. A repeated disable also re-runs the post-commit cleanup. No `Idempotency-Key` is needed.
+- **Responses:**
+
+  | Code | Meaning |
+  |---|---|
+  | `200` | `{ "accountId": "...", "status": "Disabled" \| "Active", "changed": true \| false }` |
+  | `400` | Validation problem details (`errors` per field) |
+  | `401` | No valid token for Identity: no token, or another service's audience |
+  | `403` | A valid token that is not an allowed service caller, for example a user token |
+  | `404` | Unknown account. The caller is a trusted service, so this is no enumeration risk. |
+  | `503` | The change could not be committed. Nothing changed. |
+
 <a id="3-jwt-access-token-claims-baseline"></a>
 
 ## 3. JWT access token claims (Accepted)
@@ -266,7 +302,7 @@ Rules:
 1. Confirm the **Reconstructed** REST fields (`users/me`, sessions) during implementation.
 2. `Idempotency-Key` retention, storage and scope, decided with the first endpoint that requires it.
 3. The final error `type` URI scheme.
-4. Internal Admin endpoints for account disablement and reactivation: exact paths and the service scope name.
+4. ~~Internal Admin endpoints for account disablement and reactivation~~: resolved in Phase 2.3 S6 ([section 2.12](#212-account-disablement-and-reactivation-internal)).
 
 Out of scope for this contract: MFA enrolment and external logins (social providers).
 

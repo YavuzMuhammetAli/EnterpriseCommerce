@@ -124,6 +124,9 @@ dotnet run --project src/Services/Identity/EnterpriseCommerce.Identity.Api --lau
 dotnet run --project src/Gateway/EnterpriseCommerce.Gateway --launch-profile http                  # http://localhost:5000
 dotnet run --project src/Bff/EnterpriseCommerce.Bff --launch-profile storefront                      # https://localhost:7201 (also merchant, admin)
 
+# Persisted development signing/encryption keys (outside the repo); then load the generated identity-keys.ps1/.sh:
+dotnet run deploy/dev/identity-dev-keys.cs -- init          # stage | activate | prune rehearse the key rollover
+
 # BFF tests need the session Redis (Compose profile bff, noeviction); browser tests also EC_TEST_BROWSERS=true:
 export EC_TEST_REDIS_SESSIONS='127.0.0.1:6380,password=<REDIS_SESSIONS_PASSWORD from deploy/docker/.env>'
 
@@ -143,3 +146,4 @@ docker compose --profile <name> down                                # same profi
 - Identity needs `ConnectionStrings__IdentityDatabase` (environment or user secrets; never committed). In Development, `Identity__Database__ApplyMigrationsAtStartup=true` applies the migrations at startup.
 - `dotnet ef migrations add` puts the model snapshot under a namespace-derived folder when `--namespace` is used. Move it into `Persistence/Migrations` and delete the generated folder.
 - The Phase 1 audit findings and open items are in [docs/architecture/PHASE_1_FINAL_AUDIT.md](docs/architecture/PHASE_1_FINAL_AUDIT.md).
+- Identity operations (account lifecycle, retention, key rollover, Data Protection, health, metrics) are in [docs/security/IDENTITY_OPERATIONS.md](docs/security/IDENTITY_OPERATIONS.md).

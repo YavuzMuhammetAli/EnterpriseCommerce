@@ -144,10 +144,14 @@ Exactly one front end per instance. Startup fails on any invalid value, without 
 | `Session:AbsoluteLifetime`, `Session:IdleTimeout`, `Session:AllowPersistent` | See [section 4](#4-session-and-refresh-behaviour). |
 | `Refresh:Threshold`, `RequestTimeout`, `LeaseDuration`, `WaitForOtherRefresh` | 2 min, 5 s, 15 s, 6 s. |
 | `DataProtectionKeyDirectory` | Required outside Development and shared by one deployment's instances. The production key store is deferred (D19). |
+| `DataProtectionCertificatePath`, `DataProtectionCertificatePassword` | A PKCS#12 file (mounted secret) whose certificate encrypts the Data Protection keys at rest. Required outside Development (Phase 2.3 S6). |
+| `Metadata:RefreshInterval`, `Metadata:MinimumRefreshInterval` | 1 h and 1 min. How long Identity's discovery document and JWKS are cached, and how often an unknown `kid` may force a refresh. The refresh interval must not exceed Identity's `Identity:Keys:ValidatorCacheAllowance`. |
 | `RedisKeyPrefix` | Optional. Defaults to `bff:{d}`. |
 | `DownstreamApiAddress` | Optional. The Gateway address for `/api/*`. |
 | `Proxy:KnownProxies`, `Proxy:KnownNetworks`, `Proxy:PublicHosts` | The trusted Gateway (`ForwardLimit=1`). Required, with explicit `AllowedHosts`, outside Development. |
 | `ConnectionStrings:BffSessions` | The dedicated session Redis. |
+
+Health: `/health/live` reports the process only. `/health/ready` and `/health` also check the session Redis and its `noeviction` policy. Responses carry the status word only.
 
 ## 6. Identity registration per deployment
 
