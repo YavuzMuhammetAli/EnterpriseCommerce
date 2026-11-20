@@ -52,6 +52,18 @@ jobs:
       - name: Restore
         run: dotnet restore EnterpriseCommerce.sln
 
+      - name: Start the BFF session Redis (noeviction, append-only; ADR-016 section 3)
+        # Service containers cannot take a command line, so the dedicated session Redis is started here with the same
+        # pinned image and policy as the redis-sessions Compose service. Throwaway password for this runner only.
+        run: |
+          docker run -d --name redis-sessions -p 6380:6379 redis:8.8.4-alpine             redis-server --requirepass CiOnly_Ephemeral_Sessions --maxmemory 64mb --maxmemory-policy noeviction --appendonly yes
+          for i in $(seq 1 30); do
+            docker exec -e REDISCLI_AUTH=CiOnly_Ephemeral_Sessions redis-sessions redis-cli ping | grep -q PONG && exit 0
+            sleep 1
+          done
+          echo "::error::The session Redis did not start."
+          exit 1
+
       - name: Build (warnings are errors)
         run: dotnet build EnterpriseCommerce.sln --configuration Release --no-restore
 
@@ -66,6 +78,9 @@ jobs:
       - name: Test (unit, integration, architecture)
         env:
           EC_TEST_SQLSERVER: "Server=127.0.0.1,1433;User ID=sa;Password=CiOnly_Ephemeral_Pa55word!;TrustServerCertificate=true"
+          EC_TEST_REDIS_SESSIONS: "127.0.0.1:6380,password=CiOnly_Ephemeral_Sessions"
+          # The real restart test runs in the serial collection, after the parallel tests.
+          EC_TEST_REDIS_RESTART_CONTAINER: "redis-sessions"
           # Infrastructure tests must run in CI: a missing server fails the build instead of skipping.
           EC_REQUIRE_INFRA_TESTS: "true"
         # The default bash shell uses pipefail, so a test failure still fails this step.
@@ -78,6 +93,73 @@ jobs:
           # Account security tokens (confirmation and reset links) are 43 URL-safe characters after "token=".
           if grep -nE 'eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|(code_verifier|client_assertion|refresh_token|id_token_hint)=[^&[:space:]]{8,}|[?&]token=[A-Za-z0-9_-]{43}' test-output.log; then
             echo "::error::Secret-like material found in the test output."
+            exit 1
+          fi
+
+  browser-tests:
+    name: Browser tests (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Real browser engines against Identity and the BFF on Kestrel (ADR-016 section 8). Playwright WebKit is not real
+    # Safari: the real Safari (macOS, iOS) gate is separate and still open.
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-CU28-ubuntu-22.04
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_PID: "Developer"
+          MSSQL_SA_PASSWORD: "CiOnly_Ephemeral_Pa55word!"
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'CiOnly_Ephemeral_Pa55word!' -Q 'SELECT 1' -b -o /dev/null"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+          --health-start-period 30s
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET (version from global.json)
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Start the BFF session Redis (noeviction, append-only; ADR-016 section 3)
+        # Service containers cannot take a command line, so the dedicated session Redis is started here with the same
+        # pinned image and policy as the redis-sessions Compose service. Throwaway password for this runner only.
+        run: |
+          docker run -d --name redis-sessions -p 6380:6379 redis:8.8.4-alpine             redis-server --requirepass CiOnly_Ephemeral_Sessions --maxmemory 64mb --maxmemory-policy noeviction --appendonly yes
+          for i in $(seq 1 30); do
+            docker exec -e REDISCLI_AUTH=CiOnly_Ephemeral_Sessions redis-sessions redis-cli ping | grep -q PONG && exit 0
+            sleep 1
+          done
+          echo "::error::The session Redis did not start."
+          exit 1
+
+      - name: Build
+        run: dotnet build tests/Bff/EnterpriseCommerce.Bff.BrowserTests --configuration Release
+
+      - name: HTTPS development certificate for Kestrel (not trusted; the browsers ignore certificate errors only)
+        run: dotnet dev-certs https
+
+      - name: Install the browsers and their system dependencies
+        run: pwsh tests/Bff/EnterpriseCommerce.Bff.BrowserTests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium firefox webkit
+
+      - name: Browser tests
+        env:
+          EC_TEST_SQLSERVER: "Server=127.0.0.1,1433;User ID=sa;Password=CiOnly_Ephemeral_Pa55word!;TrustServerCertificate=true"
+          EC_TEST_REDIS_SESSIONS: "127.0.0.1:6380,password=CiOnly_Ephemeral_Sessions"
+          EC_TEST_BROWSERS: "true"
+          EC_REQUIRE_INFRA_TESTS: "true"
+        run: dotnet test --project tests/Bff/EnterpriseCommerce.Bff.BrowserTests --configuration Release --no-build 2>&1 | tee browser-test-output.log
+
+      - name: Scan browser test output for secrets (ADR-017 section 11)
+        if: always()
+        run: |
+          if grep -nE 'eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|(code_verifier|client_assertion|refresh_token|id_token_hint)=[^&[:space:]]{8,}' browser-test-output.log; then
+            echo "::error::Secret-like material found in the browser test output."
             exit 1
           fi
 
@@ -95,7 +177,7 @@ jobs:
       - name: Validate every profile with placeholder environment
         run: |
           cp .env.example .env
-          for profile in sqlserver mongodb redis kafka mailsink all; do
+          for profile in sqlserver mongodb redis bff kafka mailsink all; do
             echo "Validating profile: $profile"
             docker compose --profile "$profile" config --quiet
           done

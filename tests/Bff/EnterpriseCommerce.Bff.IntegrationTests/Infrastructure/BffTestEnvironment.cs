@@ -34,7 +34,8 @@ public sealed class FrontEnd(string deployment) : IDisposable
 
     public string Audience => $"ec-{Deployment}";
 
-    public Uri Origin => new($"https://{Deployment}.example.test");
+    /// <summary>The public origin; a real loopback port when the environment runs on Kestrel (browser tests).</summary>
+    public Uri Origin { get; internal set; } = new($"https://{deployment}.example.test");
 
     public string KeyId { get; } = Guid.NewGuid().ToString("N");
 
@@ -83,6 +84,9 @@ public sealed class BffHostOptions
     public ILogEventSink? LogSink { get; set; }
 
     public string? DownstreamApiAddress { get; set; }
+
+    /// <summary>A web root with the front end's static files (browser tests).</summary>
+    public string? WebRoot { get; set; }
 
     public HttpMessageHandler? DownstreamHandler { get; set; }
 
@@ -153,6 +157,16 @@ public partial class BffTestEnvironment : IAsyncLifetime
     private readonly string _dataProtectionRoot = Path.Combine(Path.GetTempPath(), "ec-bff-tests", Guid.NewGuid().ToString("N"));
     private WebApplicationFactory<IdentityProgram>? _identity;
 
+    /// <summary>
+    /// Real Kestrel listeners on loopback ports instead of in-memory servers, for real browsers. Identity then runs on
+    /// https://localhost:{port} and each front end on https://127.0.0.1:{port}: distinct hosts, so their host-only
+    /// cookies stay separate, as with distinct host names in a deployment.
+    /// </summary>
+    protected virtual bool UseKestrel => false;
+
+    /// <summary>The issuer the hosts use: <see cref="Issuer"/> in memory, a real loopback URL on Kestrel.</summary>
+    public Uri IdentityIssuer { get; private set; } = Issuer;
+
     public FrontEnd Storefront { get; } = new("storefront");
 
     public FrontEnd Merchant { get; } = new("merchant");
@@ -171,11 +185,20 @@ public partial class BffTestEnvironment : IAsyncLifetime
 
     public void RequireAvailable() => TestInfrastructure.RequireAvailable();
 
-    public async ValueTask InitializeAsync()
+    public virtual async ValueTask InitializeAsync()
     {
         if (!TestInfrastructure.IsConfigured)
         {
             return;
+        }
+
+        if (UseKestrel)
+        {
+            IdentityIssuer = new Uri($"https://localhost:{FreePort()}/");
+            foreach (var frontEnd in FrontEnds)
+            {
+                frontEnd.Origin = new Uri($"https://127.0.0.1:{FreePort()}");
+            }
         }
 
         var options = new DbContextOptionsBuilder<IdentityServiceDbContext>().UseSqlServer(ConnectionString).UseOpenIddict().Options;
@@ -188,7 +211,7 @@ public partial class BffTestEnvironment : IAsyncLifetime
         {
             builder.UseEnvironment("Development");
             builder.UseSetting("ConnectionStrings:IdentityDatabase", ConnectionString);
-            builder.UseSetting("Identity:Issuer", Issuer.AbsoluteUri);
+            builder.UseSetting("Identity:Issuer", IdentityIssuer.AbsoluteUri);
             builder.UseSetting("Identity:AdminConsoleClientId", Admin.ClientId);
             builder.UseSetting("Identity:RateLimits:CredentialRequestsPerMinute", "100000");
             builder.UseSetting("Serilog:MinimumLevel:Default", IdentityLogSink is null ? "Warning" : "Verbose");
@@ -210,7 +233,23 @@ public partial class BffTestEnvironment : IAsyncLifetime
             }
         });
 
-        _ = _identity.Server;
+        if (UseKestrel)
+        {
+            var port = IdentityIssuer.Port;
+            _identity.UseKestrel(kestrel => kestrel.ListenLocalhost(port, listen => listen.UseHttps()));
+            _identity.StartServer();
+        }
+        else
+        {
+            _ = _identity.Server;
+        }
+    }
+
+    private static int FreePort()
+    {
+        using var listener = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 
     /// <summary>Starts a BFF host for a front end. Hosts of the same front end share the key prefix and key ring.</summary>
@@ -232,7 +271,7 @@ public partial class BffTestEnvironment : IAsyncLifetime
             builder.UseSetting("Bff:Deployment", frontEnd.Deployment);
             builder.UseSetting("Bff:ClientId", options.ClientId ?? frontEnd.ClientId);
             builder.UseSetting("Bff:Audience", frontEnd.Audience);
-            builder.UseSetting("Bff:Authority", options.Authority ?? Issuer.AbsoluteUri);
+            builder.UseSetting("Bff:Authority", options.Authority ?? IdentityIssuer.AbsoluteUri);
             builder.UseSetting("Bff:PublicOrigin", origin.AbsoluteUri.TrimEnd('/'));
             builder.UseSetting("Bff:ClientKey:PrivateKeyPem", options.PrivateKeyPem ?? frontEnd.PrivateKeyPem);
             builder.UseSetting("Bff:ClientKey:KeyId", frontEnd.KeyId);
@@ -255,6 +294,11 @@ public partial class BffTestEnvironment : IAsyncLifetime
             }
 
             builder.UseSetting("Serilog:MinimumLevel:Default", options.LogSink is null ? "Warning" : "Verbose");
+            if (options.WebRoot is not null)
+            {
+                builder.UseWebRoot(options.WebRoot);
+            }
+
             foreach (var (key, value) in options.Settings)
             {
                 builder.UseSetting(key, value);
@@ -264,7 +308,12 @@ public partial class BffTestEnvironment : IAsyncLifetime
             {
                 services.AddSingleton<TimeProvider>(time);
                 services.AddHttpClient(IdentityProtocolClient.HttpClientName)
-                    .ConfigurePrimaryHttpMessageHandler(() => authorityHandler is null ? Identity.Server.CreateHandler() : new NonDisposingHandler(authorityHandler))
+                    .ConfigurePrimaryHttpMessageHandler(() => authorityHandler is not null
+                        ? new NonDisposingHandler(authorityHandler)
+                        : UseKestrel
+                            // Test-only: the local development certificate is not trusted on every machine (CI).
+                            ? new HttpClientHandler { ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator }
+                            : Identity.Server.CreateHandler())
                     .AddHttpMessageHandler(() => new IdentityChannelControls.Handler(channel));
                 if (options.LogSink is not null)
                 {
@@ -279,7 +328,16 @@ public partial class BffTestEnvironment : IAsyncLifetime
         });
 
         var host = new BffHost(factory, frontEnd, origin, keyPrefix, time, channel);
-        _ = factory.Server;
+        if (UseKestrel)
+        {
+            factory.UseKestrel(kestrel => kestrel.Listen(IPAddress.Loopback, origin.Port, listen => listen.UseHttps()));
+            factory.StartServer();
+        }
+        else
+        {
+            _ = factory.Server;
+        }
+
         _hosts.Add(host);
         return host;
     }
@@ -430,7 +488,7 @@ public partial class BffTestEnvironment : IAsyncLifetime
         return connection.GetDatabase();
     }
 
-    public async ValueTask DisposeAsync()
+    public virtual async ValueTask DisposeAsync()
     {
         foreach (var host in _hosts)
         {

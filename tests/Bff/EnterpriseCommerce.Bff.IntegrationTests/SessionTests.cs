@@ -205,7 +205,15 @@ public sealed class SessionTests(BffTestEnvironment environment) : IClassFixture
 
         Assert.Equal(HttpStatusCode.OK, status);
     }
+}
 
+/// <summary>
+/// A real Redis process restart. It runs in the serial collection, after every parallel test, because it takes the
+/// shared session Redis down for a moment.
+/// </summary>
+[Collection(nameof(SessionStorePolicyCollection))]
+public sealed class SessionStoreRestartTests(BffTestEnvironment environment) : IClassFixture<BffTestEnvironment>
+{
     /// <summary>
     /// A real Redis process restart: needs control of the container, so it runs only when
     /// <c>EC_TEST_REDIS_RESTART_CONTAINER</c> names the session Redis container (for example

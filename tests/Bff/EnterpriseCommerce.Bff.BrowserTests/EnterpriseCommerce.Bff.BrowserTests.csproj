@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Real-browser tests of the BFF flows with Playwright (Chromium, Firefox, WebKit). They run only with
+    EC_TEST_BROWSERS=true plus the infrastructure of the integration tests. Playwright WebKit is not real Safari:
+    the real Safari gate of ADR-016 section 8 stays open.
+  -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.Playwright" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Bff\EnterpriseCommerce.Bff\EnterpriseCommerce.Bff.csproj" />
+    <ProjectReference Include="..\..\..\src\Services\Identity\EnterpriseCommerce.Identity.Api\EnterpriseCommerce.Identity.Api.csproj" Aliases="IdentityApi" />
+  </ItemGroup>
+
+  <!-- The shared test environment of the integration tests (real Identity, real session Redis). -->
+  <ItemGroup>
+    <Compile Include="..\EnterpriseCommerce.Bff.IntegrationTests\Infrastructure\*.cs" LinkBase="Infrastructure" />
+  </ItemGroup>
+
+  <!-- A test-only front end; the shipped BFF serves no page of its own. -->
+  <ItemGroup>
+    <None Update="wwwroot\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

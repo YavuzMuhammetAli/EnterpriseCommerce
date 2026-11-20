@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>BFF test front end</title>
+</head>
+<body>
+  <p>Test-only front end for the BFF browser tests.</p>
+  <script>
+    // Reads the readable antiforgery request token cookie, as the real front end will.
+    function xsrfToken() {
+      const cookie = document.cookie.split('; ').find(c => c.split('=')[0].endsWith('-xsrf'));
+      return cookie ? decodeURIComponent(cookie.substring(cookie.indexOf('=') + 1)) : '';
+    }
+
+    window.bff = {
+      user: async () => {
+        const response = await fetch('/bff/user');
+        return { status: response.status, body: await response.text(), login: response.headers.get('www-authenticate') };
+      },
+      post: async (path) => {
+        const response = await fetch(path, { method: 'POST', headers: { 'X-XSRF-TOKEN': xsrfToken() } });
+        return { status: response.status, body: await response.text() };
+      },
+    };
+  </script>
+</body>
+</html>
