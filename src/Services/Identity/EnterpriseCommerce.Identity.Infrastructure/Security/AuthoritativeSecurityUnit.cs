@@ -65,6 +65,19 @@ internal sealed class AuthoritativeSecurityUnit(
             .SingleOrDefaultAsync(cancellationToken);
     }
 
+    public async Task<long?> ReadSecurityVersionForDecisionAsync(string userId, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+
+        // HOLDLOCK keeps the shared row lock until the transaction ends, also under READ_COMMITTED_SNAPSHOT. An
+        // increment (exclusive lock) therefore waits until the decision based on this value has committed.
+        var versions = await context.Database
+            .SqlQuery<long>($"SELECT [Version] AS [Value] FROM [SecurityVersions] WITH (HOLDLOCK, ROWLOCK) WHERE [UserId] = {userId}")
+            .ToListAsync(cancellationToken);
+
+        return versions.Count == 0 ? null : versions[0];
+    }
+
     public async Task<long?> IncrementSecurityVersionAsync(string userId, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(userId);
@@ -201,6 +214,36 @@ internal sealed class AuthoritativeSecurityUnit(
                     .SetProperty(user => user.EmailConfirmed, true)
                     .SetProperty(user => user.ConcurrencyStamp, concurrencyStamp),
                 cancellationToken);
+        return updated == 1;
+    }
+
+    public async Task<bool> TrySetPasswordHashAsync(
+        string userId,
+        string newPasswordHash,
+        string? expectedCurrentHash,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newPasswordHash);
+
+        var account = context.Users.Where(user => user.Id == userId && user.Status == AccountStatus.Active);
+        if (expectedCurrentHash is not null)
+        {
+            account = account.Where(user => user.PasswordHash == expectedCurrentHash);
+        }
+
+        // One statement, as UserManager would do in its update: the hash, a new security stamp (which ends
+        // Data Protection tokens) and concurrency stamp, and a cleared lockout.
+        var securityStamp = Guid.NewGuid().ToString();
+        var concurrencyStamp = Guid.NewGuid().ToString();
+        var updated = await account.ExecuteUpdateAsync(
+            setters => setters
+                .SetProperty(user => user.PasswordHash, newPasswordHash)
+                .SetProperty(user => user.SecurityStamp, securityStamp)
+                .SetProperty(user => user.ConcurrencyStamp, concurrencyStamp)
+                .SetProperty(user => user.AccessFailedCount, 0)
+                .SetProperty(user => user.LockoutEnd, (DateTimeOffset?)null),
+            cancellationToken);
         return updated == 1;
     }
 

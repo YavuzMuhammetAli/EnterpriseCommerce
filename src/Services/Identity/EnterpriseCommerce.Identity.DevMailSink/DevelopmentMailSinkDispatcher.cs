@@ -1,6 +1,7 @@
 using System.Net.Mail;
 using System.Net.Sockets;
 using EnterpriseCommerce.Identity.Application.SecurityEmails;
+using EnterpriseCommerce.Identity.Domain.Security;
 using EnterpriseCommerce.Identity.Domain.SecurityEmails;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -20,8 +21,10 @@ internal sealed partial class DevelopmentMailSinkDispatcher(string host, int por
 
         using var mail = new MailMessage("no-reply@enterprisecommerce.local", message.RecipientEmail)
         {
-            Subject = "Confirm your email address",
-            Body = $"Open this link to confirm your email address:{Environment.NewLine}{message.Link.AbsoluteUri}",
+            Subject = message.Purpose == SecurityTokenPurpose.PasswordReset ? "Reset your password" : "Confirm your email address",
+            Body = message.Purpose == SecurityTokenPurpose.PasswordReset
+                ? $"Open this link within 30 minutes to choose a new password:{Environment.NewLine}{message.Link.AbsoluteUri}"
+                : $"Open this link to confirm your email address:{Environment.NewLine}{message.Link.AbsoluteUri}",
         };
         mail.Headers.Add("X-Delivery-Id", message.DeliveryId.ToString());
 

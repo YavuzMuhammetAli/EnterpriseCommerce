@@ -1,4 +1,5 @@
 using EnterpriseCommerce.Identity.Application.Security;
+using EnterpriseCommerce.Identity.Domain.Accounts;
 using EnterpriseCommerce.Identity.Domain.Security;
 using EnterpriseCommerce.Identity.Domain.SecurityEmails;
 using Microsoft.Extensions.Logging;
@@ -6,7 +7,7 @@ using Microsoft.Extensions.Logging;
 namespace EnterpriseCommerce.Identity.Application.SecurityEmails;
 
 /// <summary>
-/// Processes one delivery reference from the queue (ADR-018 section 3):
+/// Processes one delivery reference from the queue (ADR-018 section 3), for email confirmation and password reset:
 /// claim (Queued to Dispatching), mint the token only after a successful claim, store only its hash, build the link in
 /// memory, hand it over with bounded retries that reuse the same token and delivery identity, and record the outcome.
 /// </summary>
@@ -33,13 +34,21 @@ public sealed partial class SecurityEmailDeliveryProcessor(
             return;
         }
 
-        if (delivery.Purpose != SecurityTokenPurpose.EmailConfirmation)
+        // The account is checked again at claim time: it may have changed since the request.
+        var (applicable, page, lifetime) = delivery.Purpose switch
         {
-            await CompleteAsync(deliveryId, SecurityEmailDeliveryStatus.Failed, "unsupported-purpose", cancellationToken);
-            return;
-        }
+            SecurityTokenPurpose.EmailConfirmation => (
+                !delivery.Account.EmailConfirmed && delivery.Account.Status == AccountStatus.Active,
+                settings.ConfirmationPage,
+                settings.ConfirmationTokenLifetime),
+            SecurityTokenPurpose.PasswordReset => (
+                delivery.Account.CanSignIn,
+                settings.PasswordResetPage,
+                settings.PasswordResetTokenLifetime),
+            _ => (false, settings.ConfirmationPage, TimeSpan.Zero),
+        };
 
-        if (delivery.Account.EmailConfirmed || delivery.Account.Status != Domain.Accounts.AccountStatus.Active)
+        if (!applicable)
         {
             await CompleteAsync(deliveryId, SecurityEmailDeliveryStatus.Failed, "not-applicable", cancellationToken);
             return;
@@ -51,7 +60,7 @@ public sealed partial class SecurityEmailDeliveryProcessor(
             delivery.Purpose,
             generated.TokenHash,
             timeProvider.GetUtcNow(),
-            settings.ConfirmationTokenLifetime);
+            lifetime);
 
         // Persisting the hash supersedes the account's earlier unconsumed tokens of this purpose.
         var linked = await transaction.ExecuteAsync(
@@ -72,7 +81,7 @@ public sealed partial class SecurityEmailDeliveryProcessor(
             return;
         }
 
-        var message = new SecurityEmailMessage(deliveryId, delivery.Purpose, delivery.Email, BuildLink(generated.RawToken));
+        var message = new SecurityEmailMessage(deliveryId, delivery.Purpose, delivery.Email, BuildLink(page, generated.RawToken));
         await DispatchWithRetryAsync(message, cancellationToken);
     }
 
@@ -121,8 +130,8 @@ public sealed partial class SecurityEmailDeliveryProcessor(
         LogCompleted(logger, deliveryId, status, errorCategory, recorded);
     }
 
-    private Uri BuildLink(string rawToken) =>
-        new($"{settings.ConfirmationPage.AbsoluteUri}?token={Uri.EscapeDataString(rawToken)}");
+    private static Uri BuildLink(Uri page, string rawToken) =>
+        new($"{page.AbsoluteUri}?token={Uri.EscapeDataString(rawToken)}");
 
     [LoggerMessage(EventId = 3310, Level = LogLevel.Debug, Message = "Security email delivery {DeliveryId} not claimed; discarded without minting a token")]
     private static partial void LogNotClaimed(ILogger logger, Guid deliveryId);

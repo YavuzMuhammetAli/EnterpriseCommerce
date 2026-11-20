@@ -1,0 +1,15 @@
+@page "/connect/endsession"
+@model EnterpriseCommerce.Identity.Api.Pages.Connect.EndSessionModel
+@{
+    ViewData["Title"] = "Sign out";
+}
+<h1>Sign out</h1>
+<p>Do you want to sign out?</p>
+
+<form method="post">
+    @foreach (var parameter in Model.Parameters)
+    {
+        <input type="hidden" name="@parameter.Key" value="@parameter.Value" />
+    }
+    <button type="submit">Sign out</button>
+</form>

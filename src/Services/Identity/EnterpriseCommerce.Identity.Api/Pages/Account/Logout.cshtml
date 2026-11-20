@@ -1,0 +1,11 @@
+@page "/account/logout"
+@model EnterpriseCommerce.Identity.Api.Pages.Account.LogoutModel
+@{
+    ViewData["Title"] = "Sign out";
+}
+<h1>Sign out</h1>
+
+<form method="post">
+    <input type="hidden" asp-for="ReturnUrl" />
+    <button type="submit">Sign out</button>
+</form>

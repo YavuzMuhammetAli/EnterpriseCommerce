@@ -73,6 +73,7 @@ public static class DependencyInjection
         services.AddSingleton<IAuthoritativeSecurityTransaction, AuthoritativeSecurityTransaction>();
         services.AddSingleton<ISessionRevocationCleanup, SessionRevocationCleanup>();
         services.AddScoped<IAccountPasswordPolicy, AccountPasswordPolicy>();
+        services.AddScoped<IAccountPasswordHasher, AccountPasswordHasher>();
 
         AddSecurityEmailDelivery(services, configuration);
 
@@ -102,6 +103,8 @@ public static class DependencyInjection
             return new SecurityEmailSettings(
                 new Uri(issuer, options.ConfirmationPath),
                 options.ConfirmationTokenLifetime,
+                new Uri(issuer, options.PasswordResetPath),
+                options.PasswordResetTokenLifetime,
                 options.MaxDispatchAttempts,
                 options.RetryBaseDelay);
         });

@@ -84,6 +84,8 @@ public sealed class LogoutAllSessionsHandlerTests
 
         public Task<long?> ReadSecurityVersionAsync(string userId, CancellationToken cancellationToken) => Task.FromResult(_version);
 
+        public Task<long?> ReadSecurityVersionForDecisionAsync(string userId, CancellationToken cancellationToken) => Task.FromResult(_version);
+
         public Task<long?> IncrementSecurityVersionAsync(string userId, CancellationToken cancellationToken)
         {
             _version = _version is null ? null : _version + 1;
@@ -104,6 +106,9 @@ public sealed class LogoutAllSessionsHandlerTests
         public Task<AccountByEmail?> FindAccountByEmailAsync(string normalizedEmail, CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public Task<bool> ConfirmEmailAsync(string userId, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<bool> TrySetPasswordHashAsync(string userId, string newPasswordHash, string? expectedCurrentHash, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
 
         public Task<DateTime?> LockAccountForSecurityEmailAsync(string userId, CancellationToken cancellationToken) => throw new NotSupportedException();
 

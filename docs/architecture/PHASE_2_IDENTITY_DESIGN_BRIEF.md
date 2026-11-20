@@ -23,8 +23,10 @@ Inputs: [PROJECT_DECISIONS.md](PROJECT_DECISIONS.md) (especially sections 5, 7 a
 | S3 | Registration, email confirmation, resend limits, security email delivery records, bounded queue, worker, status-only reconciliation, Notification adapter, isolated development mail sink | Done |
 | S5 | Gateway routing and trusted forwarded headers | Done |
 | S6 | Log redaction guard, health checks, CI secret scan | Done (first part) |
-| S4 | Logout and revocation endpoints, logout-all endpoint, password reset and change | Next |
+| S4 | Token revocation and end-session (POST-only browser logout), logout-all endpoint, password reset and change, deterministic reset-versus-refresh and logout-all-versus-refresh race tests | Done |
 | S7 | Backend-for-frontend and the dedicated session Redis | Not started |
+
+**Not verified by S4:** real browsers (the tests drive HTTP directly), the BFF side of logout and re-authorization after a password change (S7), delivery of reset emails through Notification (not implemented), and SQL Server versions other than 2022.
 
 Implementation findings are recorded in [PHASE_2_2_AUTHENTICATION_FLOWS.md section 11.7](PHASE_2_2_AUTHENTICATION_FLOWS.md#117-implementation-findings-phase-23).
 

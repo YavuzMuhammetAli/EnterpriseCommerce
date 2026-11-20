@@ -25,6 +25,13 @@ public interface IAuthoritativeSecurityUnit
     Task<long?> ReadSecurityVersionAsync(string userId, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Reads the user's current security version and keeps a shared lock on it until the transaction ends, or returns
+    /// <see langword="null"/> when the record is missing. A decision based on the version (token issuance) then commits
+    /// before any concurrent increment can: the increment waits for it. Concurrent readers do not block each other.
+    /// </summary>
+    Task<long?> ReadSecurityVersionForDecisionAsync(string userId, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Raises the user's security version by one and returns the new value,
     /// or <see langword="null"/> when the record is missing (callers fail closed).
     /// </summary>
@@ -60,6 +67,14 @@ public interface IAuthoritativeSecurityUnit
 
     /// <summary>Marks the email of an active account as confirmed. Returns <see langword="false"/> when no row qualified.</summary>
     Task<bool> ConfirmEmailAsync(string userId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Sets the password hash of an active account in one conditional update, rotating the ASP.NET Core Identity
+    /// security stamp and clearing the lockout state. When <paramref name="expectedCurrentHash"/> is given, the update
+    /// applies only while the stored hash still equals it, so of two concurrent changes exactly one wins.
+    /// Returns <see langword="false"/> when no row qualified.
+    /// </summary>
+    Task<bool> TrySetPasswordHashAsync(string userId, string newPasswordHash, string? expectedCurrentHash, CancellationToken cancellationToken);
 
     /// <summary>
     /// Locks the account's security-version row until the transaction ends, serializing security email requests of

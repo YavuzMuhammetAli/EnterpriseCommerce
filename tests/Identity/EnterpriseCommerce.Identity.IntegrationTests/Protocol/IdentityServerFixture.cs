@@ -32,6 +32,8 @@ public sealed class TestClient(string clientId, string? audience) : IDisposable
 
     public string RedirectUri => $"https://{ClientId}.example.test/bff/callback";
 
+    public string PostLogoutRedirectUri => $"https://{ClientId}.example.test/bff/signed-out";
+
     public string JsonWebKeySet
     {
         get
@@ -75,6 +77,8 @@ public sealed record TokenResponse(HttpStatusCode Status, JsonElement Body)
 
     public string? RefreshToken => Body.TryGetProperty("refresh_token", out var value) ? value.GetString() : null;
 
+    public string? IdToken => Body.TryGetProperty("id_token", out var value) ? value.GetString() : null;
+
     public string? Error => Body.TryGetProperty("error", out var value) ? value.GetString() : null;
 }
 
@@ -105,6 +109,9 @@ public partial class IdentityServerFixture : IAsyncLifetime
 
     public IServiceProvider Services => Factory.Services;
 
+    /// <summary>The connection string of this fixture's throwaway database.</summary>
+    public string ConnectionString => _database.ConnectionString;
+
     public void RequireAvailable() => _database.RequireAvailable();
 
     public async ValueTask InitializeAsync()
@@ -132,6 +139,7 @@ public partial class IdentityServerFixture : IAsyncLifetime
                 builder.UseSetting(prefix + "Kind", "Browser");
                 builder.UseSetting(prefix + "Audience", client.Audience);
                 builder.UseSetting(prefix + "RedirectUris:0", client.RedirectUri);
+                builder.UseSetting(prefix + "PostLogoutRedirectUris:0", client.PostLogoutRedirectUri);
                 builder.UseSetting(prefix + "JsonWebKeySet", client.JsonWebKeySet);
             }
 

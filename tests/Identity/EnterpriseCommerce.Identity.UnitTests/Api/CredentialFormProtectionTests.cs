@@ -32,4 +32,16 @@ public sealed class CredentialFormProtectionTests
 
         Assert.Equal(expected, CredentialFormProtection.IsSameOrigin(context.Request));
     }
+
+    [Theory]
+    [InlineData("/account/login", true)]
+    [InlineData("/account/reset-password", true)]
+    [InlineData("/ACCOUNT/change-password", true)]
+    [InlineData("/connect/endsession", true)] // its POST signs the browser out
+    [InlineData("/connect/token", false)] // back-channel, client-authenticated
+    [InlineData("/connect/revoke", false)]
+    [InlineData("/api/v1/auth/logout-all", false)] // bearer only, never the cookie
+    [InlineData("/accounts", false)]
+    public void IsProtectedPath_CoversTheAccountPagesAndEndSession(string path, bool expected) =>
+        Assert.Equal(expected, CredentialFormProtection.IsProtectedPath(new PathString(path)));
 }

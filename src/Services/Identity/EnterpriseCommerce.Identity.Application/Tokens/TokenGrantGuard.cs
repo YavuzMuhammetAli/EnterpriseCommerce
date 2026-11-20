@@ -34,8 +34,9 @@ public enum TokenGrantDenial
 /// (ADR-017 sections 5 to 7). Nothing is issued unless this returns <see cref="TokenGrantDenial.None"/>.
 /// </summary>
 /// <remarks>
-/// One short transaction reads the account and the security version and, for refresh requests, inserts the
-/// token entry into the redemption ledger. Of two simultaneous refreshes with the same token, only one insert
+/// One short transaction reads the account and the security version (holding a shared lock on the version until it
+/// commits) and, for refresh requests, inserts the token entry into the redemption ledger. The guard's commit is the
+/// point at which a grant is ordered against concurrent security changes. Of two simultaneous refreshes with the same token, only one insert
 /// succeeds; the other is a reuse. A database failure surfaces as <see cref="SecurityStateUnavailableException"/>
 /// and revokes nothing.
 /// </remarks>
@@ -65,7 +66,10 @@ public sealed partial class TokenGrantGuard(
             async (unit, ct) =>
             {
                 var account = await unit.ReadAccountStateAsync(request.Subject, ct);
-                var currentVersion = await unit.ReadSecurityVersionAsync(request.Subject, ct);
+                // Locking read: a concurrent security-version increment (password reset, logout-all) waits until this
+                // decision has committed, and a pending increment is waited for instead of being read past. The
+                // decision is therefore never based on a version that an already committed increment replaced.
+                var currentVersion = await unit.ReadSecurityVersionForDecisionAsync(request.Subject, ct);
 
                 if (currentVersion is null)
                 {

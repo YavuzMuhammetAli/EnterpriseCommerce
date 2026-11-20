@@ -41,3 +41,12 @@ public interface IAccountPasswordPolicy
     /// <summary>Returns the policy violations as stable codes. An empty list means the password is acceptable.</summary>
     Task<IReadOnlyList<string>> ValidateAsync(string password, CancellationToken cancellationToken);
 }
+
+/// <summary>
+/// Hashes a new password with the configured ASP.NET Core Identity password hasher. Flows hash before their
+/// authoritative transaction, so that no database lock is held while the deliberately slow hash is computed.
+/// </summary>
+public interface IAccountPasswordHasher
+{
+    string Hash(string password);
+}

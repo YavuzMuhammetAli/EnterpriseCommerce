@@ -88,7 +88,7 @@ Common status codes:
 | Authorization (login) | `GET /connect/authorize` with the Identity-hosted login page | Protocol and page | Identity SSO cookie |
 | Token (code exchange, refresh, client credentials) | `POST /connect/token` | Protocol | Client authentication (`private_key_jwt` in deployed environments) |
 | Token revocation | `POST /connect/revoke` | Protocol | Client authentication |
-| End session | `/connect/endsession` (`id_token_hint`, registered `post_logout_redirect_uri`, `state`) | Protocol | Identity SSO cookie |
+| End session | `/connect/endsession` (`id_token_hint`, registered `post_logout_redirect_uri`, `state`): GET confirms, POST signs out | Protocol and page | Identity SSO cookie, antiforgery on POST |
 | UserInfo | `/connect/userinfo` | Protocol | Bearer |
 | Registration | Identity-hosted registration page | Page (credential entry) | Anonymous, antiforgery |
 | Email confirmation | Identity-hosted confirmation page (link target), submitted by POST | Page | Anonymous, antiforgery |
@@ -96,6 +96,7 @@ Common status codes:
 | Password reset request | Identity-hosted page, neutral response | Page | Anonymous, antiforgery |
 | Password reset confirmation | Identity-hosted page (link target), submitted by POST | Page (credential entry) | Anonymous, antiforgery |
 | Password change | Identity-hosted page | Page (credential entry) | Identity SSO cookie, antiforgery |
+| Identity sign-out | Identity-hosted page, POST only, local return URL | Page | Identity SSO cookie, antiforgery |
 | Logout all | `POST /api/v1/auth/logout-all` | REST | Bearer |
 | Current user | `GET /api/v1/users/me` | REST | Bearer |
 | List sessions | `GET /api/v1/users/me/sessions` | REST | Bearer |
@@ -132,17 +133,41 @@ Page paths are implementation details of Identity.Api and are not a client contr
 
 ### 2.5 Logout (protocol)
 
-- The BFF revokes its refresh token at `/connect/revoke`. Identity also revokes the authorization the token belongs to, with all of its tokens.
-- The browser is then sent to `/connect/endsession` to end the Identity SSO session.
-- Repeatable: logging out an already ended session also succeeds.
-- Access tokens already issued stay valid until they expire (ADR-017 section 6).
+**Implemented (Phase 2.3 S4).** Browser logout (through a BFF) and the bearer-token logout-all of section 2.6 are separate operations: logout ends **one** client session and the browser's Identity SSO session; logout-all ends **every** session of the user.
+
+**Token revocation, `POST /connect/revoke`** (RFC 7009, client authentication as at the token endpoint):
+
+- Revoking a refresh or access token also revokes the **authorization** it belongs to (the client session), in the authoritative transaction. The authorization's other tokens are revoked afterwards as cleanup. Other sessions of the user are untouched.
+- `200` for a revoked, already revoked or unknown token, so the call is repeatable.
+- A token issued to **another client** is not revoked and its session is untouched. OpenIddict still answers `200`, which reveals nothing about the token.
+- `503` when the authorization status cannot be committed. Then nothing is revoked, not even the presented token. Per PHASE_2_2_AUTHENTICATION_FLOWS.md section 5.5.4 the BFF still ends its own session.
+
+**End session, `/connect/endsession`** (OpenID Connect RP-initiated logout):
+
+- **GET never changes state.** It shows an Identity page with a "Sign out" button that submits the validated parameters by POST. A link, image or redirect alone can never sign a user out.
+- **POST** requires the antiforgery token and passes the Fetch Metadata and exact `Origin` checks. A cross-origin POST gets `403`, and a POST without antiforgery `400`.
+- `post_logout_redirect_uri` must exactly match a URI registered for the client (`Identity:Clients:n:PostLogoutRedirectUris`). Any other value, including another client's URI or an external URL, is rejected with `400` and nothing is changed. Without one, the browser goes to the local page `/account/signed-out`. `state` is returned unchanged.
+- If `id_token_hint` names a session (authorization) of the **user signed in with the current SSO cookie**, that session is revoked first, in the authoritative transaction. A hint for another user, or without a signed-in user, revokes nothing.
+- The SSO cookie is cleared **only after** that revocation has committed. If it cannot be committed, the response is `503` and the cookie is kept.
+- Repeatable: an already ended session also signs out successfully.
+
+**Identity sign-out, `/account/logout`:** for users on Identity pages without a client application. GET renders the form, and POST clears the SSO cookie and redirects to `returnUrl` only if it is a local URL, otherwise to `/account/signed-out`.
+
+Access tokens already issued stay valid until they expire (ADR-017 section 6). The BFF discards its copies at logout.
 
 ### 2.6 Logout all
 
-`POST /api/v1/auth/logout-all`
+**Implemented (Phase 2.3 S4).** `POST /api/v1/auth/logout-all`
 
-- Raises the user's security version in the authoritative transaction, so no session of the user can refresh afterwards. Every authorization and token of the user is then revoked as cleanup.
-- **Response:** `204 No Content`. `503` if the security version could not be raised. Logout-all never reports success without the committed security-version change.
+- **Authentication:** `Authorization: Bearer <access token>` only. Identity validates the token locally like every other service (signature, issuer, `typ: at+jwt`, lifetime), and requires one of the **front-end audiences** of its browser clients (`ec-storefront`, `ec-merchant`, `ec-admin`), `ec_ptype=user` and a `sub`. The Identity SSO cookie is never accepted here, so the endpoint cannot be triggered by CSRF.
+- The user is the token's `sub`. No request value selects whose sessions end.
+- Raises the user's security version in the authoritative transaction, so no session of the user can refresh, exchange a code or pass cookie validation afterwards. Every authorization and token of the user is then revoked as cleanup. A cleanup failure does not change the response: the security version already ends every session.
+- **Responses:**
+  - `204 No Content`, with no body and no session details. A repeated call also returns `204`.
+  - `401` without a valid token, including tokens for other audiences (service tokens).
+  - `403` when the token is not a user token.
+  - `503` if the security version could not be raised. Logout-all never reports success without the committed change.
+- A refresh racing logout-all either commits first, in which case its successor refresh token is then unusable, or is refused. It never issues tokens from the replaced security version (PHASE_2_2_AUTHENTICATION_FLOWS.md section 11.7, I13).
 
 ### 2.7 Email confirmation
 
@@ -164,14 +189,35 @@ Page paths are implementation details of Identity.Api and are not a client contr
 
 ### 2.8 Password reset (pages)
 
-- **Request:** always the same neutral response. A confirmed account receives a reset link, an unconfirmed account a confirmation link, and an unknown address nothing.
-- **Confirmation:** the link opens a page where the user enters the new password and submits it by POST. Consuming the token, setting the password, raising the security version and superseding other tokens commit in **one transaction**.
-- A successful reset **invalidates all sessions** of the user.
+**Implemented (Phase 2.3 S4).**
+
+| Page | Behaviour |
+|---|---|
+| `GET/POST /account/forgot-password` | Takes an email address and always redirects to `/account/reset-requested`. A confirmed, active account is sent a reset link, an unconfirmed, active account a confirmation link instead, and an unknown or disabled address nothing. The resend limits of section 2.7 apply per account and purpose, silently. |
+| `GET /account/reset-password?token=...` | Renders the new-password form. **Never consumes the token.** |
+| `POST /account/reset-password` | Resets the password. Success: "Your password has been changed", and the user is **not** signed in. Every token failure (invalid, expired, superseded, consumed, account not active) shows one generic message with a link to request a new one, and the token is not echoed back. A password-policy failure shows the policy and keeps the still unconsumed token in the form. |
+
+- **Token:** as in section 2.7 (256 bits, only the SHA-256 hash stored, looked up by hash), purpose `PasswordReset`, lifetime **30 minutes** (`Identity:SecurityEmail:PasswordResetTokenLifetime`, at most one hour). It is minted when the delivery worker claims the delivery, and only while the account is still active and confirmed.
+- **One authoritative transaction:**
+  1. consume the token
+  2. set the new password hash (which also rotates the ASP.NET Core Identity security stamp and clears the lockout)
+  3. raise the security version
+  4. supersede every other outstanding security token of the user
+
+  Any failure rolls all of it back, and the token stays usable until it expires. A missing security-version record fails closed with `503`. The password policy is checked and the hash computed before the transaction.
+- After commit, every authorization and token of the user is revoked as cleanup. Every session of the user ends: refresh chains, BFF sessions at their next refresh, and SSO cookies in every browser.
+- Same headers, antiforgery, Fetch Metadata, `Origin` and rate limits as section 2.7.
 
 ### 2.9 Password change (page)
 
-- Requires the current and the new password on an Identity-hosted page.
-- Revokes every **other** session of the user. The current browser session continues, and its Identity login cookie is reissued.
+**Implemented (Phase 2.3 S4).** `GET/POST /account/change-password`, signed in with the Identity SSO cookie (otherwise a redirect to the login page).
+
+- The account is the one of the SSO cookie, never a request value. The current password is required. A wrong one counts towards lockout and shows one generic message.
+- **One authoritative transaction:** set the new hash only while the stored hash is still the one just verified (so of two concurrent changes exactly one wins), raise the security version, and supersede outstanding reset tokens. After commit, every authorization and token of the user is revoked as cleanup.
+- **The current browser stays signed in:** after commit, and only then, its SSO cookie is reissued with the new security version and the original sign-in time. The old cookie is rejected from then on.
+- **Client sessions (ADR-017 section 7):** raising the version ends every BFF session of the user, **including the one in the same browser**, because a BFF session is not yet linked to the SSO cookie. That BFF gets `invalid_grant` at its next refresh and can authorize again through the reissued SSO cookie without a password prompt.
+- If reissuing the cookie fails after commit, the change stands, the browser is signed out, and the page asks the user to sign in again.
+- `503` if the change cannot be committed. The password and every session are then unchanged.
 
 ### 2.10 Current user
 
@@ -234,7 +280,7 @@ Out of scope for this contract: MFA enrolment and external logins (social provid
 |---|---|
 | Authentication | `Authorization: Bearer <access token>`. Identity obtains it with the client credentials grant as the service client `svc-identity` (default), scope `svc.notification.security-email`, authenticating with `private_key_jwt` (typed `client-authentication+jwt`). |
 | `Idempotency-Key` | The delivery ID (a GUID). Retries of one delivery always reuse it, with the same link. Notification must treat a repeated key as the same email and answer `2xx` or `409`. |
-| Body (JSON) | `deliveryId` (GUID), `purpose` (`EmailConfirmation`), `recipient` (email address), `link` (absolute URL that contains the token). |
+| Body (JSON) | `deliveryId` (GUID), `purpose` (`EmailConfirmation` or `PasswordReset`), `recipient` (email address), `link` (absolute URL that contains the token). |
 | Responses | `2xx` or `409`: accepted. `401`, `408`, `429`, `5xx`: transient, retried. Other `4xx`: rejected, not retried. A timeout or broken connection after sending is an unknown outcome and is retried with the same key. |
 | Notification obligations | Never log, persist or forward the link or the rendered body of a security email beyond delivery (PHASE_2_2_AUTHENTICATION_FLOWS.md section 5.6.4). Authorize the calling client and scope. |
 

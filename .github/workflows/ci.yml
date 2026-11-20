@@ -75,7 +75,8 @@ jobs:
         if: always()
         run: |
           # Compact JWS/JWE values (tokens, codes, client assertions) and sensitive OAuth parameters must never appear.
-          if grep -nE 'eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|(code_verifier|client_assertion|refresh_token|id_token_hint)=[^&[:space:]]{8,}' test-output.log; then
+          # Account security tokens (confirmation and reset links) are 43 URL-safe characters after "token=".
+          if grep -nE 'eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|(code_verifier|client_assertion|refresh_token|id_token_hint)=[^&[:space:]]{8,}|[?&]token=[A-Za-z0-9_-]{43}' test-output.log; then
             echo "::error::Secret-like material found in the test output."
             exit 1
           fi

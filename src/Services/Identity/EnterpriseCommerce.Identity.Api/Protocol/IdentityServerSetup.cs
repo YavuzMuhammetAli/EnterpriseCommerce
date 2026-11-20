@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 using OpenIddict.Abstractions;
+using OpenIddict.Validation.AspNetCore;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace EnterpriseCommerce.Identity.Api.Protocol;
@@ -21,6 +22,12 @@ internal static class IdentityServerSetup
     public const string SsoCookieName = "__Host-ec-identity";
 
     public const string AntiforgeryCookieName = "__Host-ec-identity-af";
+
+    /// <summary>The OpenID Connect end-session endpoint, served by an Identity page (POST-only sign-out).</summary>
+    public const string EndSessionPath = "connect/endsession";
+
+    /// <summary>Bearer access tokens of users, obtained by a browser client (BFF). Never the SSO cookie.</summary>
+    public const string UserBearerPolicy = "user-bearer";
 
     private static readonly TimeSpan SsoAbsoluteLifetime = TimeSpan.FromHours(12);
 
@@ -96,6 +103,8 @@ internal static class IdentityServerSetup
                 options.SetIssuer(settings.Issuer!);
                 options.SetAuthorizationEndpointUris("connect/authorize")
                     .SetTokenEndpointUris("connect/token")
+                    .SetRevocationEndpointUris("connect/revoke")
+                    .SetEndSessionEndpointUris(EndSessionPath)
                     .SetJsonWebKeySetEndpointUris(".well-known/jwks");
 
                 options.AllowAuthorizationCodeFlow()
@@ -134,11 +143,32 @@ internal static class IdentityServerSetup
                 });
 
                 options.AddEventHandler(RefreshTokenReuseHook.Descriptor);
+                options.AddEventHandler(RevocationSessionHook.Descriptor);
 
                 options.UseAspNetCore()
                     .EnableAuthorizationEndpointPassthrough()
-                    .EnableTokenEndpointPassthrough();
+                    .EnableTokenEndpointPassthrough()
+                    .EnableEndSessionEndpointPassthrough();
+            })
+            .AddValidation(options =>
+            {
+                // Identity's own REST endpoints (logout-all) accept the front-end audiences of its browser clients,
+                // validated locally like every other service does (ADR-017 sections 3, 4 and 6).
+                options.UseLocalServer();
+                options.AddAudiences([.. BrowserAudiences(settings)]);
+                options.UseAspNetCore();
             });
+
+        var audiences = BrowserAudiences(settings).ToHashSet(StringComparer.Ordinal);
+        services.AddAuthorizationBuilder()
+            .AddPolicy(UserBearerPolicy, policy => policy
+                .AddAuthenticationSchemes(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
+                .RequireAuthenticatedUser()
+                .RequireClaim(Claims.Subject)
+                .RequireClaim(IdentityClaims.PrincipalType, IdentityClaims.UserPrincipal)
+                // Defense in depth: never accept a token without one of the front-end audiences, even if the
+                // validation handler had no audience configured.
+                .RequireAssertion(context => context.User.GetAudiences().Any(audiences.Contains)));
 
         return builder;
     }
@@ -174,6 +204,12 @@ internal static class IdentityServerSetup
             await context.HttpContext.SignOutAsync(IdentityConstants.ApplicationScheme);
         }
     }
+
+    private static IEnumerable<string> BrowserAudiences(IdentityServerSettings settings) =>
+        settings.Clients
+            .Where(client => client.Kind == ClientKind.Browser && !string.IsNullOrWhiteSpace(client.Audience))
+            .Select(client => client.Audience!)
+            .Distinct(StringComparer.Ordinal);
 
     /// <summary>Creates the Identity SSO cookie principal. The security version pins the browser session (ADR-017 section 7).</summary>
     public static ClaimsPrincipal CreateSsoPrincipal(string userId, long securityVersion)

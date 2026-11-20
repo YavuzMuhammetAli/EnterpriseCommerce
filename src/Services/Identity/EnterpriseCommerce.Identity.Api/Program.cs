@@ -89,5 +89,6 @@ if (app.Environment.IsDevelopment())
 app.MapIdentityHealthChecks();
 app.MapRazorPages();
 app.MapProtocolEndpoints();
+app.MapAccountApiEndpoints();
 
 await app.RunAsync();

@@ -22,12 +22,16 @@ public static class DependencyInjection
 
         services.AddSingleton(reuseSettings);
         services.AddScoped<LogoutAllSessionsHandler>();
+        services.AddScoped<EndClientSessionHandler>();
         services.AddScoped<SecurityStateReader>();
         services.AddScoped<RefreshTokenReuseHandler>();
         services.AddScoped<TokenGrantGuard>();
         services.AddScoped<RegisterAccountHandler>();
         services.AddScoped<ResendConfirmationHandler>();
         services.AddScoped<ConfirmEmailHandler>();
+        services.AddScoped<RequestPasswordResetHandler>();
+        services.AddScoped<ResetPasswordHandler>();
+        services.AddScoped<ChangePasswordHandler>();
         services.AddScoped<SecurityEmailScheduler>();
         services.AddScoped<SecurityEmailDeliveryProcessor>();
 

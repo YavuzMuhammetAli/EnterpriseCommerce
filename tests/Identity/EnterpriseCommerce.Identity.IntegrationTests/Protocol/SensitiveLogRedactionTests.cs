@@ -126,6 +126,73 @@ public sealed partial class SensitiveLogRedactionTests(LogCapturingIdentityServe
         Assert.DoesNotContain(events, entry => SensitiveParameter().IsMatch(entry) || TokenParameter().IsMatch(entry));
     }
 
+    [Fact]
+    public async Task LogoutAndPasswordFlows_NeverLogPasswords_ResetTokens_IdTokenHints_OrLinks()
+    {
+        identity.RequireAvailable();
+        var email = await identity.CreateUserAsync();
+        const string changedPassword = "Third-Never-Logged-Pass-5";
+        const string wrongPassword = "Wrong-Never-Logged-Pass-6";
+        var ct = TestContext.Current.CancellationToken;
+        using var browser = identity.CreateBrowser();
+
+        // Password change (with a failed attempt), then logout through end-session with an ID token hint.
+        var session = await identity.SignInAsync(identity.Storefront, email, browser);
+        using (await identity.SubmitChangeAsync(browser, wrongPassword, changedPassword))
+        {
+        }
+
+        using (var changed = await identity.SubmitChangeAsync(browser, IdentityServerFixture.Password, changedPassword))
+        {
+            Assert.Contains("Your password has been changed", await changed.Content.ReadAsStringAsync(ct), StringComparison.Ordinal);
+        }
+
+        var second = await identity.SignInAsync(identity.Storefront, email, browser);
+        Assert.Equal(HttpStatusCode.OK, await identity.RevokeAsync(identity.Storefront, second.RefreshToken!));
+        using (var endSession = await identity.SubmitEndSessionAsync(browser, IdentityServerFixture.EndSessionQuery(identity.Storefront, second.IdToken, "s")))
+        {
+            Assert.Equal(HttpStatusCode.Redirect, endSession.StatusCode);
+        }
+
+        // Password reset: request, open the link, a policy failure, success and a replay.
+        var resetToken = await identity.RequestResetTokenAsync(email);
+        using (await browser.GetAsync("/account/reset-password?token=" + resetToken, ct))
+        {
+        }
+
+        using (await identity.SubmitResetAsync(browser, resetToken, "weak"))
+        {
+        }
+
+        using (await identity.SubmitResetAsync(browser, resetToken))
+        {
+        }
+
+        using (await identity.SubmitResetAsync(browser, resetToken))
+        {
+        }
+
+        var secrets = new[]
+        {
+            IdentityServerFixture.Password, IdentityServerFixture.NewPassword, changedPassword, wrongPassword, resetToken,
+            session.AccessToken!, session.RefreshToken!, second.RefreshToken!, second.IdToken!,
+        };
+        var events = identity.Sink.Events.ToList();
+
+        // The capture must include the request-time security events of these flows.
+        foreach (var expected in new[] { "PasswordChanged", "PasswordChangeFailed", "SessionEnded", "PasswordReset", "SecurityTokenRejected" })
+        {
+            Assert.Contains(events, entry => entry.Contains(expected, StringComparison.Ordinal));
+        }
+
+        foreach (var secret in secrets)
+        {
+            Assert.DoesNotContain(events, entry => entry.Contains(secret, StringComparison.Ordinal));
+        }
+
+        Assert.DoesNotContain(events, entry => JwtLike().IsMatch(entry) || SensitiveParameter().IsMatch(entry) || TokenParameter().IsMatch(entry));
+    }
+
     [GeneratedRegex(@"token=[A-Za-z0-9_-]{20,}")]
     private static partial Regex TokenParameter();
 

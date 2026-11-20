@@ -21,3 +21,15 @@ internal sealed class AccountPasswordPolicy(UserManager<ApplicationUser> users) 
         return errors;
     }
 }
+
+/// <summary>Hashes passwords with the configured ASP.NET Core Identity hasher (PBKDF2 by default).</summary>
+internal sealed class AccountPasswordHasher(IPasswordHasher<ApplicationUser> hasher) : IAccountPasswordHasher
+{
+    public string Hash(string password)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(password);
+
+        // The default hasher does not use the user instance.
+        return hasher.HashPassword(new ApplicationUser(), password);
+    }
+}

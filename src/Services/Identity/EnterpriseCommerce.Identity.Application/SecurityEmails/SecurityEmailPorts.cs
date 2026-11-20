@@ -71,10 +71,14 @@ public interface ISecurityEmailDeliveryStore
 /// <summary>Security email settings.</summary>
 /// <param name="ConfirmationPage">The absolute URL of the Identity-hosted email confirmation page.</param>
 /// <param name="ConfirmationTokenLifetime">ADR-018: 24 hours.</param>
+/// <param name="PasswordResetPage">The absolute URL of the Identity-hosted password reset page.</param>
+/// <param name="PasswordResetTokenLifetime">ADR-018: 30 minutes.</param>
 /// <param name="MaxDispatchAttempts">Bounded handover attempts per delivery.</param>
 /// <param name="RetryBaseDelay">Base delay between attempts (exponential).</param>
 public sealed record SecurityEmailSettings(
     Uri ConfirmationPage,
     TimeSpan ConfirmationTokenLifetime,
+    Uri PasswordResetPage,
+    TimeSpan PasswordResetTokenLifetime,
     int MaxDispatchAttempts,
     TimeSpan RetryBaseDelay);
