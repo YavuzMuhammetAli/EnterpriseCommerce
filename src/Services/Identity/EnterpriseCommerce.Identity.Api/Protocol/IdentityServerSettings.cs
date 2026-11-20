@@ -42,7 +42,21 @@ internal sealed class ClientRegistration
     /// <summary>Development only: a client secret from user secrets or the environment. Rejected in other environments.</summary>
     public string? ClientSecret { get; set; }
 
-    public TimeSpan AccessTokenLifetime { get; set; } = TimeSpan.FromMinutes(10);
+    /// <summary>Default access token lifetime of a browser (BFF) client (PHASE_2_2_AUTHENTICATION_FLOWS.md section 6.4).</summary>
+    public static readonly TimeSpan DefaultBrowserAccessTokenLifetime = TimeSpan.FromMinutes(10);
+
+    /// <summary>Default access token lifetime of a service client (PHASE_2_2_AUTHENTICATION_FLOWS.md section 6.4, finding I38).</summary>
+    public static readonly TimeSpan DefaultServiceAccessTokenLifetime = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// Configured access token lifetime. When unset, the default of the client's kind applies
+    /// (<see cref="EffectiveAccessTokenLifetime"/>).
+    /// </summary>
+    public TimeSpan? AccessTokenLifetime { get; set; }
+
+    /// <summary>The access token lifetime Identity registers for this client.</summary>
+    public TimeSpan EffectiveAccessTokenLifetime =>
+        AccessTokenLifetime ?? (Kind == ClientKind.Service ? DefaultServiceAccessTokenLifetime : DefaultBrowserAccessTokenLifetime);
 
     /// <summary>Sliding (inactivity) lifetime of refresh tokens.</summary>
     public TimeSpan RefreshTokenLifetime { get; set; } = TimeSpan.FromHours(2);
@@ -94,10 +108,15 @@ internal sealed class ClientRegistration
                 yield return $"Browser client '{ClientId}' needs absolute redirect URIs.";
             }
 
-            if (AbsoluteSessionLifetime <= TimeSpan.Zero || RefreshTokenLifetime <= TimeSpan.Zero || AccessTokenLifetime <= TimeSpan.Zero)
+            if (AbsoluteSessionLifetime <= TimeSpan.Zero || RefreshTokenLifetime <= TimeSpan.Zero || EffectiveAccessTokenLifetime <= TimeSpan.Zero)
             {
                 yield return $"Browser client '{ClientId}' has a non-positive lifetime.";
             }
+        }
+
+        if (Kind == ClientKind.Service && EffectiveAccessTokenLifetime <= TimeSpan.Zero)
+        {
+            yield return $"Service client '{ClientId}' has a non-positive access token lifetime.";
         }
 
         if (Kind == ClientKind.Service && ServiceScopes.Any(scope => string.IsNullOrWhiteSpace(scope.Scope) || string.IsNullOrWhiteSpace(scope.Audience)))

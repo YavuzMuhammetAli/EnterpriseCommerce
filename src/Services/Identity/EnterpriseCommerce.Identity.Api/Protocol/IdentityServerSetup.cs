@@ -290,7 +290,7 @@ internal static class IdentityServerSetup
         AuthorizationCodeLifetime,
         IdentityTokenLifetime,
         DefaultAccessTokenLifetime,
-        .. settings.Clients.Select(client => client.AccessTokenLifetime),
+        .. settings.Clients.Select(client => client.EffectiveAccessTokenLifetime),
         .. settings.Clients.Where(client => client.Kind == ClientKind.Browser)
             .SelectMany(client => new[] { client.RefreshTokenLifetime, client.AbsoluteSessionLifetime }),
     ];

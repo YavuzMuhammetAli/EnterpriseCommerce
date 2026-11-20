@@ -67,7 +67,7 @@ internal sealed partial class ClientRegistrationSynchronizer(
                 descriptor.Permissions.Add(Permissions.Prefixes.Scope + scope.Scope);
             }
 
-            descriptor.Settings[Settings.TokenLifetimes.AccessToken] = client.AccessTokenLifetime.ToString("c", System.Globalization.CultureInfo.InvariantCulture);
+            descriptor.Settings[Settings.TokenLifetimes.AccessToken] = client.EffectiveAccessTokenLifetime.ToString("c", System.Globalization.CultureInfo.InvariantCulture);
             return descriptor;
         }
 
@@ -92,7 +92,7 @@ internal sealed partial class ClientRegistrationSynchronizer(
         }
 
         var invariant = System.Globalization.CultureInfo.InvariantCulture;
-        descriptor.Settings[Settings.TokenLifetimes.AccessToken] = client.AccessTokenLifetime.ToString("c", invariant);
+        descriptor.Settings[Settings.TokenLifetimes.AccessToken] = client.EffectiveAccessTokenLifetime.ToString("c", invariant);
         descriptor.Settings[Settings.TokenLifetimes.RefreshToken] = client.RefreshTokenLifetime.ToString("c", invariant);
         return descriptor;
     }
