@@ -41,14 +41,14 @@ The architecture prioritizes **maintainability, scalability, security, separatio
 |---|---|---|
 | Runtime | .NET 10 LTS | In use |
 | API | ASP.NET Core Web API | In use |
-| ORM | Entity Framework Core | Planned (first persistence phase) |
-| Relational database | SQL Server | Local container available |
+| ORM | Entity Framework Core | In use (Identity persistence and migrations, Phase 2.3) |
+| Relational database | SQL Server | In use (Identity database, Phase 2.3; local container) |
 | Document database | MongoDB | Local container available |
-| Cache | Redis | Local container available |
+| Cache | Redis | Local container available. A separate, dedicated `noeviction` Redis is in use as the BFF session store (Phase 2.3 S7, ADR-016), not as a cache. |
 | Messaging | Apache Kafka (KRaft) | Local container available |
 | API Gateway | YARP | In use |
-| Identity provider | ASP.NET Core Identity (user store) with OpenIddict 7.9.0 or later (OAuth 2.0 / OpenID Connect server), [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md), [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md) | Accepted; implementation authorized (Phase 2.3) |
-| Browser clients | Backend-for-frontend for every front end: one ASP.NET Core codebase deployed once per front end, behind the Gateway, [ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md) | Accepted; not yet implemented |
+| Identity provider | ASP.NET Core Identity (user store) with OpenIddict 7.9.0 or later (OAuth 2.0 / OpenID Connect server), [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md), [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md) | Accepted; implemented in Phase 2.3 (in progress) and tested locally; not production-verified |
+| Browser clients | Backend-for-frontend for every front end: one ASP.NET Core codebase deployed once per front end, behind the Gateway, [ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md) | Accepted; implemented in Phase 2.3 S7 (`src/Bff`) and tested locally; the real Safari gate is open and it is not production-verified |
 | Containers | Docker | In use |
 | Local orchestration | Docker Compose (profiles) | In use |
 | Logging | Serilog | In use |
@@ -228,6 +228,7 @@ Governing ADRs: [ADR-005](../decisions/ADR-005-kafka-for-asynchronous-communicat
   - Refresh tokens and authorization codes are signed with the signing key too. A retired key is therefore kept until every token it signed or encrypted has expired, plus the 30-second skew. The strict minimum is the end of the activation rollout plus the longest such token lifetime (7 days with the accepted initial lifetimes of PHASE_2_2 section 6.4) plus 30 seconds.
   - The implemented rule is longer, deliberately: a retired signing key is kept for the replay protection window (the longest configured lifetime plus a safety margin) + 30 seconds + the validator cache allowance, and a retired encryption key for the window + 30 seconds. With those lifetimes that is 32 days 30 seconds and 31 days 30 seconds after `RetiredAt`.
   - A refresh-token rotation never extends a token of a retired key: its successor is issued with the Active keys and capped by the absolute session deadline.
+  - `RetiredAt` is set when the activation rollout starts. With those lifetimes, a rollout may last at most 24 days when it rotates both keys, and 25 days for the signing key alone; the target is the retention safety margin. A longer rollout requires recalculating the removal date from the actual last issuance time (ADR-019 section 4.1).
   - Emergency rotation removes a compromised key at once. Early removal always fails closed.
 - **Account security tokens and email (accepted, [ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)):** hashed, single-use confirmation and reset tokens consumed atomically with the account change. Notification owns production email delivery, and Identity hands emails over through a bounded in-process queue with status-only reconciliation.
 - The Identity API contract is in [IDENTITY_API_CONTRACT.md](../api/IDENTITY_API_CONTRACT.md).

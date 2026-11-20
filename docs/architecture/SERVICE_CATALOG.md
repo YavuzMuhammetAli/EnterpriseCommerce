@@ -10,7 +10,7 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
 
 | # | Service | Planned project prefix | Data store | Status |
 |---|---|---|---|---|
-| 1 | Identity | `EnterpriseCommerce.Identity` | SQL Server | Design accepted (Phase 2.2); implementation in Phase 2.3 |
+| 1 | Identity | `EnterpriseCommerce.Identity` | SQL Server | Implemented in Phase 2.3 (slices S1 to S7) and tested locally. Not production-verified, and production gates are open ([IDENTITY_OPERATIONS.md section 7](../security/IDENTITY_OPERATIONS.md#7-verification-level-and-remaining-production-gates)). |
 | 2 | Tenant & Merchant | `EnterpriseCommerce.TenantMerchant` *(provisional name)* | SQL Server | Planned |
 | 3 | Catalog | `EnterpriseCommerce.Catalog` | MongoDB | Planned |
 | 4 | Inventory | `EnterpriseCommerce.Inventory` | SQL Server | Planned |
@@ -42,9 +42,42 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
 - Token, session and protocol strategy (decided in Phase 2.2, [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md)): Identity has its own host behind the Gateway, hosts the account UI for every credential entry, and owns the per-user security version and the refresh-token redemption ledger.
 - Account security tokens ([ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)): Identity creates, hashes and consumes confirmation and reset tokens, and hands security emails to Notification through a bounded in-process queue. It does not own email delivery.
 - Account status: Identity owns the authentication status of an account. Admin decides on disablement and reactivation and calls Identity's internal API with a service token ([IDENTITY_API_CONTRACT.md section 2.12](../api/IDENTITY_API_CONTRACT.md#212-account-disablement-and-reactivation-internal)). Admin keeps the administrative audit trail; Identity records the security event.
-- Implementation (Phase 2.3): persistence and the authoritative transaction, login, authorization code + PKCE, token issuance with the redemption ledger and reuse policy, trusted forwarded headers, log redaction and health checks, registration and email confirmation with the security email queue, worker and reconciliation. See [PHASE_2_IDENTITY_DESIGN_BRIEF.md](PHASE_2_IDENTITY_DESIGN_BRIEF.md#phase-23-implementation-progress).
+- **Implemented in Phase 2.3** and tested locally against SQL Server 2022 (progress and verification notes: [PHASE_2_IDENTITY_DESIGN_BRIEF.md](PHASE_2_IDENTITY_DESIGN_BRIEF.md#phase-23-implementation-progress); operations: [IDENTITY_OPERATIONS.md](../security/IDENTITY_OPERATIONS.md)):
+  - **Persistence (S1):** EF Core migrations, and the authoritative security transaction with a whole-transaction deadlock retry and post-commit cleanup.
+  - **Authentication (S2):** the Identity-hosted login page with lockout, a progressive per-account delay and rate limiting. Authorization code with PKCE `S256`. A confirmed email is required.
+  - **Token handling (S2):**
+    - RS256 `at+jwt` access tokens with minimal claims and one audience per front end
+    - client credentials for `svc-` service clients
+    - rotated refresh tokens without leeway, the redemption ledger and the presenter-checked reuse policy
+    - the absolute session cap, and the security version checked at every grant
+  - **Registration and email confirmation (S3):** hashed, single-use confirmation tokens, resend limits, and security email delivery records with a bounded queue, a worker and status-only reconciliation.
+  - **Session revocation and password management (S4):**
+    - token revocation, and the POST-only end-session
+    - logout-all
+    - password change and password reset, each raising the security version in the authoritative transaction
+  - **Routing (S5):** its own host behind the Gateway, trusted forwarded headers and host filtering.
+  - **Account lifecycle (S6):** the internal disable and reactivate API for an allow-listed service client ([IDENTITY_API_CONTRACT.md section 2.12](../api/IDENTITY_API_CONTRACT.md#212-account-disablement-and-reactivation-internal)).
+  - **Key rollover (S6, [ADR-019](../decisions/ADR-019-signing-and-encryption-key-rollover-and-retirement.md)):** explicit `Pending`, `Active` and `Retired` signing and encryption keys, and the automatic retirement of old keys.
+  - **Retention (S6):** cleanup of the redemption ledger and of OpenIddict tokens and authorizations once they can no longer reject any token.
+  - **Operations (S6):**
+    - Data Protection keys persisted and encrypted at rest
+    - liveness and readiness checks, and bounded-tag metrics
+    - log redaction with a CI secret scan
+- **Not implemented yet:** UserInfo, `GET /api/v1/users/me`, and the session list and revoke endpoints ([IDENTITY_API_CONTRACT.md section 2.1](../api/IDENTITY_API_CONTRACT.md#21-summary)).
+- **External integrations, not complete:**
+  - **Admin** does not exist. No client is allow-listed for the internal account lifecycle API outside the tests.
+  - **Notification** has not implemented the security email endpoint ([IDENTITY_API_CONTRACT.md section 4a](../api/IDENTITY_API_CONTRACT.md#4a-outbound-security-email-handover-to-notification-internal)). Until it does, Identity refuses to start outside Development.
+  - **Monitoring:** no metrics exporter is connected.
+- **Production gates (open):**
+  - a KMS or HSM, or an accepted certificate-file key-management procedure
+  - a shared Data Protection volume with a multi-instance rolling restart, and rotation of the Data Protection key-encryption certificate
+  - administrator MFA, and real Safari
+  - the retention decision for security tokens and delivery records
+  - the service access token lifetime discrepancy (finding I38)
+
+  The full list is in [IDENTITY_OPERATIONS.md section 7](../security/IDENTITY_OPERATIONS.md#7-verification-level-and-remaining-production-gates).
 - API contract: [IDENTITY_API_CONTRACT.md](../api/IDENTITY_API_CONTRACT.md).
-- Phase 1 state: a compilable four-layer skeleton with a health endpoint, OpenAPI, exception handling and structured logging. **No identity features.**
+- Phase 1 state (historical): a compilable four-layer skeleton with a health endpoint, OpenAPI, exception handling and structured logging.
 
 ## 2. Tenant & Merchant
 

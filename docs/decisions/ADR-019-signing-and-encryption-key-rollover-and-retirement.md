@@ -31,7 +31,7 @@ Slice S6 found two problems:
 | Authorization code | Signed | Encrypted | 60 s | `IdentityServerSetup.AuthorizationCodeLifetime` |
 | ID token | Signed | Not encrypted | 5 min | `IdentityServerSetup.IdentityTokenLifetime` |
 | User access token | Signed | Not encrypted (ADR-015 R3) | Storefront 10 min, merchant 10 min, admin 5 min | Per-client `AccessTokenLifetime` |
-| Service access token | Signed | Not encrypted | 10 min (the code default; no service client sets one) | `ClientRegistration.AccessTokenLifetime` |
+| Service access token | Signed | Not encrypted | 10 min (the code default; no service client sets one). The accepted initial value is 5 min: an open discrepancy, finding I38. | `ClientRegistration.AccessTokenLifetime` |
 | Refresh token | Signed (I31) | Encrypted | Each token at most `min(RefreshTokenLifetime, session deadline − issuance)`: storefront 7 days, merchant 2 hours, admin 30 minutes | `ProtocolEndpoints.TokenAsync` (both grants) |
 | Absolute session deadline | Not a token | | Storefront 30 days, merchant 12 hours, admin 8 hours | Per-client `AbsoluteSessionLifetime`, private claim set at the code exchange |
 | Validator clock skew | | | 30 s | ADR-017 section 4, `IdentityServerSetup.ValidationClockSkew` |
@@ -106,12 +106,37 @@ Identity keeps a retired key for a fixed period after `RetiredAt`. The period is
 ### 4. Margins
 
 - **Clock skew (30 s).** Every validator accepts a token up to 30 seconds after `exp`: services through the JWT bearer handler (ADR-017 section 4), and Identity's own validation.
-- **Activation rollout.** Set `RetiredAt` when the activation rollout **starts**. Startup rejects a `RetiredAt` in the future. Instances that have not yet been restarted keep signing with the old key, so the rollout must complete well within `SafetyMargin`, which also absorbs clock differences between Identity hosts.
+- **Activation rollout** (clarified 2026-11-20; the retention rule of section 3 is unchanged). See section 4.1.
 - **`ValidatorCacheAllowance`** (default 24 hours, at most 30 days):
   - It is the longest time any validator may use a cached JWKS. It must be at least every BFF's `Bff:Metadata:RefreshInterval` (default 1 hour) and every service's JWT bearer `AutomaticRefreshInterval` (default 12 hours).
   - **Required for staging:** a Pending key must be published for at least this long before it becomes Active.
-  - **On removal, an extra margin only.** It is kept from section 6.5 step 3. A validator that still caches a removed key accepts only tokens that have already expired.
+  - **On removal, not needed for token validity.** It is kept from section 6.5 step 3. A validator that still caches a removed key accepts only tokens that have already expired. The time it adds to the signing key's period is what section 4.1 lets a rollout use.
 - **Lowering a lifetime.** Tokens issued under the old lifetime keep their `exp`. While they can still be valid, set `MinimumReplayProtectionWindow` to the previous window, and keep it until that window has passed since the change.
+
+### 4.1 Maximum activation rollout duration
+
+`RetiredAt` is set when the activation rollout **starts**, and startup rejects a `RetiredAt` in the future. Instances that have not yet been restarted keep signing and encrypting with the old keys. `T_last` (section 2) is therefore the **end** of the rollout, not `RetiredAt`.
+
+**The limit.** Section 2 requires `RetiredAt + period ≥ T_last + L_max + 30 s`. The longest permitted rollout, from `RetiredAt` to the moment the last instance stops using the old key, is therefore:
+
+```text
+D_max = period − L_max − 30 s
+```
+
+| Key | Period (section 3) | `D_max`, general | With the current configuration |
+|---|---|---|---|
+| Signing | `W + 30 s + ValidatorCacheAllowance` | `W + ValidatorCacheAllowance − L_max` | 31 days + 24 hours − 7 days = **25 days** |
+| Encryption | `W + 30 s` | `W − L_max` | 31 days − 7 days = **24 days** |
+
+- **Combined rollout.** Section 5 rotates both keys in the same rollout, so the limit for that rollout is the smaller value: **24 days**. A rollout that changes only the signing key may take up to **25 days**.
+- **Host clocks.** Any clock difference between Identity hosts is subtracted from these limits.
+- **Recommended target.** `W − L_max` is never smaller than `SafetyMargin` (at least 1 hour), whatever the lifetimes. A rollout that finishes within `SafetyMargin` is therefore always within the limit, and that remains the recommended target.
+
+**If a rollout exceeds the limit,** the automatic removal would drop the old key while tokens it signed or encrypted can still be valid:
+
+1. **Do not remove the old key.** Keep its entry and file on every instance. Do not restart an instance with the original `RetiredAt` after `RetiredAt + period`: Identity drops a retired key at startup once its period has passed.
+2. **Recalculate the earliest safe removal** from the actual last possible issuance time. `T_last` is the moment the last instance with the old key `Active` stopped (or the latest time it could still have issued a token). The earliest safe removal is `T_last + L_max + 30 s`, plus any clock difference between hosts: `T_last + 7 days + 30 s` with the current configuration.
+3. **Keep the old key available until then.** Set its `RetiredAt` to `T_last` on every instance. That value lies in the past, so startup accepts it. The automatic removal then moves to `T_last + period`, which is later than the earliest safe removal. This is a configuration change applied at the next rolling restart. Remove the key only after every token signed or encrypted with it has expired.
 
 ### 5. Scheduled rollover
 
@@ -119,7 +144,7 @@ Identity keeps a retired key for a fixed period after `RetiredAt`. The period is
 2. **Activate.**
    - Make the new signing key `Active`, and the old one `Retired` with `RetiredAt` set to the start of this rollout.
    - Rotate the encryption key the same way.
-   - Restart every instance (rolling).
+   - Restart every instance (rolling) within the limit of section 4.1: 24 days with the current configuration, and within `SafetyMargin` as the target.
 3. **Remove.** After the retention period of section 3, Identity stops loading the old keys. Delete the entries and the files.
 
 **Certificate validity:**

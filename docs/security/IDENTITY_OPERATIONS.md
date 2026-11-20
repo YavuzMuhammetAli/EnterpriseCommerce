@@ -223,6 +223,7 @@ Error messages name the file only, never its content or password.
 | Replay protection window | 30 days (storefront absolute session) + 1 day safety margin = 31 days |
 | Implemented signing key retention | `RetiredAt` + 31 days + 30 s + 24 hours = `RetiredAt` + 32 days 30 s |
 | Implemented encryption key retention | `RetiredAt` + 31 days 30 s |
+| Maximum activation rollout (from `RetiredAt` until the last instance stops using the old key) | Signing key 25 days (32 days 30 s − 7 days − 30 s). Encryption key 24 days (31 days 30 s − 7 days − 30 s). A rollout that rotates both, as in 3.2, may take at most **24 days**. |
 
 The implemented periods are deliberately longer than the strict minimum (ADR-019 section 3).
 
@@ -236,7 +237,13 @@ In Development without `Identity:Keys`, Identity uses ephemeral in-memory keys (
    - Wait at least `ValidatorCacheAllowance` (24 hours by default), so every BFF and service has it cached.
 2. **Activate.**
    - Set the new signing key `Active`, and the old one `Retired` with `RetiredAt` set to the UTC time at which this rollout starts. Startup rejects a `RetiredAt` in the future.
-   - Instances that are not yet restarted keep signing with the old key. Finish the rollout well within `Identity:Retention:SafetyMargin` (default 1 day, at least 1 hour), which absorbs it.
+   - Instances that are not yet restarted keep signing and encrypting with the old keys.
+     - **Hard limit:** the rollout must end within 24 days of `RetiredAt` (25 days if only the signing key changes; ADR-019 section 4.1).
+     - **Target:** finish within `Identity:Retention:SafetyMargin` (default 1 day, at least 1 hour), which is always within the limit.
+   - **If the rollout exceeds the limit:**
+     1. **Do not remove the old keys,** and do not restart an instance with the original `RetiredAt` after the automatic removal date.
+     2. **Recalculate the earliest safe removal** from the actual last possible issuance time `T_last` (when the last instance with the old key `Active` stopped): `T_last` + 7 days + 30 s.
+     3. **Keep the keys loaded until then.** Set their `RetiredAt` to `T_last` on every instance, so the automatic removal moves to `T_last` + the full period. Remove them only after every token signed or encrypted with them has expired.
    - Rotate the encryption key at the same time: add a new `Active` one and retire the old one.
    - Restart (rolling). Both generations of instances publish and accept both signing keys, so tokens from either validate everywhere.
    - Refresh tokens issued before the rollover still redeem: tested with the old signing and encryption keys retired.
@@ -356,3 +363,4 @@ None of these is complete.
 | Real Safari on macOS and iOS | Open (ADR-016 section 8). Playwright WebKit is no evidence (finding I26). |
 | A metrics exporter, dashboards, alerting and operational monitoring | Observability phase. The alert candidates are in section 6. |
 | Retention periods for account security tokens and delivery records | Open decision (I35, PROJECT_DECISIONS section 13) |
+| Service access token lifetime: 10 minutes by default, while the accepted initial value is 5 minutes | Open discrepancy (finding I38). It needs an implementation change or a deliberate configuration decision. |

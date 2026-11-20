@@ -108,7 +108,7 @@ Both are discouraged by current OAuth security guidance (RFC 9700, OAuth 2.0 Sec
 
 - **User data:** ASP.NET Core Identity entities hold user and credential data only. They hold no protocol state such as authorizations, tokens or client registrations.
 - **Protocol data:** OpenIddict entities (applications, authorizations, scopes and tokens) hold protocol state only. They refer to a user only through the **subject** (`sub`) value. There is no foreign key from OpenIddict tables into the user tables, and no business data is stored in OpenIddict entities.
-- **The `sub` value:** a stable, opaque, non-reassignable user identifier, **never an email address** ([IDENTITY_API_CONTRACT.md section 3](../api/IDENTITY_API_CONTRACT.md#3-jwt-access-token-claims-baseline)).
+- **The `sub` value:** a stable, opaque, non-reassignable user identifier, **never an email address** ([IDENTITY_API_CONTRACT.md section 3](../api/IDENTITY_API_CONTRACT.md#3-jwt-access-token-claims-accepted)).
 
 **A8. Data and secret handling.**
 
@@ -152,7 +152,7 @@ Authorization code + PKCE is the flow in both options. They differ in **where th
 | Components | No additional component | An additional deployable per front end, or a shared one. **This needs its own ADR**, because it is a new component |
 | Fit with the Gateway | The Gateway forwards bearer tokens | The BFF calls the Gateway with access tokens. The cookie never reaches the services |
 
-**Recommendation:** prefer a BFF for the **merchant portal and the admin console**, because they carry high privileges. Decide the customer storefront in Phase 2.2. A public SPA client is acceptable there only with short-lived access tokens, rotated refresh tokens and a strict Content Security Policy. This choice drives refresh token delivery ([IDENTITY_API_CONTRACT.md section 4](../api/IDENTITY_API_CONTRACT.md#4-open-items-for-phase-2-review), item 3).
+**Recommendation:** prefer a BFF for the **merchant portal and the admin console**, because they carry high privileges. Decide the customer storefront in Phase 2.2. A public SPA client is acceptable there only with short-lived access tokens, rotated refresh tokens and a strict Content Security Policy. This choice drives refresh token delivery ([IDENTITY_API_CONTRACT.md section 4](../api/IDENTITY_API_CONTRACT.md#4-remaining-open-items), item 3).
 
 **R3. Use signed, unencrypted JWT access tokens.**
 
