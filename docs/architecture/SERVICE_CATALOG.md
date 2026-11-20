@@ -21,7 +21,7 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
 | 9 | Notification | `EnterpriseCommerce.Notification` | SQL Server | Planned |
 | 10 | Admin | `EnterpriseCommerce.Admin` | SQL Server | Planned |
 | — | API Gateway (infrastructure) | `EnterpriseCommerce.Gateway` | none | Skeleton (Phase 1) |
-| — | Backend-for-frontend (infrastructure, one codebase, one deployment per front end) | decided in the Phase 2.3 BFF slice | Dedicated Redis for session tickets (ephemeral) | Accepted ([ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md)); not yet implemented |
+| — | Backend-for-frontend (infrastructure, one codebase, one deployment per front end) | `EnterpriseCommerce.Bff` (`src/Bff`) | Dedicated `noeviction` Redis for server-side sessions (`redis-sessions`, profile `bff`) | Implemented in Phase 2.3 S7 ([ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md), [BFF_API_CONTRACT.md](../api/BFF_API_CONTRACT.md)); real Safari gate open |
 
 ## 1. Identity
 

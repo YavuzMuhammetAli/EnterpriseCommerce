@@ -113,7 +113,28 @@ dotnet run --project src/Gateway/EnterpriseCommerce.Gateway --launch-profile htt
 | `http://localhost:5000/health` | Gateway's own health check |
 | `http://localhost:5000/identity/health` | Proxied to the Identity API (Development route, requires the Identity API to be running) |
 
+The Development configuration also routes `storefront.localhost:7000`, `merchant.localhost:7000` and `admin.localhost:7000` to the three BFF deployments.
+
 Routes are configured in the `ReverseProxy` section of `src/Gateway/EnterpriseCommerce.Gateway/appsettings*.json`. To point the Identity route elsewhere, override `ReverseProxy__Clusters__identity__Destinations__primary__Address`.
+
+## Run the backend-for-frontend (BFF)
+
+One codebase, three deployments (launch profiles `storefront`, `merchant` and `admin` on ports 7201 to 7203). Contract: [docs/api/BFF_API_CONTRACT.md](docs/api/BFF_API_CONTRACT.md).
+
+```bash
+dotnet run deploy/dev/bff-dev-keys.cs           # once: development client keys outside the repository
+cd deploy/docker && docker compose --profile sqlserver --profile bff up -d --wait && cd ../..
+dotnet user-secrets set ConnectionStrings:BffSessions "localhost:6380,password=<REDIS_SESSIONS_PASSWORD>" --project src/Bff/EnterpriseCommerce.Bff
+
+# Identity, with the three BFF client registrations generated above:
+. $env:USERPROFILE/.enterprisecommerce/bff-dev/identity-clients.ps1      # or: source ~/.enterprisecommerce/bff-dev/identity-clients.sh
+dotnet run --project src/Services/Identity/EnterpriseCommerce.Identity.Api --launch-profile https
+dotnet run --project src/Bff/EnterpriseCommerce.Bff --launch-profile storefront
+dotnet run --project src/Gateway/EnterpriseCommerce.Gateway --launch-profile https
+# Browse https://storefront.localhost:7000/bff/login
+```
+
+The BFF refuses to start unless the session Redis is reachable and uses `noeviction`. The browser flow through the Gateway needs a trusted local HTTPS certificate covering the `*.localhost` names: the default development certificate covers `localhost` only (finding I29 in [PHASE_2_2_AUTHENTICATION_FLOWS.md](docs/architecture/PHASE_2_2_AUTHENTICATION_FLOWS.md#117-implementation-findings-phase-23)).
 
 ## Run local infrastructure (Docker Compose profiles)
 
@@ -121,7 +142,8 @@ Routes are configured in the `ReverseProxy` section of `src/Gateway/EnterpriseCo
 cd deploy/docker
 docker compose --profile sqlserver up -d --wait      # SQL Server only
 docker compose --profile mongodb up -d --wait        # MongoDB only
-docker compose --profile redis up -d --wait          # Redis only
+docker compose --profile redis up -d --wait          # Redis only (cache, allkeys-lru)
+docker compose --profile bff up -d --wait            # BFF session Redis only (noeviction)
 docker compose --profile kafka up -d --wait          # Kafka (KRaft) only
 docker compose --profile all up -d --wait            # everything
 docker compose --profile all ps
@@ -160,7 +182,7 @@ The suite contains unit tests (exception handling), integration tests (the real 
 - Product catalog, inventory operations, cart, checkout, orders, payments, fulfillment, notifications and admin features
 - Any persistence (EF Core / MongoDB) and any database schema
 - Kafka topics and event flows, the outbox pattern and sagas
-- Redis usage in any service
+- Redis usage in any business service (the BFF session store is implemented in Phase 2.3 S7)
 - Application containers and Dockerfiles
 - OpenTelemetry, Prometheus, Grafana and Loki (planned as the observability phase)
 - The other nine business services (only documented so far)

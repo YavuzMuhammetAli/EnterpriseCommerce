@@ -122,6 +122,10 @@ dotnet tool restore                                                 # dotnet-ef 
 dotnet tool run dotnet-ef migrations add <Name> --project src/Services/Identity/EnterpriseCommerce.Identity.Infrastructure --output-dir Persistence/Migrations --namespace EnterpriseCommerce.Identity.Infrastructure.Persistence.Migrations
 dotnet run --project src/Services/Identity/EnterpriseCommerce.Identity.Api --launch-profile https  # https://localhost:7101 (issuer; OpenIddict requires HTTPS)
 dotnet run --project src/Gateway/EnterpriseCommerce.Gateway --launch-profile http                  # http://localhost:5000
+dotnet run --project src/Bff/EnterpriseCommerce.Bff --launch-profile storefront                      # https://localhost:7201 (also merchant, admin)
+
+# BFF tests need the session Redis (Compose profile bff, noeviction); browser tests also EC_TEST_BROWSERS=true:
+export EC_TEST_REDIS_SESSIONS='127.0.0.1:6380,password=<REDIS_SESSIONS_PASSWORD from deploy/docker/.env>'
 
 cd deploy/docker && cp .env.example .env                            # once
 docker compose --profile <sqlserver|mongodb|redis|kafka> config --quiet

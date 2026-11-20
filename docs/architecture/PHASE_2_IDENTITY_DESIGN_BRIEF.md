@@ -24,9 +24,13 @@ Inputs: [PROJECT_DECISIONS.md](PROJECT_DECISIONS.md) (especially sections 5, 7 a
 | S5 | Gateway routing and trusted forwarded headers | Done |
 | S6 | Log redaction guard, health checks, CI secret scan | Done (first part) |
 | S4 | Token revocation and end-session (POST-only browser logout), logout-all endpoint, password reset and change, deterministic reset-versus-refresh and logout-all-versus-refresh race tests | Done |
-| S7 | Backend-for-frontend and the dedicated session Redis | Not started |
+| S7 | Backend-for-frontend and the dedicated session Redis: one codebase (`src/Bff`), three deployments; authorization code + PKCE + `private_key_jwt`; server-side sessions in a `noeviction` Redis; single-flight refresh; CSRF layers; logout and logout-all; silent re-authorization after a password change; Playwright browser tests. Contract: [BFF_API_CONTRACT.md](../api/BFF_API_CONTRACT.md) | Done (real Safari gate open) |
 
-**Not verified by S4:** real browsers (the tests drive HTTP directly), the BFF side of logout and re-authorization after a password change (S7), delivery of reset emails through Notification (not implemented), and SQL Server versions other than 2022.
+**Not verified by S4:** real browsers (the tests drive HTTP directly), delivery of reset emails through Notification (not implemented), and SQL Server versions other than 2022.
+
+**Verified by S7:** the BFF side of logout, logout-all and re-authorization after a password change, in integration tests and in Chromium, Firefox and WebKit (Playwright). **Not verified by S7:** real Safari on macOS and iOS (the ADR-016 gate before any production-like deployment), and the full local flow through the Gateway on a machine without a trusted development certificate (finding I29).
+
+The brief for this slice called it "S5". It is S7 in this plan, because S5 (Gateway routing) was already done.
 
 Implementation findings are recorded in [PHASE_2_2_AUTHENTICATION_FLOWS.md section 11.7](PHASE_2_2_AUTHENTICATION_FLOWS.md#117-implementation-findings-phase-23).
 

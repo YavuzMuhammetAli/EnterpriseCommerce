@@ -39,9 +39,21 @@ The threat matrix, residual risks and required security tests are in [PHASE_2_2_
 
 **Implemented safeguards for security emails (Phase 2.3 S3, ADR-018):** confirmation tokens are minted only after the delivery worker claims a delivery, stored as SHA-256 hashes, consumed only by POST, and never logged. The development mail sink is isolated by five layers: a Debug-only project reference, `#if DEBUG` registration, a runtime guard (Development, explicit opt-in, loopback or the Compose host `mailpit`), a startup failure outside Development if its settings or assembly are present, and CI checks (architecture tests and the Release publish output).
 
+**Implemented browser session security (Phase 2.3 S7, ADR-016, [BFF_API_CONTRACT.md](../api/BFF_API_CONTRACT.md)):**
+
+- **OAuth client.** Authorization code with PKCE `S256` and `response_mode=query`. `private_key_jwt` client authentication (`typ: client-authentication+jwt`). The code exchange is never retried.
+- **ID token validation.** Issuer, audience, lifetime, nonce, and a signature check of its own (finding I19). The access-token audience and the presence of a refresh token are verified before any session exists.
+- **Server-side sessions.** Sessions live in a dedicated `noeviction` Redis with append-only persistence. The BFF refuses to start against any other policy. The cookie holds only a random 256-bit key, and Redis stores its SHA-256. Tokens are Data Protection-protected in the record and never appear in a browser response. Every login rotates the session ID and deletes the previous session (session fixation, finding I20). Records of another client are rejected. An unreadable store answers `503` (fail closed).
+- **Cookies.** `__Host-Http-` session cookie: `Secure; HttpOnly; SameSite=Strict; Path=/`, no `Domain`. Correlation and nonce cookies: `__Host-`, `SameSite=Lax`, at most 5 minutes, deleted at the callback.
+- **CSRF.** Fetch Metadata, an exact `Origin` and a session-bound antiforgery token on every state-changing request. No CORS. Local return URLs only.
+- **Refresh.** Single-flight across instances through an atomic lease. An unknown outcome is never retried with the same refresh token. `invalid_grant` ends the session.
+- **Logout.** Logout revokes at Identity and deletes the session; the end-session URL carries no `id_token_hint` (finding I24). Logout-all is authorized only by the session's bearer token.
+- **Logging.** Identity caps `OpenIddict.Validation` at Warning (finding I21). The BFF logs a non-reversible session reference, never a session key, cookie, code, verifier, assertion or token. Tested with Verbose logs over every flow.
+
 **Verification gates before any production-like deployment:**
 
-- **Real Safari** (macOS and iOS): login, refresh, logout, cookie attributes and CSRF. Playwright WebKit results do not count as Safari evidence (ADR-016 section 8).
+- **Real Safari** (macOS and iOS): login, refresh, logout, cookie attributes and CSRF. Playwright WebKit results do not count as Safari evidence (ADR-016 section 8). Still open after S7: Playwright's Windows WebKit does not even implement `SameSite` (finding I26).
+- The BFF Data Protection key ring in a shared, protected store for multi-instance deployments (D19), and per-deployment Redis ACL users for the session store.
 - MFA for platform administrators (Phase 2.2 decision D17, deferred).
 - Notification must implement the internal security email endpoint ([IDENTITY_API_CONTRACT.md section 4a](../api/IDENTITY_API_CONTRACT.md#4a-outbound-security-email-handover-to-notification-internal)). Identity refuses to start outside Development until it is configured.
 

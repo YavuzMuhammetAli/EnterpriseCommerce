@@ -10,6 +10,7 @@ Related documents: [PROJECT_DECISIONS.md](PROJECT_DECISIONS.md) (the canonical d
 EnterpriseCommerce/
 ├── src/
 │   ├── Gateway/EnterpriseCommerce.Gateway/          YARP API Gateway (infrastructure, not a business service)
+│   ├── Bff/EnterpriseCommerce.Bff/                  Backend-for-frontend (infrastructure; one codebase, one deployment per front end)
 │   ├── Services/{Service}/EnterpriseCommerce.{Service}.{Layer}/
 │   └── BuildingBlocks/                              shared technical libraries (none yet; see policy below)
 ├── tests/
@@ -77,6 +78,7 @@ Patterns are applied only where they earn their keep. There are no generic repos
 | Infrastructure | its own service's Application and Domain, plus BuildingBlocks |
 | Api | its own service's Application and Infrastructure, plus BuildingBlocks |
 | Gateway | no service project, only BuildingBlocks |
+| Bff | no service or Gateway project, only BuildingBlocks; no project references the Bff |
 | BuildingBlocks | other BuildingBlocks only |
 
 Domain and Application must not reference EF Core, SQL Server or MongoDB drivers, Kafka, Redis, ASP.NET Core, YARP or Serilog. The architecture tests check this in two ways:

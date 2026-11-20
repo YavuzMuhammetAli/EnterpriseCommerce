@@ -69,9 +69,24 @@ memory=8GB
 | SQL Server | `Server=localhost,1433;User Id=sa;Password=<MSSQL_SA_PASSWORD>;TrustServerCertificate=True` |
 | MongoDB    | `mongodb://<MONGO_ROOT_USERNAME>:<MONGO_ROOT_PASSWORD>@localhost:27017/?authSource=admin` |
 | Redis      | `localhost:6379,password=<REDIS_PASSWORD>` |
+| BFF session Redis (`bff` profile) | `localhost:6380,password=<REDIS_SESSIONS_PASSWORD>` |
 | Kafka      | bootstrap servers `localhost:9094` (containers on the compose network use `kafka:9092`) |
 
 Services will receive connection settings through configuration and environment variables when they adopt these components. No connection string is hard-coded in source.
+
+## BFF session Redis (`bff` profile)
+
+The `redis-sessions` service is the dedicated session store of the backend-for-frontend (ADR-016 section 3). It is never used for caching.
+
+- `maxmemory-policy noeviction`: a full store fails writes, and the BFF then fails closed, instead of silently evicting active sessions. The BFF refuses to start against any other policy, and its `/health` reports it.
+- Append-only persistence (`appendfsync everysec`), so sessions survive a restart.
+- It has its own password (`REDIS_SESSIONS_PASSWORD`) and port (`REDIS_SESSIONS_PORT`, default 6380).
+- The general `redis` service keeps `allkeys-lru`.
+
+```bash
+docker compose --profile bff up -d --wait
+docker compose exec redis-sessions redis-cli config get maxmemory-policy   # noeviction
+```
 
 ## Kafka notes
 
