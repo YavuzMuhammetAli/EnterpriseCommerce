@@ -92,6 +92,20 @@ public interface IAuthoritativeSecurityUnit
     Task<bool> LinkSecurityEmailTokenAsync(Guid deliveryId, Guid tokenId, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Changes the account status from <paramref name="from"/> to <paramref name="to"/> in one conditional update that
+    /// applies only while the status is still <paramref name="from"/>, recording the reason, the actor reference and the
+    /// database time. Disabling also rotates the ASP.NET Core Identity security stamp. Returns <see langword="false"/>
+    /// when no row qualified (unknown account, or the status is already different).
+    /// </summary>
+    Task<bool> TryChangeAccountStatusAsync(
+        string userId,
+        AccountStatus from,
+        AccountStatus to,
+        AccountStatusReason reason,
+        string actorReference,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Revokes one authorization (one client session).
     /// Returns <see langword="false"/> if it does not exist or is already revoked.
     /// </summary>

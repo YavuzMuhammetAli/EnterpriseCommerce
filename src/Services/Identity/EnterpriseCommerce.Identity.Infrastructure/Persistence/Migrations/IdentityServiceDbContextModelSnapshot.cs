@@ -120,6 +120,14 @@ namespace EnterpriseCommerce.Identity.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("StatusChangedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<string>("StatusChangedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("StatusReason")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("bit");
 

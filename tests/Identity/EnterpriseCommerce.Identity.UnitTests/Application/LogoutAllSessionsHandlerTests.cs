@@ -120,6 +120,8 @@ public sealed class LogoutAllSessionsHandlerTests
 
         public Task<bool> LinkSecurityEmailTokenAsync(Guid deliveryId, Guid tokenId, CancellationToken cancellationToken) => throw new NotSupportedException();
 
+        public Task<bool> TryChangeAccountStatusAsync(string userId, AccountStatus from, AccountStatus to, AccountStatusReason reason, string actorReference, CancellationToken cancellationToken) => throw new NotSupportedException();
+
         public Task<bool> TryRevokeAuthorizationAsync(string authorizationId, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 

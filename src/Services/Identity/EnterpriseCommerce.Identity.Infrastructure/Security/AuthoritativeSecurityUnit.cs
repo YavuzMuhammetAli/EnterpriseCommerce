@@ -294,6 +294,44 @@ internal sealed class AuthoritativeSecurityUnit(
         return updated == 1;
     }
 
+    public async Task<bool> TryChangeAccountStatusAsync(
+        string userId,
+        AccountStatus from,
+        AccountStatus to,
+        AccountStatusReason reason,
+        string actorReference,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(actorReference);
+        if (!AccountLifecycle.CanTransition(from, to))
+        {
+            throw new ArgumentException($"The account status transition {from} to {to} is not allowed.", nameof(to));
+        }
+
+        var fromValue = from.ToString();
+        var toValue = to.ToString();
+        var reasonValue = reason.ToString();
+        var concurrencyStamp = Guid.NewGuid().ToString();
+
+        // Disabling rotates the security stamp, so nothing derived from the old stamp survives. Reactivation does not
+        // need to. One statement: the row lock is held until the transaction ends.
+        var securityStamp = to == AccountStatus.Disabled ? Guid.NewGuid().ToString() : null;
+        var updated = await context.Database.ExecuteSqlAsync(
+            $"""
+            UPDATE [AspNetUsers]
+            SET [Status] = {toValue},
+                [StatusReason] = {reasonValue},
+                [StatusChangedBy] = {actorReference},
+                [StatusChangedAt] = SYSDATETIMEOFFSET(),
+                [SecurityStamp] = COALESCE({securityStamp}, [SecurityStamp]),
+                [ConcurrencyStamp] = {concurrencyStamp}
+            WHERE [Id] = {userId} AND [Status] = {fromValue}
+            """,
+            cancellationToken);
+        return updated == 1;
+    }
+
     public async Task<bool> TryRevokeAuthorizationAsync(string authorizationId, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(authorizationId);

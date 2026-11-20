@@ -1,3 +1,4 @@
+using EnterpriseCommerce.Identity.Domain.Accounts;
 using EnterpriseCommerce.Identity.Domain.Security;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -28,6 +29,8 @@ internal sealed class IdentityServiceDbContext(DbContextOptions<IdentityServiceD
         builder.Entity<ApplicationUser>(user =>
         {
             user.Property(u => u.Status).HasConversion<string>().HasMaxLength(16);
+            user.Property(u => u.StatusReason).HasConversion<string>().HasMaxLength(32);
+            user.Property(u => u.StatusChangedBy).HasMaxLength(AccountLifecycle.ActorReferenceMaxLength);
         });
 
         builder.Entity<SecurityVersionRecord>(record =>

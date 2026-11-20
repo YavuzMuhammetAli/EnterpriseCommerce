@@ -90,5 +90,6 @@ app.MapIdentityHealthChecks();
 app.MapRazorPages();
 app.MapProtocolEndpoints();
 app.MapAccountApiEndpoints();
+app.MapInternalAccountEndpoints();
 
 await app.RunAsync();

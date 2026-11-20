@@ -29,6 +29,9 @@ internal static class IdentityServerSetup
     /// <summary>Bearer access tokens of users, obtained by a browser client (BFF). Never the SSO cookie.</summary>
     public const string UserBearerPolicy = "user-bearer";
 
+    /// <summary>Service tokens of the clients allowed to change account status (internal API only).</summary>
+    public const string AccountAdministrationPolicy = "account-administration";
+
     private static readonly TimeSpan SsoAbsoluteLifetime = TimeSpan.FromHours(12);
 
     public static WebApplicationBuilder AddIdentityProtocolServer(this WebApplicationBuilder builder)
@@ -45,6 +48,7 @@ internal static class IdentityServerSetup
 
         errors.AddRange(settings.Clients.SelectMany(client => client.Validate(isDevelopment)));
         errors.AddRange(settings.Clients.GroupBy(c => c.ClientId, StringComparer.Ordinal).Where(g => g.Count() > 1).Select(g => $"Duplicate client '{g.Key}'."));
+        errors.AddRange(settings.AccountAdministration.Validate());
         if (errors.Count > 0)
         {
             throw new InvalidOperationException("Invalid Identity configuration: " + string.Join(" ", errors));
@@ -152,14 +156,17 @@ internal static class IdentityServerSetup
             })
             .AddValidation(options =>
             {
-                // Identity's own REST endpoints (logout-all) accept the front-end audiences of its browser clients,
-                // validated locally like every other service does (ADR-017 sections 3, 4 and 6).
+                // Identity's own REST endpoints accept the front-end audiences of its browser clients (logout-all) and
+                // its own service audience (internal account lifecycle), validated locally like every other service
+                // does (ADR-017 sections 3, 4 and 6). Each endpoint's policy then requires exactly one kind.
                 options.UseLocalServer();
-                options.AddAudiences([.. BrowserAudiences(settings)]);
+                options.AddAudiences([.. BrowserAudiences(settings), settings.AccountAdministration.Audience]);
                 options.UseAspNetCore();
             });
 
         var audiences = BrowserAudiences(settings).ToHashSet(StringComparer.Ordinal);
+        var administration = settings.AccountAdministration;
+        var administrationClients = administration.AllowedClientIds.ToHashSet(StringComparer.Ordinal);
         services.AddAuthorizationBuilder()
             .AddPolicy(UserBearerPolicy, policy => policy
                 .AddAuthenticationSchemes(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
@@ -168,10 +175,31 @@ internal static class IdentityServerSetup
                 .RequireClaim(IdentityClaims.PrincipalType, IdentityClaims.UserPrincipal)
                 // Defense in depth: never accept a token without one of the front-end audiences, even if the
                 // validation handler had no audience configured.
-                .RequireAssertion(context => context.User.GetAudiences().Any(audiences.Contains)));
+                .RequireAssertion(context => context.User.GetAudiences().Any(audiences.Contains)))
+            .AddPolicy(AccountAdministrationPolicy, policy => policy
+                .AddAuthenticationSchemes(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
+                .RequireAuthenticatedUser()
+                .RequireClaim(IdentityClaims.PrincipalType, IdentityClaims.ServicePrincipal)
+                // A service token for Identity, with the account-lifecycle scope, from an explicitly allowed service
+                // client. The calling client is authorized, never an administrator role (section 5.6.6): Admin
+                // authorizes its administrators before it calls.
+                .RequireAssertion(context =>
+                    context.User.GetAudiences().Contains(administration.Audience, StringComparer.Ordinal)
+                    && context.User.HasScope(AccountAdministrationSettings.Scope)
+                    && CallingClientOf(context.User) is { } client
+                    && client.StartsWith(ClientRegistration.ServiceClientPrefix, StringComparison.Ordinal)
+                    && administrationClients.Contains(client)));
 
         return builder;
     }
+
+    /// <summary>The service client that obtained a validated service token (its <c>client_id</c>).</summary>
+    public static string? CallingClientOf(ClaimsPrincipal principal) =>
+        principal.GetClaim(Claims.ClientId) is { Length: > 0 } clientId
+        && principal.GetClaim(Claims.Subject) is { } subject
+        && string.Equals(subject, clientId, StringComparison.Ordinal)
+            ? clientId
+            : null;
 
     /// <summary>
     /// Validates the Identity SSO cookie on every request (ADR-017 section 7): the security version and account

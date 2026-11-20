@@ -123,6 +123,37 @@ internal sealed class IdentityServerSettings
     public SigningSettings Keys { get; set; } = new();
 
     public RateLimitSettings RateLimits { get; set; } = new();
+
+    public AccountAdministrationSettings AccountAdministration { get; set; } = new();
+}
+
+/// <summary>
+/// The internal account lifecycle API (IDENTITY_API_CONTRACT.md section 2.12). Only service clients that hold the
+/// account-lifecycle scope <b>and</b> are listed here may call it. An empty list denies every caller.
+/// </summary>
+internal sealed class AccountAdministrationSettings
+{
+    /// <summary>The scope a service client must hold. Its audience is <see cref="Audience"/>.</summary>
+    public const string Scope = "svc.identity.account-lifecycle";
+
+    /// <summary>Identity's own audience for service tokens (ADR-017 section 3: the audience of the called service).</summary>
+    public string Audience { get; set; } = "identity-api";
+
+    /// <summary>The service clients (<c>svc-</c> prefix) allowed to change account status, for example <c>svc-admin</c>.</summary>
+    public List<string> AllowedClientIds { get; set; } = [];
+
+    public IEnumerable<string> Validate()
+    {
+        if (string.IsNullOrWhiteSpace(Audience))
+        {
+            yield return "Identity:AccountAdministration:Audience is required.";
+        }
+
+        foreach (var clientId in AllowedClientIds.Where(id => !id.StartsWith(ClientRegistration.ServiceClientPrefix, StringComparison.Ordinal)))
+        {
+            yield return $"Identity:AccountAdministration:AllowedClientIds may only list service clients ('{clientId}').";
+        }
+    }
 }
 
 /// <summary>

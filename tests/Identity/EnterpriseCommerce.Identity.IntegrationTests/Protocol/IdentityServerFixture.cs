@@ -102,6 +102,12 @@ public partial class IdentityServerFixture : IAsyncLifetime
 
     public TestClient Service { get; } = new("svc-test-orders", audience: null);
 
+    /// <summary>A service client allowed to change account status (stands in for Admin's <c>svc-admin</c>).</summary>
+    public TestClient AccountAdmin { get; } = new("svc-test-admin", audience: null);
+
+    /// <summary>A service client that holds the account-lifecycle scope but is not on the allow-list.</summary>
+    public TestClient RogueService { get; } = new("svc-test-rogue", audience: null);
+
     /// <summary>Replaces the Notification integration; records every security email handover.</summary>
     public CapturingSecurityEmailDispatcher Dispatcher { get; } = new();
 
@@ -149,6 +155,18 @@ public partial class IdentityServerFixture : IAsyncLifetime
             builder.UseSetting(service + "JsonWebKeySet", Service.JsonWebKeySet);
             builder.UseSetting(service + "ServiceScopes:0:Scope", "svc.inventory.reservations");
             builder.UseSetting(service + "ServiceScopes:0:Audience", "inventory-api");
+
+            foreach (var lifecycleClient in new[] { AccountAdmin, RogueService })
+            {
+                var prefix = $"Identity:Clients:{++index}:";
+                builder.UseSetting(prefix + "ClientId", lifecycleClient.ClientId);
+                builder.UseSetting(prefix + "Kind", "Service");
+                builder.UseSetting(prefix + "JsonWebKeySet", lifecycleClient.JsonWebKeySet);
+                builder.UseSetting(prefix + "ServiceScopes:0:Scope", AccountLifecycleScope);
+                builder.UseSetting(prefix + "ServiceScopes:0:Audience", "identity-api");
+            }
+
+            builder.UseSetting("Identity:AccountAdministration:AllowedClientIds:0", AccountAdmin.ClientId);
             builder.UseSetting("Identity:SecurityEmail:RetryBaseDelay", "00:00:00.020");
             builder.ConfigureTestServices(services =>
             {
@@ -182,6 +200,8 @@ public partial class IdentityServerFixture : IAsyncLifetime
         Merchant.Dispose();
         Admin.Dispose();
         Service.Dispose();
+        AccountAdmin.Dispose();
+        RogueService.Dispose();
         GC.SuppressFinalize(this);
     }
 

@@ -53,6 +53,25 @@ app.MapHealthChecks("/health");
 
 app.UseRateLimiter();
 
+// Internal service-to-service endpoints (/internal/...) are never exposed at the edge, on any host (ADR-007 edge
+// concern; IDENTITY_API_CONTRACT.md section 2.12). Services still authorize every internal call themselves.
+app.Use((context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments(InternalPaths.Prefix, StringComparison.OrdinalIgnoreCase))
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return Task.CompletedTask;
+    }
+
+    return next(context);
+});
+
 app.MapReverseProxy();
 
 await app.RunAsync();
+
+/// <summary>Path prefixes the Gateway never forwards.</summary>
+internal static class InternalPaths
+{
+    public const string Prefix = "/internal";
+}
