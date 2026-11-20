@@ -52,6 +52,9 @@ internal static partial class BffLog
     [LoggerMessage(EventId = 7090, Level = LogLevel.Error, Message = "Session store unavailable; the request fails closed")]
     public static partial void SessionStoreUnavailable(ILogger logger, Exception exception);
 
+    [LoggerMessage(EventId = 7092, Level = LogLevel.Error, Message = "Identity is unreachable (metadata, keys or back channel); the request fails with 503: {ExceptionType}")]
+    public static partial void IdentityUnavailable(ILogger logger, string exceptionType);
+
     [LoggerMessage(EventId = 7091, Level = LogLevel.Critical, Message = "The session Redis uses maxmemory-policy {Policy}; noeviction is required. The BFF does not start")]
     public static partial void SessionStorePolicyRejected(ILogger logger, string policy);
 

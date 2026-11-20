@@ -7,6 +7,11 @@
     Enforced by EnterpriseCommerce.ArchitectureTests.
   -->
 
+  <PropertyGroup>
+    <!-- Local development only: the session Redis connection string (dotnet user-secrets). Never committed. -->
+    <UserSecretsId>enterprisecommerce-bff</UserSecretsId>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
     <PackageReference Include="Serilog.AspNetCore" />

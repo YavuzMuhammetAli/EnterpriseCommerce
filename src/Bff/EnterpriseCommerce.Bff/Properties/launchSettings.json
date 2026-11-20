@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "storefront": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "https://localhost:7201",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "Bff__Deployment": "storefront",
+        "Bff__ClientId": "bff-storefront",
+        "Bff__Audience": "ec-storefront",
+        "Bff__Authority": "https://localhost:7101/",
+        "Bff__PublicOrigin": "https://storefront.localhost:7000",
+        "Bff__ClientKey__PrivateKeyPath": "%USERPROFILE%/.enterprisecommerce/bff-dev/storefront.pem",
+        "Bff__ClientKey__KeyId": "dev-storefront",
+        "Bff__Session__AbsoluteLifetime": "30.00:00:00",
+        "Bff__Session__IdleTimeout": "7.00:00:00",
+        "Bff__Session__AllowPersistent": "true",
+        "Bff__DataProtectionKeyDirectory": "%USERPROFILE%/.enterprisecommerce/bff-dev/keys-storefront"
+      }
+    },
+    "merchant": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "https://localhost:7202",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "Bff__Deployment": "merchant",
+        "Bff__ClientId": "bff-merchant",
+        "Bff__Audience": "ec-merchant",
+        "Bff__Authority": "https://localhost:7101/",
+        "Bff__PublicOrigin": "https://merchant.localhost:7000",
+        "Bff__ClientKey__PrivateKeyPath": "%USERPROFILE%/.enterprisecommerce/bff-dev/merchant.pem",
+        "Bff__ClientKey__KeyId": "dev-merchant",
+        "Bff__Session__AbsoluteLifetime": "12:00:00",
+        "Bff__Session__IdleTimeout": "02:00:00",
+        "Bff__Session__AllowPersistent": "false",
+        "Bff__DataProtectionKeyDirectory": "%USERPROFILE%/.enterprisecommerce/bff-dev/keys-merchant"
+      }
+    },
+    "admin": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "https://localhost:7203",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "Bff__Deployment": "admin",
+        "Bff__ClientId": "bff-admin",
+        "Bff__Audience": "ec-admin",
+        "Bff__Authority": "https://localhost:7101/",
+        "Bff__PublicOrigin": "https://admin.localhost:7000",
+        "Bff__ClientKey__PrivateKeyPath": "%USERPROFILE%/.enterprisecommerce/bff-dev/admin.pem",
+        "Bff__ClientKey__KeyId": "dev-admin",
+        "Bff__Session__AbsoluteLifetime": "08:00:00",
+        "Bff__Session__IdleTimeout": "00:30:00",
+        "Bff__Session__AllowPersistent": "false",
+        "Bff__DataProtectionKeyDirectory": "%USERPROFILE%/.enterprisecommerce/bff-dev/keys-admin"
+      }
+    }
+  }
+}

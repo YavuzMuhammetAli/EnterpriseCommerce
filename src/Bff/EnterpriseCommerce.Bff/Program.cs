@@ -50,7 +50,7 @@ builder.Services.AddSingleton(cookieNames);
 var dataProtection = builder.Services.AddDataProtection().SetApplicationName($"EnterpriseCommerce.Bff.{settings.Deployment}");
 if (!string.IsNullOrWhiteSpace(settings.DataProtectionKeyDirectory))
 {
-    dataProtection.PersistKeysToFileSystem(new DirectoryInfo(settings.DataProtectionKeyDirectory));
+    dataProtection.PersistKeysToFileSystem(new DirectoryInfo(Environment.ExpandEnvironmentVariables(settings.DataProtectionKeyDirectory)));
 }
 
 // The dedicated session Redis (ADR-016 section 3); the host refuses to start unless it uses noeviction.

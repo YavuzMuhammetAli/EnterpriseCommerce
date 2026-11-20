@@ -31,7 +31,7 @@ internal sealed class ClientAssertionFactory : IDisposable
         _time = time;
         var pem = _settings.ClientKey.PrivateKeyPem is { Length: > 0 } inline
             ? inline
-            : File.ReadAllText(_settings.ClientKey.PrivateKeyPath!);
+            : File.ReadAllText(Environment.ExpandEnvironmentVariables(_settings.ClientKey.PrivateKeyPath!));
         (_key, _credentials) = LoadKey(pem, _settings.ClientKey.KeyId);
     }
 

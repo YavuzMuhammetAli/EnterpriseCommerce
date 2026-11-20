@@ -143,6 +143,27 @@ public sealed class CallbackSecurityTests(BffTestEnvironment environment) : ICla
         Assert.DoesNotContain(browser.Transcript, r => r.Url.Host == "evil.example.test" && r.Url.AbsolutePath == "/bff/callback");
     }
 
+    [Fact]
+    public async Task AnUnreachableIdentity_IsATemporary503_NotAnError()
+    {
+        environment.RequireAvailable();
+        var bff = environment.CreateBff(environment.Storefront, options => options.AuthorityHandler = new UnreachableHandler());
+        using var browser = environment.CreateBrowser(bff);
+
+        var response = await browser.GetAsync(bff.Url("/bff/login"));
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.Status);
+        Assert.NotNull(response.Header("Retry-After"));
+        Assert.DoesNotContain("IDX", response.Body, StringComparison.Ordinal);
+        Assert.Null(browser.Cookie(bff.Origin, bff.SessionCookieName));
+    }
+
+    private sealed class UnreachableHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            throw new HttpRequestException(HttpRequestError.SecureConnectionError, "TLS failure (test).");
+    }
+
     [Theory]
     [InlineData("https://evil.example/steal")]
     [InlineData("//evil.example/steal")]

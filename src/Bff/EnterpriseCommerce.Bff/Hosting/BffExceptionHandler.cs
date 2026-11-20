@@ -12,11 +12,22 @@ internal sealed class BffExceptionHandler(IProblemDetailsService problemDetails,
 {
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
-        var unavailable = exception is SessionStoreUnavailableException
-            || exception.InnerException is SessionStoreUnavailableException;
-        if (unavailable)
+        var storeUnavailable = Chain(exception).Any(e => e is SessionStoreUnavailableException);
+
+        // Identity's metadata or keys could not be fetched (network, TLS, 5xx): temporary, nothing was decided.
+        var identityUnavailable = !storeUnavailable && Chain(exception).Any(e =>
+            e is HttpRequestException
+            || (e is InvalidOperationException && e.Message.StartsWith("IDX20803", StringComparison.Ordinal)));
+        var unavailable = storeUnavailable || identityUnavailable;
+        if (storeUnavailable)
         {
             BffLog.SessionStoreUnavailable(logger, exception);
+            httpContext.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            httpContext.Response.Headers.RetryAfter = "5";
+        }
+        else if (identityUnavailable)
+        {
+            BffLog.IdentityUnavailable(logger, exception.GetType().Name);
             httpContext.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
             httpContext.Response.Headers.RetryAfter = "5";
         }
@@ -36,5 +47,13 @@ internal sealed class BffExceptionHandler(IProblemDetailsService problemDetails,
                 Title = unavailable ? "Temporarily unavailable. Retry shortly." : "An unexpected error occurred.",
             },
         });
+    }
+
+    private static IEnumerable<Exception> Chain(Exception exception)
+    {
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+        {
+            yield return current;
+        }
     }
 }
