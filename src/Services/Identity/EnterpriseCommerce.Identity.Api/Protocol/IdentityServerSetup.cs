@@ -1,14 +1,16 @@
 using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
 using System.Threading.RateLimiting;
+using EnterpriseCommerce.Identity.Api.Protocol.Keys;
 using EnterpriseCommerce.Identity.Application.Security;
+using EnterpriseCommerce.Identity.Domain.Security;
 using EnterpriseCommerce.Identity.Infrastructure.Retention;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using OpenIddict.Abstractions;
+using OpenIddict.Server;
 using OpenIddict.Validation.AspNetCore;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
@@ -35,6 +37,9 @@ internal static class IdentityServerSetup
 
     private static readonly TimeSpan SsoAbsoluteLifetime = TimeSpan.FromHours(12);
 
+    /// <summary>The clock skew every validator allows (ADR-017 section 4).</summary>
+    public static readonly TimeSpan ValidationClockSkew = TimeSpan.FromSeconds(30);
+
     /// <summary>Authorization code lifetime (PHASE_2_2_AUTHENTICATION_FLOWS.md section 6.4).</summary>
     public static readonly TimeSpan AuthorizationCodeLifetime = TimeSpan.FromSeconds(60);
 
@@ -59,6 +64,13 @@ internal static class IdentityServerSetup
         errors.AddRange(settings.Clients.SelectMany(client => client.Validate(isDevelopment)));
         errors.AddRange(settings.Clients.GroupBy(c => c.ClientId, StringComparer.Ordinal).Where(g => g.Count() > 1).Select(g => $"Duplicate client '{g.Key}'."));
         errors.AddRange(settings.AccountAdministration.Validate());
+        foreach (var legacy in new[] { "SigningCertificatePath", "SigningCertificatePassword", "EncryptionCertificatePath", "EncryptionCertificatePassword" })
+        {
+            if (builder.Configuration.GetSection($"{IdentityServerSettings.SectionName}:Keys:{legacy}").Exists())
+            {
+                errors.Add($"Identity:Keys:{legacy} is replaced by the key ring (Identity:Keys:Signing and Identity:Keys:Encryption).");
+            }
+        }
         if (errors.Count > 0)
         {
             throw new InvalidOperationException("Invalid Identity configuration: " + string.Join(" ", errors));
@@ -69,6 +81,18 @@ internal static class IdentityServerSetup
 
         // Retention keeps replay-protection records until every token they could reject has expired (S6.2).
         services.UseReplayProtectionLifetimes(TokenLifetimes(settings));
+
+        // The key ring (S6.3). A retired key stays loaded until nothing it signed or encrypted can still be accepted.
+        var retentionSettings = builder.Configuration.GetSection(IdentityRetentionOptions.SectionName).Get<IdentityRetentionOptions>() ?? new();
+        var replayWindow = ReplayProtectionWindow.Compute(TokenLifetimes(settings), retentionSettings.SafetyMargin, retentionSettings.MinimumReplayProtectionWindow);
+        var keyRing = KeyRingLoader.Load(
+            settings.Keys,
+            new CertificateFileKeySource(),
+            new KeyRetention(replayWindow + ValidationClockSkew + settings.Keys.ValidatorCacheAllowance, replayWindow + ValidationClockSkew),
+            DateTimeOffset.UtcNow,
+            isDevelopment);
+        services.AddSingleton(keyRing);
+        services.AddHostedService<KeyRingReporter>();
 
         services.AddAuthentication(IdentityConstants.ApplicationScheme)
             .AddCookie(IdentityConstants.ApplicationScheme, options =>
@@ -141,7 +165,15 @@ internal static class IdentityServerSetup
 
                 // Signed, unencrypted JWT access tokens (ADR-015 R3, ADR-017 section 2).
                 options.DisableAccessTokenEncryption();
-                AddKeys(options, settings.Keys, isDevelopment);
+                foreach (var key in keyRing.Of(KeyUse.Signing))
+                {
+                    options.AddSigningKey(key.SecurityKey);
+                }
+
+                foreach (var key in keyRing.Of(KeyUse.Encryption))
+                {
+                    options.AddEncryptionKey(key.SecurityKey);
+                }
 
                 options.Configure(server =>
                 {
@@ -176,6 +208,9 @@ internal static class IdentityServerSetup
                 options.AddAudiences([.. BrowserAudiences(settings), settings.AccountAdministration.Audience]);
                 options.UseAspNetCore();
             });
+
+        // Registered after OpenIddict's own post-configuration, which sorts the credentials by date (V24).
+        services.AddSingleton<IPostConfigureOptions<OpenIddictServerOptions>>(new ActiveKeysFirst(keyRing));
 
         var audiences = BrowserAudiences(settings).ToHashSet(StringComparer.Ordinal);
         var administration = settings.AccountAdministration;
@@ -271,34 +306,5 @@ internal static class IdentityServerSetup
             .SetClaim(IdentityClaims.SecurityVersion, securityVersion.ToString(System.Globalization.CultureInfo.InvariantCulture))
             .SetClaims(Claims.AuthenticationMethodReference, ["pwd"]);
         return new ClaimsPrincipal(identity);
-    }
-
-    private static void AddKeys(OpenIddictServerBuilder options, SigningSettings keys, bool isDevelopment)
-    {
-        if (!string.IsNullOrWhiteSpace(keys.SigningCertificatePath))
-        {
-            var signing = X509CertificateLoader.LoadPkcs12FromFile(keys.SigningCertificatePath, keys.SigningCertificatePassword);
-            var encryption = X509CertificateLoader.LoadPkcs12FromFile(
-                keys.EncryptionCertificatePath ?? throw new InvalidOperationException("Identity:Keys:EncryptionCertificatePath is required."),
-                keys.EncryptionCertificatePassword);
-
-            if (signing.GetRSAPublicKey() is not { KeySize: >= 3072 })
-            {
-                throw new InvalidOperationException("The signing certificate must use an RSA key of at least 3072 bits (ADR-017 section 2).");
-            }
-
-            options.AddSigningCertificate(signing).AddEncryptionCertificate(encryption);
-            return;
-        }
-
-        if (!isDevelopment)
-        {
-            throw new InvalidOperationException("Signing and encryption certificates must be configured outside Development (ADR-017 section 12).");
-        }
-
-        // Development and tests only: keys generated in memory at startup, never stored or committed.
-        // Tokens become invalid when the process restarts.
-        options.AddSigningKey(new RsaSecurityKey(RSA.Create(3072)) { KeyId = Guid.NewGuid().ToString("N") });
-        options.AddEncryptionKey(new RsaSecurityKey(RSA.Create(3072)) { KeyId = Guid.NewGuid().ToString("N") });
     }
 }

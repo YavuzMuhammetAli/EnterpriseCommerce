@@ -120,7 +120,7 @@ internal sealed class IdentityServerSettings
 
     public List<ClientRegistration> Clients { get; set; } = [];
 
-    public SigningSettings Keys { get; set; } = new();
+    public Keys.KeyRingSettings Keys { get; set; } = new();
 
     public RateLimitSettings RateLimits { get; set; } = new();
 
@@ -154,21 +154,6 @@ internal sealed class AccountAdministrationSettings
             yield return $"Identity:AccountAdministration:AllowedClientIds may only list service clients ('{clientId}').";
         }
     }
-}
-
-/// <summary>
-/// Signing and encryption certificates for deployed environments (ADR-017 section 12).
-/// Paths and passwords come from a protected store or the environment, never from the repository.
-/// </summary>
-internal sealed class SigningSettings
-{
-    public string? SigningCertificatePath { get; set; }
-
-    public string? SigningCertificatePassword { get; set; }
-
-    public string? EncryptionCertificatePath { get; set; }
-
-    public string? EncryptionCertificatePassword { get; set; }
 }
 
 /// <summary>Per-IP limits on the credential pages (ADR-017 section 9).</summary>

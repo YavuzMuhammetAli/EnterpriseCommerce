@@ -37,6 +37,8 @@ internal sealed class BffSettings
 
     public BffRefreshSettings Refresh { get; set; } = new();
 
+    public BffMetadataSettings Metadata { get; set; } = new();
+
     /// <summary>The Gateway base address that <c>/api/*</c> is forwarded to with the session's access token. Optional.</summary>
     public string? DownstreamApiAddress { get; set; }
 
@@ -107,6 +109,19 @@ internal sealed class BffRefreshSettings
 
     /// <summary>How long a request waits for another instance's refresh before using what it has.</summary>
     public TimeSpan WaitForOtherRefresh { get; set; } = TimeSpan.FromSeconds(6);
+}
+
+/// <summary>
+/// How the BFF caches Identity's discovery document and JWKS (Phase 2.3 S6.3). The refresh interval bounds how long a
+/// retired signing key can still be used for validation here, so it must not exceed Identity's
+/// <c>Identity:Keys:ValidatorCacheAllowance</c>. On an unknown key ID the handler requests a refresh at once, at most
+/// once per <see cref="MinimumRefreshInterval"/>.
+/// </summary>
+internal sealed class BffMetadataSettings
+{
+    public TimeSpan RefreshInterval { get; set; } = TimeSpan.FromHours(1);
+
+    public TimeSpan MinimumRefreshInterval { get; set; } = TimeSpan.FromMinutes(1);
 }
 
 /// <summary>The BFF's own endpoints (P22 section 4.1).</summary>
@@ -187,6 +202,13 @@ internal static class BffSettingsValidation
         if (refresh.Threshold < TimeSpan.Zero || refresh.RequestTimeout <= TimeSpan.Zero || refresh.LeaseDuration <= refresh.RequestTimeout || refresh.WaitForOtherRefresh < TimeSpan.Zero)
         {
             yield return "Bff:Refresh needs a non-negative Threshold and a LeaseDuration longer than the RequestTimeout.";
+        }
+
+        var metadata = settings.Metadata;
+        if (metadata.RefreshInterval < TimeSpan.FromMinutes(5) || metadata.RefreshInterval > TimeSpan.FromHours(24)
+            || metadata.MinimumRefreshInterval < TimeSpan.FromSeconds(1) || metadata.MinimumRefreshInterval > metadata.RefreshInterval)
+        {
+            yield return "Bff:Metadata needs a RefreshInterval of 5 minutes to 24 hours and a MinimumRefreshInterval of 1 second up to it.";
         }
 
         if (settings.DownstreamApiAddress is { Length: > 0 } downstream && !Uri.TryCreate(downstream, UriKind.Absolute, out _))

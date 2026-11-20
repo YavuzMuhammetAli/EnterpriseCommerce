@@ -128,7 +128,29 @@ public partial class IdentityServerFixture : IAsyncLifetime
             return;
         }
 
-        _factory = new ServerFactory(builder =>
+        _factory = CreateFactory(extra: null);
+
+        // Starts the host, which registers the clients.
+        _ = _factory.Server;
+    }
+
+    /// <summary>
+    /// Stops the Identity host and starts a new one on the same database, with the base configuration plus
+    /// <paramref name="extra"/>: a restart, for example with a changed key ring.
+    /// </summary>
+    public async Task RestartAsync(Action<IWebHostBuilder> extra)
+    {
+        if (_factory is not null)
+        {
+            await _factory.DisposeAsync();
+        }
+
+        _factory = CreateFactory(extra);
+        _ = _factory.Server;
+    }
+
+    private ServerFactory CreateFactory(Action<IWebHostBuilder>? extra) =>
+        new(builder =>
         {
             builder.UseEnvironment("Development");
             builder.UseSetting("ConnectionStrings:IdentityDatabase", _database.ConnectionString);
@@ -174,11 +196,8 @@ public partial class IdentityServerFixture : IAsyncLifetime
                 services.AddSingleton<ISecurityEmailDispatcher>(Dispatcher);
             });
             ConfigureHost(builder);
+            extra?.Invoke(builder);
         });
-
-        // Starts the host, which registers the clients.
-        _ = _factory.Server;
-    }
 
     /// <summary>The Serilog default level for the host. The shipped per-namespace overrides still apply.</summary>
     protected virtual string MinimumLogLevel => "Warning";

@@ -10,6 +10,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 
+using EnterpriseCommerce.Identity.IntegrationTests.Infrastructure;
+
 namespace EnterpriseCommerce.Identity.IntegrationTests.Protocol;
 
 /// <summary>
@@ -158,38 +160,8 @@ public sealed class AuthorizationCodeFlowTests(IdentityServerFixture identity) :
         Assert.Equal(HttpStatusCode.BadRequest, browserClient.Status);
     }
 
-    private async Task<WebApplication> StartResourceServerAsync(string audience)
-    {
-        var builder = WebApplication.CreateBuilder();
-        builder.WebHost.UseTestServer();
-        builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
-        {
-            // Configured as ADR-017 section 4 requires for every service.
-            options.Authority = IdentityServerFixture.Issuer.AbsoluteUri;
-            options.Audience = audience;
-            options.MapInboundClaims = false;
-            options.BackchannelHttpHandler = identity.Factory.Server.CreateHandler();
-            options.TokenValidationParameters.ValidIssuer = IdentityServerFixture.Issuer.AbsoluteUri;
-            options.TokenValidationParameters.ValidAlgorithms = [SecurityAlgorithms.RsaSha256];
-            options.TokenValidationParameters.ValidTypes = ["at+jwt"];
-            options.TokenValidationParameters.ClockSkew = TimeSpan.FromSeconds(30);
-        });
-        builder.Services.AddAuthorization();
+    private Task<WebApplication> StartResourceServerAsync(string audience) =>
+        ResourceServer.StartAsync(identity.Factory.Server.CreateHandler(), audience);
 
-        var app = builder.Build();
-        app.UseAuthentication();
-        app.UseAuthorization();
-        app.MapGet("/resource", () => Results.Ok()).RequireAuthorization();
-        await app.StartAsync(TestContext.Current.CancellationToken);
-        return app;
-    }
-
-    private static async Task<HttpStatusCode> CallAsync(WebApplication api, string accessToken)
-    {
-        using var client = api.GetTestClient();
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/resource");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
-        return response.StatusCode;
-    }
+    private static Task<HttpStatusCode> CallAsync(WebApplication api, string accessToken) => ResourceServer.CallAsync(api, accessToken);
 }

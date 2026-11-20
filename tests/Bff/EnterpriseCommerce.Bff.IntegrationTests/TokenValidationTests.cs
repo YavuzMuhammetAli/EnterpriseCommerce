@@ -77,12 +77,43 @@ internal sealed class StubProvider : IAsyncDisposable
 {
     public static readonly Uri Issuer = new("https://op.example.test/");
 
-    private readonly RSA _key = RSA.Create(2048);
-    private readonly string _keyId = Guid.NewGuid().ToString("N");
+    private readonly List<(RSA Key, string KeyId)> _keys = [];
+    private readonly List<(RSA Key, string KeyId)> _published = [];
+    private (RSA Key, string KeyId) _signing;
+    private (RSA Key, string KeyId)? _staged;
     private readonly ConcurrentDictionary<string, (string? Nonce, string Challenge, string ClientId)> _codes = new();
     private WebApplication? _app;
 
-    private StubProvider(StubScenario scenario) => Scenario = scenario;
+    private StubProvider(StubScenario scenario)
+    {
+        Scenario = scenario;
+        _signing = NewKey();
+        _published.Add(_signing);
+    }
+
+    /// <summary>How often the JWKS was fetched.</summary>
+    public int JwksRequests { get; private set; }
+
+    /// <summary>Publishes a new key in the JWKS without signing with it (scheduled rotation, step 1).</summary>
+    public void PublishNextKey()
+    {
+        _staged = NewKey();
+        _published.Add(_staged.Value);
+    }
+
+    /// <summary>Signs with the published next key from now on (scheduled rotation, step 2).</summary>
+    public void ActivateNextKey() => _signing = _staged ?? throw new InvalidOperationException("No key was published.");
+
+    /// <summary>Emergency rotation: replaces the published key and signs with the new one at once.</summary>
+    public void ReplaceKey()
+    {
+        _signing = NewKey();
+        _published.Clear();
+        _published.Add(_signing);
+    }
+
+    /// <summary>Signs with a key that is never published (a forged token with a made-up key ID).</summary>
+    public void SignWithUnpublishedKey() => _signing = NewKey();
 
     public StubScenario Scenario { get; }
 
@@ -110,8 +141,15 @@ internal sealed class StubProvider : IAsyncDisposable
         }));
         app.MapGet("/jwks", () =>
         {
-            var parameters = provider._key.ExportParameters(false);
-            return Results.Json(new { keys = new[] { new { kty = "RSA", use = "sig", alg = "RS256", kid = provider._keyId, n = Base64UrlEncoder.Encode(parameters.Modulus), e = Base64UrlEncoder.Encode(parameters.Exponent) } } });
+            provider.JwksRequests++;
+            return Results.Json(new
+            {
+                keys = provider._published.Select(published =>
+                {
+                    var parameters = published.Key.ExportParameters(false);
+                    return new { kty = "RSA", use = "sig", alg = "RS256", kid = published.KeyId, n = Base64UrlEncoder.Encode(parameters.Modulus), e = Base64UrlEncoder.Encode(parameters.Exponent) };
+                }).ToArray(),
+            });
         });
         app.MapGet("/authorize", (HttpContext context) =>
         {
@@ -178,7 +216,7 @@ internal sealed class StubProvider : IAsyncDisposable
             Expires = !accessToken && Scenario == StubScenario.Expired ? now.AddHours(-1) : now.AddMinutes(10),
             SigningCredentials = !accessToken && Scenario == StubScenario.Unsigned
                 ? null
-                : new SigningCredentials(new RsaSecurityKey(_key) { KeyId = _keyId }, SecurityAlgorithms.RsaSha256),
+                : new SigningCredentials(new RsaSecurityKey(_signing.Key) { KeyId = _signing.KeyId }, SecurityAlgorithms.RsaSha256),
             Subject = new ClaimsIdentity(),
         };
         return new JsonWebTokenHandler().CreateToken(descriptor);
@@ -191,6 +229,16 @@ internal sealed class StubProvider : IAsyncDisposable
             await _app.DisposeAsync();
         }
 
-        _key.Dispose();
+        foreach (var (key, _) in _keys)
+        {
+            key.Dispose();
+        }
+    }
+
+    private (RSA Key, string KeyId) NewKey()
+    {
+        var key = (RSA.Create(2048), Guid.NewGuid().ToString("N"));
+        _keys.Add(key);
+        return key;
     }
 }

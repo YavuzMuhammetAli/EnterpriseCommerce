@@ -7,6 +7,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Throwaway test certificates, shared with the unit tests. -->
+    <Compile Include="..\EnterpriseCommerce.Identity.UnitTests\Infrastructure\TestKeyMaterial.cs" Link="Infrastructure\TestKeyMaterial.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\..\src\Services\Identity\EnterpriseCommerce.Identity.Api\EnterpriseCommerce.Identity.Api.csproj" />
   </ItemGroup>
 

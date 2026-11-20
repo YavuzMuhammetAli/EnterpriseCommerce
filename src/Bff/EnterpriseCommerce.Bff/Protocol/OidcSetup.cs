@@ -72,6 +72,11 @@ internal static class OidcSetup
             options.Backchannel = httpClients.CreateClient(IdentityProtocolClient.HttpClientName);
             options.RemoteAuthenticationTimeout = TimeSpan.FromMinutes(5);
 
+            // Bounded metadata and JWKS caching (S6.3): a signing key Identity retired stops being trusted here within
+            // RefreshInterval. An ID token with an unknown key ID makes the handler request a refresh immediately.
+            options.AutomaticRefreshInterval = bff.Metadata.RefreshInterval;
+            options.RefreshInterval = bff.Metadata.MinimumRefreshInterval;
+
             // Pushed authorization requests are a later proposal (P22 section 5.2); Identity does not offer them.
             options.PushedAuthorizationBehavior = PushedAuthorizationBehavior.Disable;
 

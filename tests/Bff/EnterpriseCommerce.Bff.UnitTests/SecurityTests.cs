@@ -199,6 +199,9 @@ public sealed class BffSettingsValidationTests
         ["lease shorter than request"] = s => s.Refresh.LeaseDuration = TimeSpan.FromSeconds(1),
         ["external post-logout landing"] = s => s.PostLogoutLandingPath = "//evil.example",
         ["no key ring outside development"] = s => s.DataProtectionKeyDirectory = null,
+        ["metadata cached too long"] = s => s.Metadata.RefreshInterval = TimeSpan.FromDays(2),
+        ["metadata refreshed too often"] = s => s.Metadata.RefreshInterval = TimeSpan.FromMinutes(1),
+        ["minimum refresh above the interval"] = s => s.Metadata.MinimumRefreshInterval = TimeSpan.FromHours(2),
     };
 
     public static TheoryData<string> Invalid => [.. InvalidChanges.Keys];
