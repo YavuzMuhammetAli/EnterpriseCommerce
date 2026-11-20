@@ -2,6 +2,7 @@ using EnterpriseCommerce.Identity.Application.Accounts;
 using EnterpriseCommerce.Identity.Application.Security;
 using EnterpriseCommerce.Identity.Application.SecurityEmails;
 using EnterpriseCommerce.Identity.Infrastructure.Persistence;
+using EnterpriseCommerce.Identity.Infrastructure.Retention;
 using EnterpriseCommerce.Identity.Infrastructure.Security;
 using EnterpriseCommerce.Identity.Infrastructure.SecurityEmails;
 using Microsoft.EntityFrameworkCore;
@@ -76,6 +77,7 @@ public static class DependencyInjection
         services.AddScoped<IAccountPasswordHasher, AccountPasswordHasher>();
 
         AddSecurityEmailDelivery(services, configuration);
+        services.AddIdentityRetention(configuration);
 
         return services;
     }

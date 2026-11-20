@@ -6,6 +6,7 @@ using EnterpriseCommerce.Identity.Domain.Accounts;
 using EnterpriseCommerce.Identity.Domain.Security;
 using EnterpriseCommerce.Identity.Infrastructure;
 using EnterpriseCommerce.Identity.Infrastructure.Persistence;
+using EnterpriseCommerce.Identity.Infrastructure.Retention;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -36,7 +37,8 @@ internal static class IdentityTestServices
             .AddLogging()
             .AddSingleton<IConfiguration>(configuration)
             .AddIdentityApplication(new RefreshReuseSettings("bff-admin"))
-            .AddIdentityInfrastructure(configuration);
+            .AddIdentityInfrastructure(configuration)
+            .UseReplayProtectionLifetimes([TimeSpan.FromHours(1)]);
 
         configure?.Invoke(services);
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });

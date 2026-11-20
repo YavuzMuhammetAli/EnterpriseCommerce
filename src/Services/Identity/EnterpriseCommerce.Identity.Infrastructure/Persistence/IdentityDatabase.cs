@@ -26,7 +26,18 @@ internal static class SqlServerErrors
     /// <summary>Cannot insert a duplicate key row (unique index).</summary>
     public const int UniqueIndexViolation = 2601;
 
+    /// <summary>Lock request time out period exceeded.</summary>
+    public const int LockTimeout = 1222;
+
+    /// <summary>The SQL client's command timeout.</summary>
+    public const int CommandTimeout = -2;
+
     public static bool IsDeadlock(Exception exception) => HasError(exception, number => number == Deadlock);
+
+    /// <summary>Failures worth retrying an idempotent statement for: deadlock victim, lock timeout, command timeout.</summary>
+    public static bool IsTransient(Exception exception) =>
+        exception is TimeoutException
+        || HasError(exception, number => number is Deadlock or LockTimeout or CommandTimeout);
 
     public static bool IsUniqueViolation(Exception exception) =>
         HasError(exception, number => number is UniqueConstraintViolation or UniqueIndexViolation);

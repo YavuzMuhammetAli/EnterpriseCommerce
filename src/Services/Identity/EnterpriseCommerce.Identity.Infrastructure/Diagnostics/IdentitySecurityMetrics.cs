@@ -44,4 +44,16 @@ internal static class IdentitySecurityMetrics
     /// <summary>Deliveries that became Failed (tag: <c>reason</c>, including retries-exhausted).</summary>
     public static readonly Counter<long> SecurityEmailFailed =
         Meter.CreateCounter<long>("identity.security_email.failed");
+
+    /// <summary>Retention runs (tag: <c>outcome</c>: completed, skipped or failed).</summary>
+    public static readonly Counter<long> RetentionRuns =
+        Meter.CreateCounter<long>("identity.retention.runs");
+
+    /// <summary>Rows deleted by retention (tag: <c>category</c>).</summary>
+    public static readonly Counter<long> RetentionDeleted =
+        Meter.CreateCounter<long>("identity.retention.deleted");
+
+    /// <summary>Retention statements retried after a transient failure (tag: <c>category</c>).</summary>
+    public static readonly Counter<long> RetentionRetries =
+        Meter.CreateCounter<long>("identity.retention.retries");
 }

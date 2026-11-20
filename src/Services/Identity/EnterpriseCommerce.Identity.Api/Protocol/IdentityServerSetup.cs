@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.RateLimiting;
 using EnterpriseCommerce.Identity.Application.Security;
+using EnterpriseCommerce.Identity.Infrastructure.Retention;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
@@ -34,6 +35,15 @@ internal static class IdentityServerSetup
 
     private static readonly TimeSpan SsoAbsoluteLifetime = TimeSpan.FromHours(12);
 
+    /// <summary>Authorization code lifetime (PHASE_2_2_AUTHENTICATION_FLOWS.md section 6.4).</summary>
+    public static readonly TimeSpan AuthorizationCodeLifetime = TimeSpan.FromSeconds(60);
+
+    /// <summary>ID token lifetime (PHASE_2_2_AUTHENTICATION_FLOWS.md section 6.4).</summary>
+    public static readonly TimeSpan IdentityTokenLifetime = TimeSpan.FromMinutes(5);
+
+    /// <summary>The server-wide default access token lifetime; clients override it per token.</summary>
+    public static readonly TimeSpan DefaultAccessTokenLifetime = TimeSpan.FromMinutes(10);
+
     public static WebApplicationBuilder AddIdentityProtocolServer(this WebApplicationBuilder builder)
     {
         var services = builder.Services;
@@ -56,6 +66,9 @@ internal static class IdentityServerSetup
 
         services.Configure<IdentityServerSettings>(builder.Configuration.GetSection(IdentityServerSettings.SectionName));
         services.AddHostedService<ClientRegistrationSynchronizer>();
+
+        // Retention keeps replay-protection records until every token they could reject has expired (S6.2).
+        services.UseReplayProtectionLifetimes(TokenLifetimes(settings));
 
         services.AddAuthentication(IdentityConstants.ApplicationScheme)
             .AddCookie(IdentityConstants.ApplicationScheme, options =>
@@ -119,9 +132,9 @@ internal static class IdentityServerSetup
 
                 // ADR-017 section 5: no reuse leeway. A redeemed refresh token is never accepted again.
                 options.SetRefreshTokenReuseLeeway(null);
-                options.SetAuthorizationCodeLifetime(TimeSpan.FromSeconds(60));
-                options.SetIdentityTokenLifetime(TimeSpan.FromMinutes(5));
-                options.SetAccessTokenLifetime(TimeSpan.FromMinutes(10));
+                options.SetAuthorizationCodeLifetime(AuthorizationCodeLifetime);
+                options.SetIdentityTokenLifetime(IdentityTokenLifetime);
+                options.SetAccessTokenLifetime(DefaultAccessTokenLifetime);
 
                 options.RegisterScopes(
                     [Scopes.OpenId, Scopes.OfflineAccess, .. settings.Clients.SelectMany(c => c.ServiceScopes).Select(s => s.Scope).Distinct(StringComparer.Ordinal)]);
@@ -232,6 +245,17 @@ internal static class IdentityServerSetup
             await context.HttpContext.SignOutAsync(IdentityConstants.ApplicationScheme);
         }
     }
+
+    /// <summary>Every lifetime that can bound a token Identity issues: per client, plus the server-wide ones.</summary>
+    public static IReadOnlyCollection<TimeSpan> TokenLifetimes(IdentityServerSettings settings) =>
+    [
+        AuthorizationCodeLifetime,
+        IdentityTokenLifetime,
+        DefaultAccessTokenLifetime,
+        .. settings.Clients.Select(client => client.AccessTokenLifetime),
+        .. settings.Clients.Where(client => client.Kind == ClientKind.Browser)
+            .SelectMany(client => new[] { client.RefreshTokenLifetime, client.AbsoluteSessionLifetime }),
+    ];
 
     private static IEnumerable<string> BrowserAudiences(IdentityServerSettings settings) =>
         settings.Clients
