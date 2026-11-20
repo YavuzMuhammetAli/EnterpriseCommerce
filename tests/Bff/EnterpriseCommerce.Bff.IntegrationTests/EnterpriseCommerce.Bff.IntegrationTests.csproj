@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Bff\EnterpriseCommerce.Bff\EnterpriseCommerce.Bff.csproj" />
+    <!--
+      The real Identity host is the authorization server of these tests. Both hosts declare a top-level Program, so
+      Identity's is reached through the IdentityApi alias.
+    -->
+    <ProjectReference Include="..\..\..\src\Services\Identity\EnterpriseCommerce.Identity.Api\EnterpriseCommerce.Identity.Api.csproj" Aliases="IdentityApi" />
+  </ItemGroup>
+
+</Project>

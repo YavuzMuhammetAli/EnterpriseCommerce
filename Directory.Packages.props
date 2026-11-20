@@ -37,10 +37,23 @@
     <PackageVersion Include="Yarp.ReverseProxy" Version="2.3.0" />
   </ItemGroup>
 
+  <!--
+    Backend-for-frontend (ADR-016, ADR-017 section 9).
+    OpenIdConnect: the first-party ASP.NET Core handler named by the Phase 2.2 design (P22 section 4.1).
+    StackExchange.Redis (MIT): the session store needs atomic compare-and-set scripts for the refresh lease, which
+    IDistributedCache cannot express.
+  -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.15" />
+    <PackageVersion Include="StackExchange.Redis" Version="3.4.29" />
+  </ItemGroup>
+
   <!-- Testing -->
   <ItemGroup>
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.15" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.15" />
+    <!-- Browser tests of the BFF flows (Apache-2.0). Test-only; never referenced by a src project. -->
+    <PackageVersion Include="Microsoft.Playwright" Version="1.64.1" />
     <PackageVersion Include="xunit.v3" Version="4.0.3" />
   </ItemGroup>
 

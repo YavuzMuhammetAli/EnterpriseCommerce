@@ -108,6 +108,40 @@ services:
     restart: unless-stopped
     logging: *default-logging
 
+  # Dedicated BFF session store (ADR-016 section 3). Never shared with caching: noeviction, so active sessions are
+  # never evicted (a full store fails writes, and the BFF fails closed); append-only persistence, so sessions survive
+  # a restart. The BFF refuses to start if the policy is anything but noeviction. The "redis" service keeps allkeys-lru.
+  redis-sessions:
+    image: redis:8.8.4-alpine
+    profiles: ["bff", "all"]
+    command:
+      - "redis-server"
+      - "--requirepass"
+      - "${REDIS_SESSIONS_PASSWORD:?REDIS_SESSIONS_PASSWORD must be set in deploy/docker/.env}"
+      - "--maxmemory"
+      - "64mb"
+      - "--maxmemory-policy"
+      - "noeviction"
+      - "--appendonly"
+      - "yes"
+      - "--appendfsync"
+      - "everysec"
+    environment:
+      REDISCLI_AUTH: ${REDIS_SESSIONS_PASSWORD:?REDIS_SESSIONS_PASSWORD must be set in deploy/docker/.env}
+    ports:
+      - "127.0.0.1:${REDIS_SESSIONS_PORT:-6380}:6379"
+    volumes:
+      - redis-sessions-data:/data
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG && redis-cli config get maxmemory-policy | grep -q noeviction"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+    logging: *default-logging
+
   # Single-node Kafka in KRaft mode (combined broker + controller, no ZooKeeper).
   # Containers on the compose network use kafka:9092; host applications use localhost:9094.
   kafka:
@@ -152,4 +186,5 @@ volumes:
   mongodb-data:
   mongodb-config:
   redis-data:
+  redis-sessions-data:
   kafka-data:

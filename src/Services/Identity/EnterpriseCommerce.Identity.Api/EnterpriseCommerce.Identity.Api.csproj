@@ -24,6 +24,9 @@
   <ItemGroup>
     <InternalsVisibleTo Include="EnterpriseCommerce.Identity.IntegrationTests" />
     <InternalsVisibleTo Include="EnterpriseCommerce.Identity.UnitTests" />
+    <!-- The BFF tests run the real Identity host as the authorization server (test-only access). -->
+    <InternalsVisibleTo Include="EnterpriseCommerce.Bff.IntegrationTests" />
+    <InternalsVisibleTo Include="EnterpriseCommerce.Bff.BrowserTests" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    Backend-for-frontend (ADR-016): one reusable codebase, deployed once per front end (Storefront, Merchant Portal,
+    Admin Console), each with its own OAuth client, cookies, Data Protection key ring and Redis key namespace.
+    A technical deployable, not a business microservice: it must not reference any service or Gateway project.
+    Enforced by EnterpriseCommerce.ArchitectureTests.
+  -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="StackExchange.Redis" />
+    <PackageReference Include="Yarp.ReverseProxy" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EnterpriseCommerce.Bff.UnitTests" />
+    <InternalsVisibleTo Include="EnterpriseCommerce.Bff.IntegrationTests" />
+    <InternalsVisibleTo Include="EnterpriseCommerce.Bff.BrowserTests" />
+  </ItemGroup>
+
+</Project>

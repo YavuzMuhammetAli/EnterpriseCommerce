@@ -6,6 +6,12 @@ public enum ProjectKind
 {
     ServiceLayer,
     Gateway,
+
+    /// <summary>
+    /// The backend-for-frontend (ADR-016): one technical deployable, configured once per front end. Like the Gateway it
+    /// references no service project.
+    /// </summary>
+    Bff,
     BuildingBlock,
 
     /// <summary>
@@ -51,6 +57,7 @@ public sealed record SourceProject(
                 => (ProjectKind.DevelopmentAdapter, svc, (string?)null),
             ["src", "Services", var svc, _, _] => (ProjectKind.ServiceLayer, svc, name.Split('.').Last()),
             ["src", "Gateway", _, _] => (ProjectKind.Gateway, (string?)null, (string?)null),
+            ["src", "Bff", _, _] => (ProjectKind.Bff, null, null),
             ["src", "BuildingBlocks", _, _] => (ProjectKind.BuildingBlock, null, null),
             _ => (ProjectKind.Unknown, null, null),
         };

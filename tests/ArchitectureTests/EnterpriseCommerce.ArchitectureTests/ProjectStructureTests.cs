@@ -11,6 +11,7 @@ public sealed class ProjectStructureTests
         var names = Repository.SourceProjects.Select(project => project.Name).ToList();
 
         Assert.Contains("EnterpriseCommerce.Gateway", names);
+        Assert.Contains("EnterpriseCommerce.Bff", names);
         foreach (var layer in SourceProject.Layers)
         {
             Assert.Contains($"EnterpriseCommerce.Identity.{layer}", names);

@@ -99,6 +99,31 @@ public sealed class DependencyRuleTests
     }
 
     [Fact]
+    public void Bff_DoesNotReferenceAnyServiceOrGatewayProject()
+    {
+        var bffs = Repository.SourceProjects.Where(p => p.Kind == ProjectKind.Bff).ToList();
+        Assert.NotEmpty(bffs);
+
+        var violations = bffs
+            .SelectMany(bff => bff.ProjectReferences.Where(reference => !IsBuildingBlock(reference))
+                .Select(reference => $"{bff.Name} -> {reference}"));
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void NoProject_ReferencesTheBff()
+    {
+        var bffNames = Repository.SourceProjects.Where(p => p.Kind == ProjectKind.Bff).Select(p => p.Name).ToHashSet();
+
+        var violations = Repository.SourceProjects
+            .SelectMany(project => project.ProjectReferences.Where(bffNames.Contains)
+                .Select(reference => $"{project.Name} -> {reference}"));
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
     public void BuildingBlocks_DoNotReferenceServicesOrGateway()
     {
         var violations = Repository.SourceProjects
