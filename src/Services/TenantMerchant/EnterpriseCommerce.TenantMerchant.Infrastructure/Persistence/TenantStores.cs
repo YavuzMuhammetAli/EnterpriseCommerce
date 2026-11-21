@@ -15,7 +15,7 @@ internal sealed class TenantProvisioningStore(TenantMerchantDbContext context) :
         {
             var row = await context.Tenants
                 .AsNoTracking()
-                .Where(t => t.ProvisionedByClientId == clientId && t.ProvisioningKey == provisioningKey)
+                .Where(t => t.Origin == TenantOrigin.Provisioned && t.ProvisionedByClientId == clientId && t.ProvisioningKey == provisioningKey)
                 .Select(t => new { Tenant = new TenantView(t.Id, t.Slug, t.Status, t.CreatedAt, t.MerchantProfile.DisplayName), t.ProvisioningRequestHash })
                 .SingleOrDefaultAsync(cancellationToken);
             return row is null ? null : new ProvisionedTenant(row.Tenant, row.ProvisioningRequestHash);

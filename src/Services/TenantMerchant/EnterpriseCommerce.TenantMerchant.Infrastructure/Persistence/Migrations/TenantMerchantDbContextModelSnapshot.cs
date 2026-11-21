@@ -86,7 +86,7 @@ namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Persistence.Migration
                         {
                             t.HasTrigger("TR_MembershipAuditRecords_AppendOnly");
 
-                            t.HasCheckConstraint("CK_MembershipAuditRecords_Action", "[Action] IN (N'OwnerMembershipProvisioned', N'InvitationCreated', N'InvitationCancelled', N'InvitationAccepted', N'InvitationExpired', N'MembershipSuspended', N'MembershipReactivated', N'MembershipRemoved', N'MembershipRoleChanged')");
+                            t.HasCheckConstraint("CK_MembershipAuditRecords_Action", "[Action] IN (N'OwnerMembershipProvisioned', N'InvitationCreated', N'InvitationCancelled', N'InvitationAccepted', N'InvitationExpired', N'MembershipSuspended', N'MembershipReactivated', N'MembershipRemoved', N'MembershipRoleChanged', N'SelfServiceOwnerMembershipCreated')");
 
                             t.HasCheckConstraint("CK_MembershipAuditRecords_ActorKind", "[ActorKind] IN (N'User', N'Service', N'System')");
                         });
@@ -262,6 +262,11 @@ namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Persistence.Migration
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<string>("Origin")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
                     b.Property<string>("ProvisionedByActor")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -288,6 +293,10 @@ namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Persistence.Migration
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
+                    b.Property<string>("SelfServiceSubjectId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasMaxLength(63)
@@ -307,10 +316,20 @@ namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Persistence.Migration
 
                     b.HasIndex("ProvisionedByClientId", "ProvisioningKey")
                         .IsUnique()
-                        .HasDatabaseName("UX_Tenants_ProvisionedByClientId_ProvisioningKey");
+                        .HasDatabaseName("UX_Tenants_ProvisionedByClientId_ProvisioningKey")
+                        .HasFilter("[Origin] = N'Provisioned'");
+
+                    b.HasIndex("SelfServiceSubjectId", "ProvisioningKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Tenants_SelfServiceSubjectId_ProvisioningKey")
+                        .HasFilter("[Origin] = N'SelfService'");
 
                     b.ToTable("Tenants", null, t =>
                         {
+                            t.HasCheckConstraint("CK_Tenants_Origin", "[Origin] IN (N'Provisioned', N'SelfService')");
+
+                            t.HasCheckConstraint("CK_Tenants_Origin_SelfServiceSubject", "([Origin] = N'SelfService' AND [SelfServiceSubjectId] IS NOT NULL) OR ([Origin] = N'Provisioned' AND [SelfServiceSubjectId] IS NULL)");
+
                             t.HasCheckConstraint("CK_Tenants_Status", "[Status] IN (N'Active')");
                         });
                 });

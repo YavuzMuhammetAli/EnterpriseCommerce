@@ -13,9 +13,6 @@ namespace EnterpriseCommerce.TenantMerchant.Api.Tenants;
 /// </summary>
 internal static class InternalTenantEndpoints
 {
-    public const string IdempotencyKeyHeader = "Idempotency-Key";
-    public const int IdempotencyKeyMaxLength = 100;
-
     public static IEndpointRouteBuilder MapInternalTenantEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var tenants = endpoints.MapGroup("/internal/v1/tenants")
@@ -28,7 +25,7 @@ internal static class InternalTenantEndpoints
 
     private static async Task<IResult> ProvisionAsync(
         HttpContext httpContext,
-        [FromHeader(Name = IdempotencyKeyHeader)] string? idempotencyKey,
+        [FromHeader(Name = IdempotencyKey.HeaderName)] string? idempotencyKey,
         ProvisionTenantRequest request,
         ProvisionTenantHandler handler,
         CancellationToken cancellationToken)
@@ -39,12 +36,9 @@ internal static class InternalTenantEndpoints
             return Results.Forbid(authenticationSchemes: [JwtBearerDefaults.AuthenticationScheme]);
         }
 
-        if (!IsValidIdempotencyKey(idempotencyKey))
+        if (!IdempotencyKey.IsValid(idempotencyKey))
         {
-            return Problems.Validation(new Dictionary<string, string[]>
-            {
-                [IdempotencyKeyHeader] = [$"The {IdempotencyKeyHeader} header is required: 1 to {IdempotencyKeyMaxLength} characters of letters, digits, '.', '_', ':' or '-' (a UUID is recommended)."],
-            });
+            return Problems.Validation(IdempotencyKey.Errors());
         }
 
         var result = await handler.HandleAsync(
@@ -69,8 +63,4 @@ internal static class InternalTenantEndpoints
         await handler.HandleAsync(tenantId, cancellationToken) is { } result
             ? Results.Ok(TenantContractMapping.ToProvisioned(result.Tenant, result.InitialOwner))
             : Problems.TenantNotFound();
-
-    private static bool IsValidIdempotencyKey(string? value) =>
-        value is { Length: > 0 and <= IdempotencyKeyMaxLength }
-        && value.All(c => c is (>= 'a' and <= 'z') or (>= 'A' and <= 'Z') or (>= '0' and <= '9') or '.' or '_' or ':' or '-');
 }

@@ -1,5 +1,6 @@
 using EnterpriseCommerce.TenantMerchant.Application.Common;
 using EnterpriseCommerce.TenantMerchant.Application.Invitations;
+using EnterpriseCommerce.TenantMerchant.Application.Onboarding;
 using EnterpriseCommerce.TenantMerchant.Application.Provisioning;
 using EnterpriseCommerce.TenantMerchant.Application.Tenants;
 using EnterpriseCommerce.TenantMerchant.Infrastructure.Identity;
@@ -41,12 +42,19 @@ public static class DependencyInjection
         services.AddScoped<ITenantReadStore, TenantReadStore>();
         services.AddScoped<IInvitationReadStore, InvitationReadStore>();
         services.AddSingleton<ITenantWriteGate, TenantWriteGate>();
+        services.AddSingleton<ITenantOnboardingGate, TenantOnboardingGate>();
 
         services.AddOptions<InvitationSettings>()
             .Bind(configuration.GetSection(InvitationSettings.SectionName))
             .Validate(settings => !settings.Validate().Any(), $"{InvitationSettings.SectionName} is invalid: Lifetime 1 hour to 30 days, MaxOpenPerTenant 1 to 1000.")
             .ValidateOnStart();
         services.AddSingleton(provider => provider.GetRequiredService<IOptions<InvitationSettings>>().Value);
+
+        services.AddOptions<OnboardingSettings>()
+            .Bind(configuration.GetSection(OnboardingSettings.SectionName))
+            .Validate(settings => !settings.Validate().Any(), $"{OnboardingSettings.SectionName} is invalid: MaxTenantsPerSubject 1 to 10.")
+            .ValidateOnStart();
+        services.AddSingleton(provider => provider.GetRequiredService<IOptions<OnboardingSettings>>().Value);
 
         AddIdentityVerification(services, configuration);
         return services;

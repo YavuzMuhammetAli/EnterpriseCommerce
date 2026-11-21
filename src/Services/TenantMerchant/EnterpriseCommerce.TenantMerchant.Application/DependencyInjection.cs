@@ -1,6 +1,7 @@
 using EnterpriseCommerce.TenantMerchant.Application.Authorization;
 using EnterpriseCommerce.TenantMerchant.Application.Invitations;
 using EnterpriseCommerce.TenantMerchant.Application.Memberships;
+using EnterpriseCommerce.TenantMerchant.Application.Onboarding;
 using EnterpriseCommerce.TenantMerchant.Application.Provisioning;
 using EnterpriseCommerce.TenantMerchant.Application.Tenants;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,6 +28,7 @@ public static class DependencyInjection
         services.AddScoped<MembershipAdministrationHandler>();
         services.AddScoped<GetMembershipHandler>();
         services.AddScoped<ListCallerTenantsHandler>();
+        services.AddScoped<CreateTenantHandler>();
         return services;
     }
 }

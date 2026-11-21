@@ -10,6 +10,13 @@ namespace EnterpriseCommerce.TenantMerchant.Api.Tenants;
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 internal sealed record ProvisionTenantRequest(string? Slug, string? DisplayName, string? OwnerSubjectId, string? ActorReference);
 
+/// <summary>
+/// <c>POST /api/v1/tenants</c> body (self-service onboarding). Unknown members are rejected with <c>400</c>: the owner
+/// is always the caller, so an owner, a role or a membership field is never accepted.
+/// </summary>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+internal sealed record CreateTenantRequest(string? Slug, string? DisplayName);
+
 internal sealed record MerchantProfileResponse(string DisplayName);
 
 internal sealed record TenantResponse(Guid Id, string Slug, string Status, DateTimeOffset CreatedAt, MerchantProfileResponse MerchantProfile);

@@ -1,5 +1,6 @@
 using EnterpriseCommerce.TenantMerchant.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace EnterpriseCommerce.TenantMerchant.UnitTests.Infrastructure;
@@ -86,6 +87,36 @@ public sealed class PersistenceModelTests : IDisposable
     {
         var memberships = _context.Model.FindEntityType(typeof(EnterpriseCommerce.TenantMerchant.Domain.Memberships.Membership))!;
         Assert.Contains(memberships.GetDeclaredTriggers(), trigger => trigger.ModelName == TenantMerchantDbContext.RequireActiveOwnerTrigger);
+    }
+
+    [Fact]
+    public void Model_IdempotencyKeys_HaveOneNamespacePerProvisioningClient_AndOnePerSelfServiceSubject()
+    {
+        var tenants = _context.Model.FindEntityType(typeof(EnterpriseCommerce.TenantMerchant.Domain.Tenants.Tenant))!;
+        var indexes = tenants.GetIndexes().ToDictionary(index => index.GetDatabaseName()!, StringComparer.Ordinal);
+
+        var provisioning = indexes[TenantMerchantDbContext.ProvisioningKeyIndex];
+        Assert.True(provisioning.IsUnique);
+        Assert.Equal(["ProvisionedByClientId", "ProvisioningKey"], provisioning.Properties.Select(p => p.Name));
+        Assert.Equal("[Origin] = N'Provisioned'", provisioning.GetFilter());
+
+        var selfService = indexes[TenantMerchantDbContext.SelfServiceKeyIndex];
+        Assert.True(selfService.IsUnique);
+        Assert.Equal(["SelfServiceSubjectId", "ProvisioningKey"], selfService.Properties.Select(p => p.Name));
+        Assert.Equal("[Origin] = N'SelfService'", selfService.GetFilter());
+    }
+
+    [Fact]
+    public void Model_TenantOrigin_IsConstrainedAndTiedToTheSelfServiceSubject()
+    {
+        // Check constraints are kept only in the design-time model.
+        var tenants = _context.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(EnterpriseCommerce.TenantMerchant.Domain.Tenants.Tenant))!;
+        var constraints = tenants.GetCheckConstraints().ToDictionary(constraint => constraint.ModelName, constraint => constraint.Sql, StringComparer.Ordinal);
+
+        Assert.Equal("[Origin] IN (N'Provisioned', N'SelfService')", constraints["CK_Tenants_Origin"]);
+        Assert.Contains("[SelfServiceSubjectId] IS NOT NULL", constraints["CK_Tenants_Origin_SelfServiceSubject"], StringComparison.Ordinal);
+        Assert.Equal("nvarchar(16)", tenants.FindProperty("Origin")!.GetColumnType());
+        Assert.Equal("nvarchar(128)", tenants.FindProperty("SelfServiceSubjectId")!.GetColumnType());
     }
 
     private const string InvitationTokenHashColumn = "MerchantInvitations.TokenHash";

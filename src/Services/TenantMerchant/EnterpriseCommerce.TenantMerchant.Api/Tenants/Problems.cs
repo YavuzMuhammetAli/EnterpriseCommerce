@@ -32,6 +32,9 @@ internal static class Problems
             title: "The Idempotency-Key was already used for a different request.",
             type: TypeBase + "idempotency-key-reused");
 
+    public static IResult TenantLimitReached() =>
+        Problem(StatusCodes.Status409Conflict, "tenant-limit-reached", "You have created the maximum number of tenants.");
+
     public static IResult MembershipNotFound() =>
         Problem(StatusCodes.Status404NotFound, "membership-not-found", "The membership was not found.");
 

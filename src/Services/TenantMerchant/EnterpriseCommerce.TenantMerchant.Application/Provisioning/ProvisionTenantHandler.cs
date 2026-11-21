@@ -1,6 +1,4 @@
-using System.Buffers.Binary;
-using System.Security.Cryptography;
-using System.Text;
+using EnterpriseCommerce.TenantMerchant.Application.Common;
 using EnterpriseCommerce.TenantMerchant.Application.Tenants;
 using EnterpriseCommerce.TenantMerchant.Domain.Audit;
 using EnterpriseCommerce.TenantMerchant.Domain.Memberships;
@@ -196,16 +194,6 @@ public static class ProvisioningRequestHash
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(actor);
 
-        using var buffer = new MemoryStream();
-        Span<byte> length = stackalloc byte[sizeof(int)];
-        foreach (var field in new[] { Version, slug.Value, displayName.Value, owner.Value, actor.Value })
-        {
-            var bytes = Encoding.UTF8.GetBytes(field);
-            BinaryPrimitives.WriteInt32BigEndian(length, bytes.Length);
-            buffer.Write(length);
-            buffer.Write(bytes);
-        }
-
-        return SHA256.HashData(buffer.ToArray());
+        return CanonicalRequestHash.Compute(Version, slug.Value, displayName.Value, owner.Value, actor.Value);
     }
 }

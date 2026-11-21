@@ -12,8 +12,8 @@ namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Persistence;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Invariants that must hold under concurrency are database constraints: the unique slug, the unique provisioning key
-/// per client, one current membership per subject and tenant, one pending invitation per address and tenant, a unique
+/// Invariants that must hold under concurrency are database constraints: the unique slug, the unique idempotency key
+/// per provisioning client and per self-service subject, one current membership per subject and tenant, one pending invitation per address and tenant, a unique
 /// invitation token hash, and the allowed status and role values. Every mutable table has a <c>rowversion</c>
 /// concurrency token.
 /// </para>
@@ -27,6 +27,7 @@ internal sealed class TenantMerchantDbContext(DbContextOptions<TenantMerchantDbC
 {
     public const string TenantSlugIndex = "UX_Tenants_Slug";
     public const string ProvisioningKeyIndex = "UX_Tenants_ProvisionedByClientId_ProvisioningKey";
+    public const string SelfServiceKeyIndex = "UX_Tenants_SelfServiceSubjectId_ProvisioningKey";
     public const string CurrentMembershipIndex = "UX_Memberships_TenantId_SubjectId_Current";
     public const string PendingInvitationIndex = "UX_MerchantInvitations_TenantId_NormalizedEmail_Pending";
     public const string InvitationTokenHashIndex = "UX_MerchantInvitations_TokenHash";
@@ -50,11 +51,26 @@ internal sealed class TenantMerchantDbContext(DbContextOptions<TenantMerchantDbC
     {
         modelBuilder.Entity<Tenant>(tenant =>
         {
-            tenant.ToTable("Tenants", table => table.HasCheckConstraint("CK_Tenants_Status", AllowedValues<TenantStatus>("Status")));
+            tenant.ToTable("Tenants", table =>
+            {
+                table.HasCheckConstraint("CK_Tenants_Status", AllowedValues<TenantStatus>("Status"));
+                table.HasCheckConstraint("CK_Tenants_Origin", AllowedValues<TenantOrigin>("Origin"));
+
+                // A self-service tenant always records its creating subject, and a provisioned one never does.
+                table.HasCheckConstraint(
+                    "CK_Tenants_Origin_SelfServiceSubject",
+                    $"([Origin] = N'{nameof(TenantOrigin.SelfService)}' AND [SelfServiceSubjectId] IS NOT NULL)"
+                    + $" OR ([Origin] = N'{nameof(TenantOrigin.Provisioned)}' AND [SelfServiceSubjectId] IS NULL)");
+            });
             tenant.HasKey(t => t.Id);
             tenant.Property(t => t.Id).ValueGeneratedNever();
             tenant.Property(t => t.Slug).HasMaxLength(TenantSlug.MaxLength).IsUnicode(false);
             tenant.Property(t => t.Status).HasConversion<string>().HasMaxLength(32);
+
+            // The application always writes the origin. The migration that added the column filled existing (S1 and
+            // S2) rows, which were all provisioned, with 'Provisioned'.
+            tenant.Property(t => t.Origin).HasConversion<string>().HasMaxLength(16);
+            tenant.Property(t => t.SelfServiceSubjectId).HasMaxLength(SubjectId.MaxLength);
             tenant.Property(t => t.ProvisionedByClientId).HasMaxLength(100);
             tenant.Property(t => t.ProvisioningKey).HasMaxLength(100);
             tenant.Property(t => t.ProvisioningRequestHash).HasMaxLength(32).IsFixedLength();
@@ -62,7 +78,19 @@ internal sealed class TenantMerchantDbContext(DbContextOptions<TenantMerchantDbC
             tenant.Property<byte[]>(RowVersion).IsRowVersion();
 
             tenant.HasIndex(t => t.Slug).IsUnique().HasDatabaseName(TenantSlugIndex);
-            tenant.HasIndex(t => new { t.ProvisionedByClientId, t.ProvisioningKey }).IsUnique().HasDatabaseName(ProvisioningKeyIndex);
+            // Idempotency keys have two namespaces. A service caller's key is unique per client; a self-service key is
+            // unique per subject, because every merchant-portal user comes through the same BFF client and must never
+            // replay, or be refused because of, another user's request.
+            tenant.HasIndex(t => new { t.ProvisionedByClientId, t.ProvisioningKey })
+                .IsUnique()
+                .HasFilter($"[Origin] = N'{nameof(TenantOrigin.Provisioned)}'")
+                .HasDatabaseName(ProvisioningKeyIndex);
+
+            // Also serves the per-subject count of the onboarding limit.
+            tenant.HasIndex(t => new { t.SelfServiceSubjectId, t.ProvisioningKey })
+                .IsUnique()
+                .HasFilter($"[Origin] = N'{nameof(TenantOrigin.SelfService)}'")
+                .HasDatabaseName(SelfServiceKeyIndex);
 
             // ADR-020: one merchant profile per tenant, in its own table, written in the tenant's transaction.
             tenant.OwnsOne(t => t.MerchantProfile, profile =>

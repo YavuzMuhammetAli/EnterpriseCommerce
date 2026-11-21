@@ -19,6 +19,7 @@ public sealed class MigrationTests(SqlServerTestDatabase database) : IClassFixtu
         var applied = await context.Database.GetAppliedMigrationsAsync(ct);
         Assert.Contains(applied, migration => migration.EndsWith("_InitialTenantMerchantSchema", StringComparison.Ordinal));
         Assert.Contains(applied, migration => migration.EndsWith("_MerchantMembershipAdministration", StringComparison.Ordinal));
+        Assert.Contains(applied, migration => migration.EndsWith("_SelfServiceOnboarding", StringComparison.Ordinal));
         Assert.Empty(await context.Database.GetPendingMigrationsAsync(ct));
         Assert.False(context.Database.HasPendingModelChanges(), "The model has changes that no migration captures.");
     }
@@ -42,7 +43,8 @@ public sealed class MigrationTests(SqlServerTestDatabase database) : IClassFixtu
             + "|MerchantInvitations.IX_MerchantInvitations_TenantId_CreatedAt:0:-"
             + "|MerchantInvitations.UX_MerchantInvitations_TenantId_NormalizedEmail_Pending:1:([Status]=N'Pending')"
             + "|MerchantInvitations.UX_MerchantInvitations_TokenHash:1:-"
-            + "|Tenants.UX_Tenants_ProvisionedByClientId_ProvisioningKey:1:-"
+            + "|Tenants.UX_Tenants_ProvisionedByClientId_ProvisioningKey:1:([Origin]=N'Provisioned')"
+            + "|Tenants.UX_Tenants_SelfServiceSubjectId_ProvisioningKey:1:([Origin]=N'SelfService')"
             + "|Tenants.UX_Tenants_Slug:1:-",
             indexes);
 
@@ -51,7 +53,7 @@ public sealed class MigrationTests(SqlServerTestDatabase database) : IClassFixtu
         Assert.Equal(
             "CK_MembershipAuditRecords_Action|CK_MembershipAuditRecords_ActorKind|CK_Memberships_Role|CK_Memberships_Status"
             + "|CK_MerchantInvitations_Accepted|CK_MerchantInvitations_Cancelled|CK_MerchantInvitations_Expired|CK_MerchantInvitations_Expiry"
-            + "|CK_MerchantInvitations_Role|CK_MerchantInvitations_Status|CK_Tenants_Status",
+            + "|CK_MerchantInvitations_Role|CK_MerchantInvitations_Status|CK_Tenants_Origin|CK_Tenants_Origin_SelfServiceSubject|CK_Tenants_Status",
             checks);
 
         var foreignKeys = await database.ScalarAsync<string>(
@@ -91,6 +93,12 @@ public sealed class MigrationTests(SqlServerTestDatabase database) : IClassFixtu
             "SELECT (SELECT COUNT(*) FROM sys.objects WHERE name IN ('MerchantInvitations', 'MembershipAuditRecords', 'TR_Memberships_RequireActiveOwner', 'TR_MembershipAuditRecords_AppendOnly'))"
             + " + (SELECT COUNT(*) FROM sys.indexes WHERE name IN ('IX_Memberships_TenantId_ActiveOwner', 'IX_Memberships_SubjectId_Status'))";
 
+        // S3 down to S2: the origin columns, the self-service index and constraints go, and the S2 key index returns.
+        await migrator.MigrateAsync("MerchantMembershipAdministration", cancellationToken: ct);
+        Assert.Equal(0, await database.ScalarAsync<int>(S3Objects));
+        Assert.Equal("-", await database.ScalarAsync<string>(ProvisioningKeyFilter));
+        Assert.Equal(6, await database.ScalarAsync<int>(s2Objects));
+
         // S2 down to S1: its tables, triggers and indexes go, and the S1 schema stays.
         await migrator.MigrateAsync("InitialTenantMerchantSchema", cancellationToken: ct);
         Assert.Equal(0, await database.ScalarAsync<int>(s2Objects));
@@ -101,6 +109,77 @@ public sealed class MigrationTests(SqlServerTestDatabase database) : IClassFixtu
 
         await context.Database.MigrateAsync(ct);
         Assert.Equal(6, await database.ScalarAsync<int>(s2Objects));
+        Assert.Equal(5, await database.ScalarAsync<int>(S3Objects));
+        Assert.Equal("([Origin]=N'Provisioned')", await database.ScalarAsync<string>(ProvisioningKeyFilter));
         Assert.Equal(5, await database.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name IN ('Tenants', 'MerchantProfiles', 'Memberships', 'MerchantInvitations', 'MembershipAuditRecords')"));
     }
+
+    [Fact]
+    public async Task SelfServiceMigration_KeepsExistingTenants_AsProvisioned()
+    {
+        database.RequireAvailable();
+        await using var context = database.CreateContext();
+        var migrator = context.GetService<IMigrator>();
+        var ct = TestContext.Current.CancellationToken;
+        var tenantId = Guid.CreateVersion7();
+
+        await migrator.MigrateAsync("MerchantMembershipAdministration", cancellationToken: ct);
+        try
+        {
+            // A tenant written by S2, before the origin existed.
+            await database.ExecuteAsync(
+                "INSERT INTO Tenants (Id, Slug, Status, CreatedAt, ProvisionedByClientId, ProvisioningKey, ProvisioningRequestHash, ProvisionedByActor)"
+                + $" VALUES ('{tenantId}', 'pre-s3-{tenantId:N}', N'Active', SYSDATETIMEOFFSET(), N'svc-admin', N'pre-s3-{tenantId:N}', {EmptyHash}, N'admin:1');"
+                + $" INSERT INTO MerchantProfiles (TenantId, DisplayName, CreatedAt, UpdatedAt) VALUES ('{tenantId}', N'Pre S3', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());");
+
+            await context.Database.MigrateAsync(ct);
+
+            Assert.Equal("Provisioned", await database.ScalarAsync<string>($"SELECT Origin FROM Tenants WHERE Id = '{tenantId}'"));
+            Assert.Equal(0, await database.ScalarAsync<int>($"SELECT COUNT(*) FROM Tenants WHERE Id = '{tenantId}' AND SelfServiceSubjectId IS NOT NULL"));
+        }
+        finally
+        {
+            await context.Database.MigrateAsync(ct);
+            await database.ExecuteAsync($"DELETE FROM MerchantProfiles WHERE TenantId = '{tenantId}'; DELETE FROM Tenants WHERE Id = '{tenantId}';");
+        }
+    }
+
+    [Fact]
+    public async Task SelfServiceMigration_RefusesToRollBack_WhenSelfServiceTenantsExist()
+    {
+        database.RequireAvailable();
+        await using var context = database.CreateContext();
+        var migrator = context.GetService<IMigrator>();
+        var ct = TestContext.Current.CancellationToken;
+        var tenantId = Guid.CreateVersion7();
+
+        await database.ExecuteAsync(
+            "INSERT INTO Tenants (Id, Slug, Status, CreatedAt, Origin, SelfServiceSubjectId, ProvisionedByClientId, ProvisioningKey, ProvisioningRequestHash, ProvisionedByActor)"
+            + $" VALUES ('{tenantId}', 'self-{tenantId:N}', N'Active', SYSDATETIMEOFFSET(), 'SelfService', N'user-1', N'bff-merchant', N'k-{tenantId:N}', {EmptyHash}, N'user-1');"
+            + $" INSERT INTO MerchantProfiles (TenantId, DisplayName, CreatedAt, UpdatedAt) VALUES ('{tenantId}', N'Self', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());");
+        try
+        {
+            var refusal = await Assert.ThrowsAsync<Microsoft.Data.SqlClient.SqlException>(
+                () => migrator.MigrateAsync("MerchantMembershipAdministration", cancellationToken: ct));
+
+            Assert.Equal(EnterpriseCommerce.TenantMerchant.Infrastructure.Persistence.Migrations.SelfServiceOnboarding.SelfServiceDataExistsError, refusal.Number);
+            Assert.Equal(5, await database.ScalarAsync<int>(S3Objects));
+            Assert.Empty(await context.Database.GetPendingMigrationsAsync(ct));
+        }
+        finally
+        {
+            await database.ExecuteAsync($"DELETE FROM MerchantProfiles WHERE TenantId = '{tenantId}'; DELETE FROM Tenants WHERE Id = '{tenantId}';");
+        }
+    }
+
+    private const string S3Objects =
+        "SELECT (SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('Tenants') AND name IN ('Origin', 'SelfServiceSubjectId'))"
+        + " + (SELECT COUNT(*) FROM sys.indexes WHERE name = 'UX_Tenants_SelfServiceSubjectId_ProvisioningKey')"
+        + " + (SELECT COUNT(*) FROM sys.check_constraints WHERE name IN ('CK_Tenants_Origin', 'CK_Tenants_Origin_SelfServiceSubject'))";
+
+    private const string ProvisioningKeyFilter =
+        "SELECT ISNULL(filter_definition, '-') FROM sys.indexes WHERE name = 'UX_Tenants_ProvisionedByClientId_ProvisioningKey'";
+
+    /// <summary>A 32-byte zero hash literal.</summary>
+    private const string EmptyHash = "0x0000000000000000000000000000000000000000000000000000000000000000";
 }

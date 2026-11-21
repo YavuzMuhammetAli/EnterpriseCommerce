@@ -15,6 +15,7 @@ public enum MembershipAuditAction
     MembershipReactivated,
     MembershipRemoved,
     MembershipRoleChanged,
+    SelfServiceOwnerMembershipCreated,
 }
 
 /// <summary>Who caused an audited change.</summary>
@@ -99,6 +100,24 @@ public sealed class MembershipAuditRecord
     {
         ArgumentNullException.ThrowIfNull(owner);
         return Create(MembershipAuditAction.OwnerMembershipProvisioned, owner.TenantId, actor, correlationId, now) with
+        {
+            MembershipId = owner.Id,
+            SubjectId = owner.SubjectId,
+            NewRole = owner.Role.ToString(),
+            NewStatus = owner.Status.ToString(),
+        };
+    }
+
+    /// <summary>The owner membership of a tenant that a merchant-portal user created for themselves (self-service onboarding).</summary>
+    public static MembershipAuditRecord SelfServiceOwnerCreated(Membership owner, string? correlationId, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        if (!Memberships.SubjectId.TryCreate(owner.SubjectId, out var subject) || owner.Role != MerchantRole.MerchantOwner)
+        {
+            throw new ArgumentException("A self-service owner record needs an owner membership.", nameof(owner));
+        }
+
+        return Create(MembershipAuditAction.SelfServiceOwnerMembershipCreated, owner.TenantId, AuditActor.User(subject), correlationId, now) with
         {
             MembershipId = owner.Id,
             SubjectId = owner.SubjectId,
