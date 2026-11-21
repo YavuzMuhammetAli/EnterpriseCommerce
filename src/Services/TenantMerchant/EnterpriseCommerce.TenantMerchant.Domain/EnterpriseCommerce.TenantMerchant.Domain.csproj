@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tenant & Merchant Domain layer: tenants, merchant profiles, memberships and merchant roles (ADR-020).
+    Must not reference other layers or any infrastructure technology
+    (EF Core, SQL Server, MongoDB, Kafka, Redis, ASP.NET Core).
+    Enforced by EnterpriseCommerce.ArchitectureTests.
+  -->
+
+</Project>

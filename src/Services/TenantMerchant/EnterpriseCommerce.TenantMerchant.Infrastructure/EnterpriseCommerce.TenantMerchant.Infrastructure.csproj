@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tenant & Merchant Infrastructure: EF Core persistence in the service's own SQL Server database (ADR-011, ADR-020). -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+  </ItemGroup>
+
+  <!-- Design-time only (dotnet ef migrations). Never flows to consumers or the published output. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EnterpriseCommerce.TenantMerchant.Application\EnterpriseCommerce.TenantMerchant.Application.csproj" />
+    <ProjectReference Include="..\EnterpriseCommerce.TenantMerchant.Domain\EnterpriseCommerce.TenantMerchant.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EnterpriseCommerce.TenantMerchant.Api" />
+    <InternalsVisibleTo Include="EnterpriseCommerce.TenantMerchant.IntegrationTests" />
+    <InternalsVisibleTo Include="EnterpriseCommerce.TenantMerchant.UnitTests" />
+  </ItemGroup>
+
+</Project>

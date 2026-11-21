@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- Composition root of the Tenant & Merchant service. -->
+
+  <ItemGroup>
+    <!-- Local access token validation with the standard JWT bearer handler (ADR-017 section 4). -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Serilog.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EnterpriseCommerce.TenantMerchant.Application\EnterpriseCommerce.TenantMerchant.Application.csproj" />
+    <ProjectReference Include="..\EnterpriseCommerce.TenantMerchant.Infrastructure\EnterpriseCommerce.TenantMerchant.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EnterpriseCommerce.TenantMerchant.IntegrationTests" />
+    <InternalsVisibleTo Include="EnterpriseCommerce.TenantMerchant.UnitTests" />
+  </ItemGroup>
+
+</Project>
