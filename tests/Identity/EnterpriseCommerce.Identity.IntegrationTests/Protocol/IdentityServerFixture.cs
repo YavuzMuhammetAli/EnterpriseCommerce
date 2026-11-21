@@ -108,6 +108,12 @@ public partial class IdentityServerFixture : IAsyncLifetime
     /// <summary>A service client that holds the account-lifecycle scope but is not on the allow-list.</summary>
     public TestClient RogueService { get; } = new("svc-test-rogue", audience: null);
 
+    /// <summary>A service client allowed to verify account emails (stands in for <c>svc-tenant-merchant</c>).</summary>
+    public TestClient EmailVerifier { get; } = new("svc-test-verifier", audience: null);
+
+    /// <summary>A service client that holds the verification scope but is not on the verification allow-list.</summary>
+    public TestClient UnlistedVerifier { get; } = new("svc-test-unlisted-verifier", audience: null);
+
     /// <summary>Replaces the Notification integration; records every security email handover.</summary>
     public CapturingSecurityEmailDispatcher Dispatcher { get; } = new();
 
@@ -188,7 +194,18 @@ public partial class IdentityServerFixture : IAsyncLifetime
                 builder.UseSetting(prefix + "ServiceScopes:0:Audience", "identity-api");
             }
 
+            foreach (var verificationClient in new[] { EmailVerifier, UnlistedVerifier })
+            {
+                var prefix = $"Identity:Clients:{++index}:";
+                builder.UseSetting(prefix + "ClientId", verificationClient.ClientId);
+                builder.UseSetting(prefix + "Kind", "Service");
+                builder.UseSetting(prefix + "JsonWebKeySet", verificationClient.JsonWebKeySet);
+                builder.UseSetting(prefix + "ServiceScopes:0:Scope", AccountVerificationScope);
+                builder.UseSetting(prefix + "ServiceScopes:0:Audience", "identity-api");
+            }
+
             builder.UseSetting("Identity:AccountAdministration:AllowedClientIds:0", AccountAdmin.ClientId);
+            builder.UseSetting("Identity:AccountVerification:AllowedClientIds:0", EmailVerifier.ClientId);
             builder.UseSetting("Identity:SecurityEmail:RetryBaseDelay", "00:00:00.020");
             builder.ConfigureTestServices(services =>
             {
@@ -221,6 +238,8 @@ public partial class IdentityServerFixture : IAsyncLifetime
         Service.Dispose();
         AccountAdmin.Dispose();
         RogueService.Dispose();
+        EmailVerifier.Dispose();
+        UnlistedVerifier.Dispose();
         GC.SuppressFinalize(this);
     }
 

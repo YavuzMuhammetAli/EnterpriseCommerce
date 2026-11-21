@@ -34,6 +34,7 @@ public static class DependencyInjection
         services.AddScoped<ChangePasswordHandler>();
         services.AddScoped<DisableAccountHandler>();
         services.AddScoped<ReactivateAccountHandler>();
+        services.AddScoped<VerifyAccountEmailHandler>();
         services.AddScoped<SecurityEmailScheduler>();
         services.AddScoped<SecurityEmailDeliveryProcessor>();
 

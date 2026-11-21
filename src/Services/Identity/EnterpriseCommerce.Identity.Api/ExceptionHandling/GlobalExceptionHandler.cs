@@ -9,7 +9,8 @@ namespace EnterpriseCommerce.Identity.Api.ExceptionHandling;
 /// </summary>
 /// <remarks>
 /// <see cref="SecurityStateUnavailableException"/> becomes <c>503</c>: the authoritative security state could not be
-/// confirmed, so nothing was issued or reported as done (ADR-017 section 8). Everything else becomes a generic <c>500</c>.
+/// confirmed, so nothing was issued or reported as done (ADR-017 section 8). A request that could not be bound keeps its
+/// <c>4xx</c> status. Everything else becomes a generic <c>500</c>.
 /// </remarks>
 internal sealed partial class GlobalExceptionHandler(
     IProblemDetailsService problemDetailsService,
@@ -22,7 +23,19 @@ internal sealed partial class GlobalExceptionHandler(
     {
         ProblemDetails problem;
 
-        if (exception is SecurityStateUnavailableException)
+        if (exception is BadHttpRequestException badRequest)
+        {
+            // A request that could not be bound, for example malformed JSON or a member the contract does not define.
+            // Minimal APIs throw this in Development and answer it directly elsewhere; either way the client gets the
+            // same problem, without parser details.
+            problem = new ProblemDetails
+            {
+                Status = badRequest.StatusCode,
+                Title = "The request is malformed.",
+                Type = "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+            };
+        }
+        else if (exception is SecurityStateUnavailableException)
         {
             LogSecurityStateUnavailable(logger, exception, httpContext.Request.Method, httpContext.Request.Path);
             httpContext.Response.Headers.RetryAfter = "5";

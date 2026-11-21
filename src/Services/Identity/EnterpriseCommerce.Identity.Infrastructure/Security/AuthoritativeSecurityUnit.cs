@@ -32,6 +32,19 @@ internal sealed class AuthoritativeSecurityUnit(
         return account is null ? null : new AccountSignInState(account.Status, account.EmailConfirmed);
     }
 
+    public async Task<Application.Accounts.AccountEmailState?> ReadAccountEmailStateAsync(string userId, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+
+        var account = await context.Users
+            .AsNoTracking()
+            .Where(user => user.Id == userId)
+            .Select(user => new { user.Status, user.EmailConfirmed, user.NormalizedEmail })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        return account is null ? null : new Application.Accounts.AccountEmailState(account.Status, account.EmailConfirmed, account.NormalizedEmail);
+    }
+
     public async Task<bool> TryRecordRefreshRedemptionAsync(
         string tokenId,
         string? authorizationId,

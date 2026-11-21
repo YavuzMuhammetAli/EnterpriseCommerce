@@ -144,6 +144,32 @@ internal sealed class IdentityServerSettings
     public RateLimitSettings RateLimits { get; set; } = new();
 
     public AccountAdministrationSettings AccountAdministration { get; set; } = new();
+
+    public AccountVerificationSettings AccountVerification { get; set; } = new();
+}
+
+/// <summary>
+/// The internal account email verification API (IDENTITY_API_CONTRACT.md section 2.13, ADR-021). Only service clients
+/// that hold the verification scope <b>and</b> are listed here may call it. An empty list denies every caller. Its
+/// audience is Identity's service audience, <see cref="AccountAdministrationSettings.Audience"/>.
+/// </summary>
+internal sealed class AccountVerificationSettings
+{
+    /// <summary>The scope a service client must hold.</summary>
+    public const string Scope = "svc.identity.account-verification";
+
+    /// <summary>The service clients (<c>svc-</c> prefix) allowed to verify account emails, for example <c>svc-tenant-merchant</c>.</summary>
+    public List<string> AllowedClientIds { get; set; } = [];
+
+    public IEnumerable<string> Validate()
+    {
+        foreach (var clientId in AllowedClientIds.Where(id =>
+            !id.StartsWith(ClientRegistration.ServiceClientPrefix, StringComparison.Ordinal)
+            || id.Length == ClientRegistration.ServiceClientPrefix.Length))
+        {
+            yield return $"Identity:AccountVerification:AllowedClientIds may only list service clients ('{clientId}').";
+        }
+    }
 }
 
 /// <summary>

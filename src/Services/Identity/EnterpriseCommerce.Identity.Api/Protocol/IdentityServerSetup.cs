@@ -36,6 +36,9 @@ internal static class IdentityServerSetup
     /// <summary>Service tokens of the clients allowed to change account status (internal API only).</summary>
     public const string AccountAdministrationPolicy = "account-administration";
 
+    /// <summary>Service tokens of the clients allowed to verify account emails (internal API only, ADR-021).</summary>
+    public const string AccountVerificationPolicy = "account-verification";
+
     private static readonly TimeSpan SsoAbsoluteLifetime = TimeSpan.FromHours(12);
 
     /// <summary>The clock skew every validator allows (ADR-017 section 4).</summary>
@@ -65,6 +68,7 @@ internal static class IdentityServerSetup
         errors.AddRange(settings.Clients.SelectMany(client => client.Validate(isDevelopment)));
         errors.AddRange(settings.Clients.GroupBy(c => c.ClientId, StringComparer.Ordinal).Where(g => g.Count() > 1).Select(g => $"Duplicate client '{g.Key}'."));
         errors.AddRange(settings.AccountAdministration.Validate());
+        errors.AddRange(settings.AccountVerification.Validate());
         foreach (var legacy in new[] { "SigningCertificatePath", "SigningCertificatePassword", "EncryptionCertificatePath", "EncryptionCertificatePassword" })
         {
             if (builder.Configuration.GetSection($"{IdentityServerSettings.SectionName}:Keys:{legacy}").Exists())
@@ -216,6 +220,7 @@ internal static class IdentityServerSetup
         var audiences = BrowserAudiences(settings).ToHashSet(StringComparer.Ordinal);
         var administration = settings.AccountAdministration;
         var administrationClients = administration.AllowedClientIds.ToHashSet(StringComparer.Ordinal);
+        var verificationClients = settings.AccountVerification.AllowedClientIds.ToHashSet(StringComparer.Ordinal);
         services.AddAuthorizationBuilder()
             .AddPolicy(UserBearerPolicy, policy => policy
                 .AddAuthenticationSchemes(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
@@ -237,7 +242,19 @@ internal static class IdentityServerSetup
                     && context.User.HasScope(AccountAdministrationSettings.Scope)
                     && CallingClientOf(context.User) is { } client
                     && client.StartsWith(ClientRegistration.ServiceClientPrefix, StringComparison.Ordinal)
-                    && administrationClients.Contains(client)));
+                    && administrationClients.Contains(client)))
+            .AddPolicy(AccountVerificationPolicy, policy => policy
+                .AddAuthenticationSchemes(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
+                .RequireAuthenticatedUser()
+                .RequireClaim(IdentityClaims.PrincipalType, IdentityClaims.ServicePrincipal)
+                // A service token for Identity, with the verification scope, from an explicitly allowed service client
+                // (ADR-021). The lifecycle scope does not grant it, and this scope grants nothing else.
+                .RequireAssertion(context =>
+                    context.User.GetAudiences().Contains(administration.Audience, StringComparer.Ordinal)
+                    && context.User.HasScope(AccountVerificationSettings.Scope)
+                    && CallingClientOf(context.User) is { } client
+                    && client.StartsWith(ClientRegistration.ServiceClientPrefix, StringComparison.Ordinal)
+                    && verificationClients.Contains(client)));
 
         return builder;
     }

@@ -16,6 +16,12 @@ public interface IAuthoritativeSecurityUnit
     Task<AccountSignInState?> ReadAccountStateAsync(string userId, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Reads the account facts that decide an email verification check (status, confirmation and the normalized
+    /// address), or <see langword="null"/> when the user does not exist. Read only.
+    /// </summary>
+    Task<Accounts.AccountEmailState?> ReadAccountEmailStateAsync(string userId, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Records the redemption of a refresh token entry in the redemption ledger (ADR-017 section 5).
     /// Returns <see langword="false"/> when the entry was already recorded, which means the token is being reused.
     /// </summary>

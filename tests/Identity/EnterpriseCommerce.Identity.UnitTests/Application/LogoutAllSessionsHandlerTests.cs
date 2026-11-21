@@ -1,3 +1,4 @@
+using EnterpriseCommerce.Identity.Application.Accounts;
 using EnterpriseCommerce.Identity.Application.Security;
 using EnterpriseCommerce.Identity.Application.Sessions;
 using EnterpriseCommerce.Identity.Domain.Accounts;
@@ -78,6 +79,8 @@ public sealed class LogoutAllSessionsHandlerTests
         }
 
         public Task<AccountSignInState?> ReadAccountStateAsync(string userId, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<AccountEmailState?> ReadAccountEmailStateAsync(string userId, CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public Task<bool> TryRecordRefreshRedemptionAsync(string tokenId, string? authorizationId, DateTimeOffset now, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
