@@ -1,3 +1,4 @@
+using EnterpriseCommerce.TenantMerchant.Application.Common;
 using EnterpriseCommerce.TenantMerchant.Application.Tenants;
 using EnterpriseCommerce.TenantMerchant.Domain.Memberships;
 using Microsoft.Extensions.Logging;
@@ -19,6 +20,9 @@ public enum TenantAccess
 }
 
 public sealed record TenantAccessDecision(TenantAccess Access, MembershipView? Membership);
+
+/// <summary>An access decision taken inside a locked tenant transaction, with the caller's tracked membership.</summary>
+public sealed record TenantWriteAccess(TenantAccess Access, Membership? Actor);
 
 /// <summary>
 /// Decides whether an authenticated Identity subject may use a permission in a tenant, from Tenant &amp; Merchant's own
@@ -50,6 +54,36 @@ public sealed partial class TenantAccessAuthorizer(ITenantReadStore store, ILogg
         }
 
         return new TenantAccessDecision(TenantAccess.Allowed, membership);
+    }
+
+    /// <summary>
+    /// The same decision, taken <b>inside</b> a locked tenant transaction for a change (ADR-021): the caller's membership
+    /// is re-read under the tenant lock, so a member who was suspended or demoted a moment ago cannot still act.
+    /// </summary>
+    public async Task<TenantWriteAccess> AuthorizeAsync(
+        ITenantWriteSession session,
+        Guid tenantId,
+        string subjectId,
+        MerchantPermission permission,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentException.ThrowIfNullOrEmpty(subjectId);
+
+        var actor = session.TenantExists ? await session.FindCurrentMembershipAsync(subjectId, cancellationToken) : null;
+        if (actor is not { Status: MembershipStatus.Active })
+        {
+            LogTenantNotVisible(logger, subjectId, tenantId, permission);
+            return new TenantWriteAccess(TenantAccess.NotVisible, null);
+        }
+
+        if (!MerchantRolePermissions.Allows(actor.Role, permission))
+        {
+            LogPermissionDenied(logger, subjectId, tenantId, permission, actor.Role);
+            return new TenantWriteAccess(TenantAccess.Forbidden, actor);
+        }
+
+        return new TenantWriteAccess(TenantAccess.Allowed, actor);
     }
 
     [LoggerMessage(

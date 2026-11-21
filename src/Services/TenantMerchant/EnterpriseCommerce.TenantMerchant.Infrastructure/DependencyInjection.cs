@@ -1,15 +1,22 @@
+using EnterpriseCommerce.TenantMerchant.Application.Common;
+using EnterpriseCommerce.TenantMerchant.Application.Invitations;
 using EnterpriseCommerce.TenantMerchant.Application.Provisioning;
 using EnterpriseCommerce.TenantMerchant.Application.Tenants;
+using EnterpriseCommerce.TenantMerchant.Infrastructure.Identity;
 using EnterpriseCommerce.TenantMerchant.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace EnterpriseCommerce.TenantMerchant.Infrastructure;
 
-/// <summary>Registers the Infrastructure-layer implementations: the service's own SQL Server persistence.</summary>
+/// <summary>
+/// Registers the Infrastructure-layer implementations: the service's own SQL Server persistence, and the Identity
+/// verification client.
+/// </summary>
 public static class DependencyInjection
 {
     public static IServiceCollection AddTenantMerchantInfrastructure(this IServiceCollection services, IConfiguration configuration)
@@ -32,6 +39,33 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<ITenantProvisioningStore, TenantProvisioningStore>();
         services.AddScoped<ITenantReadStore, TenantReadStore>();
+        services.AddScoped<IInvitationReadStore, InvitationReadStore>();
+        services.AddSingleton<ITenantWriteGate, TenantWriteGate>();
+
+        services.AddOptions<InvitationSettings>()
+            .Bind(configuration.GetSection(InvitationSettings.SectionName))
+            .Validate(settings => !settings.Validate().Any(), $"{InvitationSettings.SectionName} is invalid: Lifetime 1 hour to 30 days, MaxOpenPerTenant 1 to 1000.")
+            .ValidateOnStart();
+        services.AddSingleton(provider => provider.GetRequiredService<IOptions<InvitationSettings>>().Value);
+
+        AddIdentityVerification(services, configuration);
         return services;
+    }
+
+    private static void AddIdentityVerification(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<IdentityVerificationOptions>()
+            .Bind(configuration.GetSection(IdentityVerificationOptions.SectionName))
+            .PostConfigure(options => options.Issuer ??= Uri.TryCreate(configuration["TenantMerchant:Authentication:Issuer"], UriKind.Absolute, out var issuer) ? issuer : null)
+            .Validate<IHostEnvironment>(
+                (options, environment) => !options.Validate(environment.IsDevelopment()).Any(),
+                $"{IdentityVerificationOptions.SectionName} is invalid (ADR-021): see TENANT_MERCHANT_API_CONTRACT.md for the required values.")
+            .ValidateOnStart();
+
+        services.AddSingleton<IdentityServiceTokenProvider>();
+        services.AddHttpClient(IdentityServiceTokenProvider.HttpClientName, (provider, client) =>
+            client.Timeout = provider.GetRequiredService<IOptions<IdentityVerificationOptions>>().Value.Timeout);
+        services.AddHttpClient<IIdentityAccountVerifier, IdentityAccountVerifier>((provider, client) =>
+            client.Timeout = provider.GetRequiredService<IOptions<IdentityVerificationOptions>>().Value.Timeout);
     }
 }

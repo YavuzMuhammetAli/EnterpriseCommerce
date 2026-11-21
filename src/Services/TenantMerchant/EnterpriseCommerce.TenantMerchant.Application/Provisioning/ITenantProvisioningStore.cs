@@ -1,4 +1,5 @@
 using EnterpriseCommerce.TenantMerchant.Application.Tenants;
+using EnterpriseCommerce.TenantMerchant.Domain.Audit;
 using EnterpriseCommerce.TenantMerchant.Domain.Memberships;
 using EnterpriseCommerce.TenantMerchant.Domain.Tenants;
 
@@ -27,8 +28,8 @@ public interface ITenantProvisioningStore
     Task<bool> SlugExistsAsync(string slug, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Inserts the tenant, its merchant profile and the owner membership in <b>one</b> transaction: either all of them
-    /// commit, or none does.
+    /// Inserts the tenant, its merchant profile, the owner membership and its audit record in <b>one</b> transaction:
+    /// either all of them commit, or none does.
     /// </summary>
-    Task<TenantInsertOutcome> AddAsync(Tenant tenant, Membership owner, CancellationToken cancellationToken);
+    Task<TenantInsertOutcome> AddAsync(Tenant tenant, Membership owner, MembershipAuditRecord audit, CancellationToken cancellationToken);
 }

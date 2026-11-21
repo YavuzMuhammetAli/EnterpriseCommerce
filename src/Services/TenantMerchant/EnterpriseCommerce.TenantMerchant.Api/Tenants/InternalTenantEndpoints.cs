@@ -1,3 +1,4 @@
+using EnterpriseCommerce.TenantMerchant.Api.Hosting;
 using EnterpriseCommerce.TenantMerchant.Api.Security;
 using EnterpriseCommerce.TenantMerchant.Application.Provisioning;
 using EnterpriseCommerce.TenantMerchant.Application.Tenants;
@@ -47,7 +48,8 @@ internal static class InternalTenantEndpoints
         }
 
         var result = await handler.HandleAsync(
-            new ProvisionTenantCommand(clientId, idempotencyKey!, request.Slug, request.DisplayName, request.OwnerSubjectId, request.ActorReference),
+            new ProvisionTenantCommand(
+                clientId, idempotencyKey!, request.Slug, request.DisplayName, request.OwnerSubjectId, request.ActorReference, CorrelationIdMiddleware.Get(httpContext)),
             cancellationToken);
 
         return result.Outcome switch

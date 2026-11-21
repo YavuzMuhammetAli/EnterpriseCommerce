@@ -18,7 +18,7 @@ public sealed class PersistenceModelTests : IDisposable
     {
         var tables = _context.Model.GetEntityTypes().Select(entity => entity.GetTableName()).Distinct().Order(StringComparer.Ordinal);
 
-        Assert.Equal(["Memberships", "MerchantProfiles", "Tenants"], tables);
+        Assert.Equal(["MembershipAuditRecords", "Memberships", "MerchantInvitations", "MerchantProfiles", "Tenants"], tables);
     }
 
     [Fact]
@@ -48,20 +48,47 @@ public sealed class PersistenceModelTests : IDisposable
         string[] forbidden = ["password", "secret", "token", "credential", "securitystamp"];
         var columns = _context.Model.GetEntityTypes()
             .SelectMany(entity => entity.GetProperties())
-            .Select(property => property.GetColumnName(StoreObjectIdentifier.Table(property.DeclaringType.GetTableName()!)) ?? property.Name);
+            .Select(property => $"{property.DeclaringType.GetTableName()}.{property.GetColumnName(StoreObjectIdentifier.Table(property.DeclaringType.GetTableName()!)) ?? property.Name}");
 
-        Assert.DoesNotContain(columns, column => forbidden.Any(word => column.Contains(word, StringComparison.OrdinalIgnoreCase)));
+        // The one deliberate exception (ADR-021): the SHA-256 hash of an invitation's acceptance token. The raw token is
+        // never stored; Model_InvitationTokenHash_CanHoldOnlyAHash proves the column cannot hold it.
+        Assert.DoesNotContain(
+            columns.Where(column => column != InvitationTokenHashColumn),
+            column => forbidden.Any(word => column.Contains(word, StringComparison.OrdinalIgnoreCase)));
     }
 
     [Fact]
-    public void Model_EveryTableHasARowVersion()
+    public void Model_InvitationTokenHash_CanHoldOnlyAHash()
+    {
+        var property = _context.Model.FindEntityType(typeof(EnterpriseCommerce.TenantMerchant.Domain.Invitations.MerchantInvitation))!
+            .FindProperty(nameof(EnterpriseCommerce.TenantMerchant.Domain.Invitations.MerchantInvitation.TokenHash))!;
+
+        Assert.Equal("binary(32)", property.GetColumnType());
+        Assert.True(property.IsFixedLength());
+        Assert.True(property.GetContainingIndexes().Single().IsUnique);
+    }
+
+    [Fact]
+    public void Model_EveryMutableTableHasARowVersion_AndTheAuditTableIsAppendOnly()
     {
         var withoutRowVersion = _context.Model.GetEntityTypes()
             .Where(entity => entity.FindProperty(TenantMerchantDbContext.RowVersion) is not { IsConcurrencyToken: true })
             .Select(entity => entity.GetTableName());
 
-        Assert.Empty(withoutRowVersion);
+        // The audit table is never updated, so it has no concurrency token: its trigger refuses updates and deletes.
+        Assert.Equal(["MembershipAuditRecords"], withoutRowVersion);
+        var audit = _context.Model.FindEntityType(typeof(EnterpriseCommerce.TenantMerchant.Domain.Audit.MembershipAuditRecord))!;
+        Assert.Contains(audit.GetDeclaredTriggers(), trigger => trigger.ModelName == TenantMerchantDbContext.AuditAppendOnlyTrigger);
     }
+
+    [Fact]
+    public void Model_MembershipsDeclareTheLastOwnerTrigger()
+    {
+        var memberships = _context.Model.FindEntityType(typeof(EnterpriseCommerce.TenantMerchant.Domain.Memberships.Membership))!;
+        Assert.Contains(memberships.GetDeclaredTriggers(), trigger => trigger.ModelName == TenantMerchantDbContext.RequireActiveOwnerTrigger);
+    }
+
+    private const string InvitationTokenHashColumn = "MerchantInvitations.TokenHash";
 
     public void Dispose() => _context.Dispose();
 }

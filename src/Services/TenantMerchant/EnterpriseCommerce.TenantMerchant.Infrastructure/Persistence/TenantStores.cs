@@ -1,5 +1,6 @@
 using EnterpriseCommerce.TenantMerchant.Application.Provisioning;
 using EnterpriseCommerce.TenantMerchant.Application.Tenants;
+using EnterpriseCommerce.TenantMerchant.Domain.Audit;
 using EnterpriseCommerce.TenantMerchant.Domain.Memberships;
 using EnterpriseCommerce.TenantMerchant.Domain.Tenants;
 using Microsoft.EntityFrameworkCore;
@@ -23,17 +24,19 @@ internal sealed class TenantProvisioningStore(TenantMerchantDbContext context) :
     public Task<bool> SlugExistsAsync(string slug, CancellationToken cancellationToken) =>
         SqlServerErrors.GuardAsync("check tenant slug", () => context.Tenants.AnyAsync(t => t.Slug == slug, cancellationToken));
 
-    public async Task<TenantInsertOutcome> AddAsync(Tenant tenant, Membership owner, CancellationToken cancellationToken)
+    public async Task<TenantInsertOutcome> AddAsync(Tenant tenant, Membership owner, MembershipAuditRecord audit, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(tenant);
         ArgumentNullException.ThrowIfNull(owner);
+        ArgumentNullException.ThrowIfNull(audit);
 
         context.Tenants.Add(tenant);
         context.Memberships.Add(owner);
+        context.MembershipAuditRecords.Add(audit);
         try
         {
-            // One SaveChanges is one transaction: the tenant, its merchant profile and the owner membership commit
-            // together or not at all.
+            // One SaveChanges is one transaction: the tenant, its merchant profile, the owner membership and its audit
+            // record commit together or not at all.
             return await SqlServerErrors.GuardAsync("insert tenant", async () =>
             {
                 try
@@ -92,6 +95,33 @@ internal sealed class TenantReadStore(TenantMerchantDbContext context) : ITenant
             return new MembershipPage(items, Page: 0, take, total);
         });
 
+    public Task<MembershipView?> GetMembershipAsync(Guid tenantId, Guid membershipId, CancellationToken cancellationToken) =>
+        SqlServerErrors.GuardAsync("read membership by id", () => Views(context.Memberships
+                .AsNoTracking()
+                .Where(m => m.TenantId == tenantId && m.Id == membershipId))
+            .SingleOrDefaultAsync(cancellationToken));
+
+    public Task<CallerTenantPage> ListCallerTenantsAsync(string subjectId, int skip, int take, CancellationToken cancellationToken) =>
+        SqlServerErrors.GuardAsync("list caller tenants", async () =>
+        {
+            var active = context.Memberships
+                .AsNoTracking()
+                .Where(m => m.SubjectId == subjectId && m.Status == MembershipStatus.Active);
+
+            var total = await active.CountAsync(cancellationToken);
+            var items = await (
+                    from m in active
+                    join t in context.Tenants.AsNoTracking() on m.TenantId equals t.Id
+                    orderby m.CreatedAt, m.Id
+                    select new CallerTenantView(
+                        new TenantView(t.Id, t.Slug, t.Status, t.CreatedAt, t.MerchantProfile.DisplayName),
+                        new MembershipView(m.Id, m.TenantId, m.SubjectId, m.Role, m.Status, m.CreatedAt, m.StatusChangedAt)))
+                .Skip(skip)
+                .Take(take)
+                .ToListAsync(cancellationToken);
+            return new CallerTenantPage(items, Page: 0, take, total);
+        });
+
     private static IQueryable<MembershipView> Views(IQueryable<Membership> memberships) =>
-        memberships.Select(m => new MembershipView(m.Id, m.TenantId, m.SubjectId, m.Role, m.Status, m.CreatedAt));
+        memberships.Select(m => new MembershipView(m.Id, m.TenantId, m.SubjectId, m.Role, m.Status, m.CreatedAt, m.StatusChangedAt));
 }

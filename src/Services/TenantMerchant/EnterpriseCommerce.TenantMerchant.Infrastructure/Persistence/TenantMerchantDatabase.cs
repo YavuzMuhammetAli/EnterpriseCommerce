@@ -27,6 +27,23 @@ internal static class SqlServerErrors
     /// <summary>Cannot insert a duplicate key row (unique index).</summary>
     public const int UniqueIndexViolation = 2601;
 
+    /// <summary>The transaction was chosen as a deadlock victim and rolled back.</summary>
+    public const int Deadlock = 1205;
+
+    /// <summary>A change would leave a tenant without an active owner (<c>TR_Memberships_RequireActiveOwner</c>).</summary>
+    public const int LastActiveOwnerViolation = 50001;
+
+    /// <summary>An audit record was to be updated or deleted (<c>TR_MembershipAuditRecords_AppendOnly</c>).</summary>
+    public const int AuditAppendOnlyViolation = 50002;
+
+    public static bool IsDeadlock(Exception exception) => HasError(exception, Deadlock);
+
+    public static bool IsLastActiveOwnerViolation(Exception exception) => HasError(exception, LastActiveOwnerViolation);
+
+    private static bool HasError(Exception exception, int number) =>
+        FindSqlException(exception) is { } sqlException
+        && (sqlException.Number == number || sqlException.Errors.Cast<SqlError>().Any(error => error.Number == number));
+
     public static bool IsUniqueViolation(Exception exception) =>
         FindSqlException(exception) is { } sqlException
         && (sqlException.Number is UniqueConstraintViolation or UniqueIndexViolation

@@ -1,12 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Tenant & Merchant Infrastructure: EF Core persistence in the service's own SQL Server database (ADR-011, ADR-020). -->
+  <!--
+    Tenant & Merchant Infrastructure: EF Core persistence in the service's own SQL Server database (ADR-011, ADR-020),
+    and the HTTP client of Identity's internal email verification API (ADR-021).
+  -->
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
   </ItemGroup>
 

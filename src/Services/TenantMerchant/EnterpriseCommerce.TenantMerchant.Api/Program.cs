@@ -1,6 +1,7 @@
 using EnterpriseCommerce.TenantMerchant.Api.Diagnostics;
 using EnterpriseCommerce.TenantMerchant.Api.ExceptionHandling;
 using EnterpriseCommerce.TenantMerchant.Api.Hosting;
+using EnterpriseCommerce.TenantMerchant.Api.Invitations;
 using EnterpriseCommerce.TenantMerchant.Api.Security;
 using EnterpriseCommerce.TenantMerchant.Api.Tenants;
 using EnterpriseCommerce.TenantMerchant.Application;
@@ -77,5 +78,7 @@ if (app.Environment.IsDevelopment())
 app.MapTenantMerchantHealthChecks();
 app.MapInternalTenantEndpoints();
 app.MapTenantEndpoints();
+app.MapMembershipEndpoints();
+app.MapInvitationEndpoints();
 
 await app.RunAsync();

@@ -16,11 +16,29 @@ public enum MerchantRole
     MerchantStaff,
 }
 
-/// <summary>What a membership can be used for. S1 defines only the read permissions its endpoints need.</summary>
+/// <summary>
+/// What a membership can be used for, before any target-specific rule (ADR-021). The rules that depend on the target
+/// (which role may be invited, which membership may be changed) are in <see cref="MembershipAdministrationPolicy"/>.
+/// </summary>
 public enum MerchantPermission
 {
+    /// <summary>Read the tenant and one's own membership.</summary>
     ViewTenant,
+
+    /// <summary>List and read the tenant's memberships.</summary>
     ViewMemberships,
+
+    /// <summary>List and read the tenant's invitations.</summary>
+    ViewInvitations,
+
+    /// <summary>Create and cancel invitations, subject to the invited role.</summary>
+    ManageInvitations,
+
+    /// <summary>Suspend, reactivate and remove memberships, subject to the target's role.</summary>
+    ManageMemberships,
+
+    /// <summary>Change the role of a membership.</summary>
+    ChangeRoles,
 }
 
 /// <summary>The fixed mapping from merchant roles to permissions.</summary>
@@ -29,7 +47,11 @@ public static class MerchantRolePermissions
     public static bool Allows(MerchantRole role, MerchantPermission permission) => permission switch
     {
         MerchantPermission.ViewTenant => role is MerchantRole.MerchantOwner or MerchantRole.MerchantAdmin or MerchantRole.MerchantStaff,
-        MerchantPermission.ViewMemberships => role is MerchantRole.MerchantOwner or MerchantRole.MerchantAdmin,
+        MerchantPermission.ViewMemberships
+            or MerchantPermission.ViewInvitations
+            or MerchantPermission.ManageInvitations
+            or MerchantPermission.ManageMemberships => role is MerchantRole.MerchantOwner or MerchantRole.MerchantAdmin,
+        MerchantPermission.ChangeRoles => role is MerchantRole.MerchantOwner,
         _ => false,
     };
 }

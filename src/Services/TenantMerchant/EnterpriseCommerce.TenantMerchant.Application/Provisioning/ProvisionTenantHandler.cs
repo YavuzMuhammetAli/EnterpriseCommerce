@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using EnterpriseCommerce.TenantMerchant.Application.Tenants;
+using EnterpriseCommerce.TenantMerchant.Domain.Audit;
 using EnterpriseCommerce.TenantMerchant.Domain.Memberships;
 using EnterpriseCommerce.TenantMerchant.Domain.Tenants;
 using Microsoft.Extensions.Logging;
@@ -18,7 +19,8 @@ public sealed record ProvisionTenantCommand(
     string? Slug,
     string? DisplayName,
     string? OwnerSubjectId,
-    string? ActorReference);
+    string? ActorReference,
+    string? CorrelationId = null);
 
 public enum ProvisionTenantOutcome
 {
@@ -106,7 +108,9 @@ public sealed partial class ProvisionTenantHandler(
         var tenant = Tenant.Provision(slug, displayName, new ProvisioningRecord(command.ClientId, command.ProvisioningKey, requestHash, actor), now);
         var ownerMembership = Membership.CreateOwner(tenant.Id, owner, now);
 
-        if (await store.AddAsync(tenant, ownerMembership, cancellationToken) == TenantInsertOutcome.Inserted)
+        var audit = MembershipAuditRecord.OwnerProvisioned(ownerMembership, AuditActor.Service(command.ClientId), command.CorrelationId, now);
+
+        if (await store.AddAsync(tenant, ownerMembership, audit, cancellationToken) == TenantInsertOutcome.Inserted)
         {
             LogTenantProvisioned(logger, tenant.Id, command.ClientId, actor.Value, ownerMembership.Id);
             return new ProvisionTenantResult(
@@ -150,8 +154,7 @@ public sealed partial class ProvisionTenantHandler(
         return new ProvisionTenantResult(ProvisionTenantOutcome.Replayed, earlier.Tenant, owner);
     }
 
-    private static MembershipView ToView(Membership membership) =>
-        new(membership.Id, membership.TenantId, membership.SubjectId, membership.Role, membership.Status, membership.CreatedAt);
+    private static MembershipView ToView(Membership membership) => MembershipView.Of(membership);
 
     [LoggerMessage(
         EventId = 3000,

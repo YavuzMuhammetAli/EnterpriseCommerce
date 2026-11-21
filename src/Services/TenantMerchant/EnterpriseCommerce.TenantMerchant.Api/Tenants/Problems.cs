@@ -31,4 +31,64 @@ internal static class Problems
             statusCode: StatusCodes.Status422UnprocessableEntity,
             title: "The Idempotency-Key was already used for a different request.",
             type: TypeBase + "idempotency-key-reused");
+
+    public static IResult MembershipNotFound() =>
+        Problem(StatusCodes.Status404NotFound, "membership-not-found", "The membership was not found.");
+
+    public static IResult SelfModificationForbidden() =>
+        Problem(StatusCodes.Status403Forbidden, "self-modification-forbidden", "You cannot change your own membership.");
+
+    public static IResult InvalidTransition() =>
+        Problem(StatusCodes.Status409Conflict, "invalid-transition", "The change is not possible in the current state.");
+
+    public static IResult LastActiveOwner() =>
+        Problem(StatusCodes.Status409Conflict, "last-active-owner", "The tenant must keep at least one active owner.");
+
+    public static IResult OwnerRoleReserved() =>
+        Problem(StatusCodes.Status422UnprocessableEntity, "owner-role-reserved", "The MerchantOwner role is granted only by tenant provisioning.");
+
+    public static IResult ConcurrencyConflict() =>
+        Problem(StatusCodes.Status409Conflict, "concurrency-conflict", "A concurrent change was made. Read the current state and try again.");
+
+    public static IResult InvitationNotFound() =>
+        Problem(StatusCodes.Status404NotFound, "invitation-not-found", "The invitation was not found.");
+
+    public static IResult InvitationAlreadyPending(Guid? invitationId)
+    {
+        var extensions = new Dictionary<string, object?>(StringComparer.Ordinal);
+        if (invitationId is { } id)
+        {
+            extensions["invitationId"] = id;
+        }
+
+        return Results.Problem(
+            statusCode: StatusCodes.Status409Conflict,
+            title: "The address already has a pending invitation. Cancel it to invite again.",
+            type: TypeBase + "invitation-already-pending",
+            extensions: extensions);
+    }
+
+    public static IResult InvitationLimitReached() =>
+        Problem(StatusCodes.Status409Conflict, "invitation-limit-reached", "The tenant has the maximum number of open invitations.");
+
+    public static IResult InvitationNotPending() =>
+        Problem(StatusCodes.Status409Conflict, "invitation-not-pending", "The invitation is no longer pending.");
+
+    public static IResult InvitationExpired() =>
+        Problem(StatusCodes.Status410Gone, "invitation-expired", "The invitation has expired.");
+
+    public static IResult InvitationEmailMismatch() =>
+        Problem(StatusCodes.Status403Forbidden, "invitation-email-mismatch", "The invitation was sent to a different email address.");
+
+    public static IResult InvitationEmailUnverified() =>
+        Problem(StatusCodes.Status403Forbidden, "invitation-email-unverified", "Confirm your email address before accepting the invitation.");
+
+    public static IResult InvitationAccountIneligible() =>
+        Problem(StatusCodes.Status403Forbidden, "invitation-account-ineligible", "This account cannot accept invitations.");
+
+    public static IResult AlreadyAMember() =>
+        Problem(StatusCodes.Status409Conflict, "already-a-member", "You already have a membership in this tenant.");
+
+    private static IResult Problem(int status, string code, string title) =>
+        Results.Problem(statusCode: status, title: title, type: TypeBase + code);
 }

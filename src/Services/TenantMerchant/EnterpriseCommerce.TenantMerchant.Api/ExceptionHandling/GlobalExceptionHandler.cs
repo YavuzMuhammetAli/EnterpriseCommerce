@@ -1,4 +1,5 @@
 using EnterpriseCommerce.TenantMerchant.Application.Common;
+using EnterpriseCommerce.TenantMerchant.Application.Invitations;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,7 +10,8 @@ namespace EnterpriseCommerce.TenantMerchant.Api.ExceptionHandling;
 /// </summary>
 /// <remarks>
 /// <see cref="DataStoreUnavailableException"/> becomes <c>503</c> with <c>Retry-After</c>: the database could not
-/// complete the operation, so nothing is reported as done. Everything else becomes a generic <c>500</c>.
+/// complete the operation, so nothing is reported as done. <see cref="IdentityUnavailableException"/> becomes <c>503</c>
+/// too: an invitation is never accepted without Identity's verdict (ADR-021). Everything else becomes a generic <c>500</c>.
 /// </remarks>
 internal sealed partial class GlobalExceptionHandler(
     IProblemDetailsService problemDetailsService,
@@ -42,6 +44,17 @@ internal sealed partial class GlobalExceptionHandler(
                 Type = "https://tools.ietf.org/html/rfc9110#section-15.6.4",
             };
         }
+        else if (exception is IdentityUnavailableException)
+        {
+            LogIdentityUnavailable(logger, httpContext.Request.Method, httpContext.Request.Path);
+            httpContext.Response.Headers.RetryAfter = "5";
+            problem = new ProblemDetails
+            {
+                Status = StatusCodes.Status503ServiceUnavailable,
+                Title = "The account could not be verified right now. Try again later.",
+                Type = "https://errors.enterprisecommerce.example/tenant-merchant/identity-unavailable",
+            };
+        }
         else
         {
             LogUnhandledException(logger, exception, httpContext.Request.Method, httpContext.Request.Path);
@@ -70,4 +83,11 @@ internal sealed partial class GlobalExceptionHandler(
         Level = LogLevel.Error,
         Message = "Tenant & Merchant database unavailable while processing {RequestMethod} {RequestPath}; answered 503")]
     private static partial void LogDataStoreUnavailable(ILogger logger, Exception exception, string requestMethod, PathString requestPath);
+
+    // The exception is not logged: its details are already logged, without the request body, by the Identity client.
+    [LoggerMessage(
+        EventId = 1002,
+        Level = LogLevel.Error,
+        Message = "Identity verification unavailable while processing {RequestMethod} {RequestPath}; answered 503")]
+    private static partial void LogIdentityUnavailable(ILogger logger, string requestMethod, PathString requestPath);
 }

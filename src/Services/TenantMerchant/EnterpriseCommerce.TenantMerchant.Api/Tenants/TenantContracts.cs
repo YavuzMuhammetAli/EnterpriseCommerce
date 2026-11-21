@@ -14,7 +14,7 @@ internal sealed record MerchantProfileResponse(string DisplayName);
 
 internal sealed record TenantResponse(Guid Id, string Slug, string Status, DateTimeOffset CreatedAt, MerchantProfileResponse MerchantProfile);
 
-internal sealed record MembershipResponse(Guid Id, string SubjectId, string Role, string Status, DateTimeOffset CreatedAt);
+internal sealed record MembershipResponse(Guid Id, string SubjectId, string Role, string Status, DateTimeOffset CreatedAt, DateTimeOffset StatusChangedAt);
 
 /// <summary>Provisioning result, and the internal tenant read: the tenant with its initial owner membership.</summary>
 internal sealed record ProvisionedTenantResponse(
@@ -36,6 +36,13 @@ internal sealed record MemberTenantResponse(
 
 internal sealed record MembershipPageResponse(IReadOnlyList<MembershipResponse> Items, int Page, int PageSize, int TotalCount);
 
+/// <summary>The caller's tenants: each tenant with the caller's own membership.</summary>
+internal sealed record CallerTenantPageResponse(IReadOnlyList<MemberTenantResponse> Items, int Page, int PageSize, int TotalCount);
+
+/// <summary><c>PUT .../memberships/{membershipId}/role</c> body. Unknown members are rejected with <c>400</c>.</summary>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+internal sealed record ChangeRoleRequest(string? Role);
+
 internal static class TenantContractMapping
 {
     public static ProvisionedTenantResponse ToProvisioned(TenantView tenant, MembershipView? owner) =>
@@ -47,6 +54,9 @@ internal static class TenantContractMapping
     public static MembershipPageResponse ToResponse(MembershipPage page) =>
         new([.. page.Items.Select(ToResponse)], page.Page, page.PageSize, page.TotalCount);
 
+    public static CallerTenantPageResponse ToResponse(CallerTenantPage page) =>
+        new([.. page.Items.Select(item => ToMember(item.Tenant, item.Membership))], page.Page, page.PageSize, page.TotalCount);
+
     public static MembershipResponse ToResponse(MembershipView membership) =>
-        new(membership.Id, membership.SubjectId, membership.Role.ToString(), membership.Status.ToString(), membership.CreatedAt);
+        new(membership.Id, membership.SubjectId, membership.Role.ToString(), membership.Status.ToString(), membership.CreatedAt, membership.StatusChangedAt);
 }

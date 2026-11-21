@@ -1,5 +1,6 @@
 using EnterpriseCommerce.TenantMerchant.Application.Provisioning;
 using EnterpriseCommerce.TenantMerchant.Application.Tenants;
+using EnterpriseCommerce.TenantMerchant.Domain.Audit;
 using EnterpriseCommerce.TenantMerchant.Domain.Memberships;
 using EnterpriseCommerce.TenantMerchant.Domain.Tenants;
 
@@ -14,6 +15,8 @@ internal sealed class InMemoryTenantStore : ITenantProvisioningStore, ITenantRea
     public List<Tenant> Tenants { get; } = [];
 
     public List<Membership> Memberships { get; } = [];
+
+    public List<MembershipAuditRecord> AuditRecords { get; } = [];
 
     /// <summary>Runs inside <see cref="AddAsync"/> before the uniqueness checks, to simulate a concurrent winner.</summary>
     public Action? BeforeInsert { get; set; }
@@ -35,7 +38,7 @@ internal sealed class InMemoryTenantStore : ITenantProvisioningStore, ITenantRea
     /// <summary>Runs inside <see cref="SlugExistsAsync"/>, to simulate a commit between the key and slug lookups.</summary>
     public Action? BeforeSlugCheck { get; set; }
 
-    public Task<TenantInsertOutcome> AddAsync(Tenant tenant, Membership owner, CancellationToken cancellationToken)
+    public Task<TenantInsertOutcome> AddAsync(Tenant tenant, Membership owner, MembershipAuditRecord audit, CancellationToken cancellationToken)
     {
         BeforeInsert?.Invoke();
         if (Tenants.Any(t => t.Slug == tenant.Slug
@@ -46,6 +49,7 @@ internal sealed class InMemoryTenantStore : ITenantProvisioningStore, ITenantRea
 
         Tenants.Add(tenant);
         Memberships.Add(owner);
+        AuditRecords.Add(audit);
         Inserts++;
         return Task.FromResult(TenantInsertOutcome.Inserted);
     }
@@ -72,11 +76,23 @@ internal sealed class InMemoryTenantStore : ITenantProvisioningStore, ITenantRea
         return Task.FromResult(new MembershipPage([.. current.Skip(skip).Take(take).Select(View)], 0, take, current.Count));
     }
 
+    public Task<MembershipView?> GetMembershipAsync(Guid tenantId, Guid membershipId, CancellationToken cancellationToken) =>
+        Task.FromResult(Memberships.Where(m => m.TenantId == tenantId && m.Id == membershipId).Select(View).SingleOrDefault());
+
+    public Task<CallerTenantPage> ListCallerTenantsAsync(string subjectId, int skip, int take, CancellationToken cancellationToken)
+    {
+        var active = Memberships.Where(m => m.SubjectId == subjectId && m.Status == MembershipStatus.Active).OrderBy(m => m.CreatedAt).ToList();
+        return Task.FromResult(new CallerTenantPage(
+            [.. active.Skip(skip).Take(take).Select(m => new CallerTenantView(View(Tenants.Single(t => t.Id == m.TenantId)), View(m)))],
+            0,
+            take,
+            active.Count));
+    }
+
     private static TenantView View(Tenant tenant) =>
         new(tenant.Id, tenant.Slug, tenant.Status, tenant.CreatedAt, tenant.MerchantProfile.DisplayName);
 
-    private static MembershipView View(Membership membership) =>
-        new(membership.Id, membership.TenantId, membership.SubjectId, membership.Role, membership.Status, membership.CreatedAt);
+    private static MembershipView View(Membership membership) => MembershipView.Of(membership);
 }
 
 internal sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

@@ -16,7 +16,9 @@ public sealed class MigrationTests(SqlServerTestDatabase database) : IClassFixtu
         await using var context = database.CreateContext();
         var ct = TestContext.Current.CancellationToken;
 
-        Assert.Contains(await context.Database.GetAppliedMigrationsAsync(ct), migration => migration.EndsWith("_InitialTenantMerchantSchema", StringComparison.Ordinal));
+        var applied = await context.Database.GetAppliedMigrationsAsync(ct);
+        Assert.Contains(applied, migration => migration.EndsWith("_InitialTenantMerchantSchema", StringComparison.Ordinal));
+        Assert.Contains(applied, migration => migration.EndsWith("_MerchantMembershipAdministration", StringComparison.Ordinal));
         Assert.Empty(await context.Database.GetPendingMigrationsAsync(ct));
         Assert.False(context.Database.HasPendingModelChanges(), "The model has changes that no migration captures.");
     }
@@ -32,23 +34,49 @@ public sealed class MigrationTests(SqlServerTestDatabase database) : IClassFixtu
             WHERE i.name LIKE 'UX[_]%' OR i.name LIKE 'IX[_]%'
             """);
         Assert.Equal(
-            "Memberships.IX_Memberships_TenantId_CreatedAt:0:-"
+            "MembershipAuditRecords.IX_MembershipAuditRecords_TenantId_OccurredAt:0:-"
+            + "|Memberships.IX_Memberships_SubjectId_Status:0:-"
+            + "|Memberships.IX_Memberships_TenantId_ActiveOwner:0:([Role]=N'MerchantOwner' AND [Status]=N'Active')"
+            + "|Memberships.IX_Memberships_TenantId_CreatedAt:0:-"
             + "|Memberships.UX_Memberships_TenantId_SubjectId_Current:1:([Status]<>N'Removed')"
+            + "|MerchantInvitations.IX_MerchantInvitations_TenantId_CreatedAt:0:-"
+            + "|MerchantInvitations.UX_MerchantInvitations_TenantId_NormalizedEmail_Pending:1:([Status]=N'Pending')"
+            + "|MerchantInvitations.UX_MerchantInvitations_TokenHash:1:-"
             + "|Tenants.UX_Tenants_ProvisionedByClientId_ProvisioningKey:1:-"
             + "|Tenants.UX_Tenants_Slug:1:-",
             indexes);
 
         var checks = await database.ScalarAsync<string>(
             "SELECT STRING_AGG(name, '|') WITHIN GROUP (ORDER BY name) FROM sys.check_constraints");
-        Assert.Equal("CK_Memberships_Role|CK_Memberships_Status|CK_Tenants_Status", checks);
+        Assert.Equal(
+            "CK_MembershipAuditRecords_Action|CK_MembershipAuditRecords_ActorKind|CK_Memberships_Role|CK_Memberships_Status"
+            + "|CK_MerchantInvitations_Accepted|CK_MerchantInvitations_Cancelled|CK_MerchantInvitations_Expired|CK_MerchantInvitations_Expiry"
+            + "|CK_MerchantInvitations_Role|CK_MerchantInvitations_Status|CK_Tenants_Status",
+            checks);
 
         var foreignKeys = await database.ScalarAsync<string>(
             "SELECT STRING_AGG(CONCAT(OBJECT_NAME(parent_object_id), '->', OBJECT_NAME(referenced_object_id)), '|') WITHIN GROUP (ORDER BY name) FROM sys.foreign_keys");
-        Assert.Equal("Memberships->Tenants|MerchantProfiles->Tenants", foreignKeys);
+        Assert.Equal("MembershipAuditRecords->Tenants|Memberships->Tenants|MerchantInvitations->Tenants|MerchantProfiles->Tenants", foreignKeys);
 
-        var rowVersions = await database.ScalarAsync<int>(
-            "SELECT COUNT(*) FROM sys.columns c JOIN sys.types ty ON ty.user_type_id = c.user_type_id WHERE ty.name = 'timestamp' AND c.name = 'RowVersion'");
-        Assert.Equal(3, rowVersions);
+        // Every mutable table; the append-only audit table has none (ADR-021).
+        var rowVersions = await database.ScalarAsync<string>(
+            "SELECT STRING_AGG(OBJECT_NAME(c.object_id), '|') WITHIN GROUP (ORDER BY OBJECT_NAME(c.object_id)) FROM sys.columns c JOIN sys.types ty ON ty.user_type_id = c.user_type_id WHERE ty.name = 'timestamp' AND c.name = 'RowVersion'");
+        Assert.Equal("Memberships|MerchantInvitations|MerchantProfiles|Tenants", rowVersions);
+
+        // The backstops of ADR-021: the last-owner trigger runs after the change, the audit trigger replaces it.
+        var triggers = await database.ScalarAsync<string>(
+            "SELECT STRING_AGG(CONCAT(OBJECT_NAME(parent_id), '.', name, ':', is_instead_of_trigger, ':', is_disabled), '|') WITHIN GROUP (ORDER BY name) FROM sys.triggers");
+        Assert.Equal("MembershipAuditRecords.TR_MembershipAuditRecords_AppendOnly:1:0|Memberships.TR_Memberships_RequireActiveOwner:0:0", triggers);
+    }
+
+    [Fact]
+    public async Task Database_UsesReadCommittedSnapshot_WhichTheWriteGateAndTriggerTolerate()
+    {
+        // EF Core creates the database with READ_COMMITTED_SNAPSHOT on. The tenant write gate does not depend on it
+        // (its UPDLOCK serializes writers either way) and the last-owner trigger forces a locking read
+        // (READCOMMITTEDLOCK). This test records the setting the concurrency tests ran under.
+        database.RequireAvailable();
+        Assert.True(await database.ScalarAsync<bool>("SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = DB_NAME()"));
     }
 
     [Fact]
@@ -59,10 +87,20 @@ public sealed class MigrationTests(SqlServerTestDatabase database) : IClassFixtu
         var migrator = context.GetService<IMigrator>();
         var ct = TestContext.Current.CancellationToken;
 
+        const string s2Objects =
+            "SELECT (SELECT COUNT(*) FROM sys.objects WHERE name IN ('MerchantInvitations', 'MembershipAuditRecords', 'TR_Memberships_RequireActiveOwner', 'TR_MembershipAuditRecords_AppendOnly'))"
+            + " + (SELECT COUNT(*) FROM sys.indexes WHERE name IN ('IX_Memberships_TenantId_ActiveOwner', 'IX_Memberships_SubjectId_Status'))";
+
+        // S2 down to S1: its tables, triggers and indexes go, and the S1 schema stays.
+        await migrator.MigrateAsync("InitialTenantMerchantSchema", cancellationToken: ct);
+        Assert.Equal(0, await database.ScalarAsync<int>(s2Objects));
+        Assert.Equal(3, await database.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name IN ('Tenants', 'MerchantProfiles', 'Memberships')"));
+
         await migrator.MigrateAsync(Migration.InitialDatabase, cancellationToken: ct);
         Assert.Equal(0, await database.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name IN ('Tenants', 'MerchantProfiles', 'Memberships')"));
 
         await context.Database.MigrateAsync(ct);
-        Assert.Equal(3, await database.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name IN ('Tenants', 'MerchantProfiles', 'Memberships')"));
+        Assert.Equal(6, await database.ScalarAsync<int>(s2Objects));
+        Assert.Equal(5, await database.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name IN ('Tenants', 'MerchantProfiles', 'Memberships', 'MerchantInvitations', 'MembershipAuditRecords')"));
     }
 }
