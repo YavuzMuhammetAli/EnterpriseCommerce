@@ -167,10 +167,14 @@ Governing ADR: [ADR-014](../decisions/ADR-014-logical-tenant-isolation.md).
 - **Naming and cardinality (resolved, [ADR-020](../decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md)):**
   - The service is `TenantMerchant` (projects `EnterpriseCommerce.TenantMerchant.*`, audience `tenant-merchant-api`, scopes `svc.tenant-merchant.*`).
   - **A tenant is one merchant organization.** Memberships and merchant roles are tenant-scoped, and other services scope merchant-owned data by the tenant ID.
+- **Invitations and membership administration (accepted, [ADR-021](../decisions/ADR-021-merchant-invitations-and-membership-administration.md)):**
+  - An invitation's single-use token is stored only as a hash and returned once to the inviter until Notification delivers it.
+  - Acceptance also requires Identity's verdict that the caller's verified email is the invited address (D14), through a narrow internal endpoint; access tokens still carry no email.
+  - Every membership change is serialized per tenant (an update lock on the tenant row) and commits with an append-only audit record. A tenant can never be left without an active owner, and a trigger backs this up.
 - **Design-level details within the accepted model** are worked out in later phases and must conform to ADR-014. They are not open architectural decisions:
   - the tenant context claim shape: resolved by [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md). Access tokens carry no tenant claim, and the tenant is an explicit request parameter validated by the owning service
   - the membership data shared with other services (Tenant & Merchant design; it needs the first event flow, [PHASE_3_TENANT_MERCHANT.md section 7](PHASE_3_TENANT_MERCHANT.md#7-integration-events))
-  - the merchant role catalog and the membership rules: `MerchantOwner`, `MerchantAdmin` and `MerchantStaff`, defined in [PHASE_3_TENANT_MERCHANT.md section 3](PHASE_3_TENANT_MERCHANT.md#3-merchant-roles-permissions-and-membership-rules)
+  - the merchant role catalog and the membership rules: `MerchantOwner`, `MerchantAdmin` and `MerchantStaff`, defined in [PHASE_3_TENANT_MERCHANT.md section 3](PHASE_3_TENANT_MERCHANT.md#3-merchant-roles-permissions-and-membership-rules), with the S2 permission matrix in [PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md section 3](PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md#3-role-and-permission-matrix)
   - the per-service enforcement technique, for example EF Core query filters versus explicit scoping (each service's design)
 
 ## 8. Checkout and order processing
@@ -233,6 +237,7 @@ Governing ADRs: [ADR-005](../decisions/ADR-005-kafka-for-asynchronous-communicat
   - A refresh-token rotation never extends a token of a retired key: its successor is issued with the Active keys and capped by the absolute session deadline.
   - `RetiredAt` is set when the activation rollout starts. With those lifetimes, a rollout may last at most 24 days when it rotates both keys, and 25 days for the signing key alone; the target is the retention safety margin. A longer rollout requires recalculating the removal date from the actual last issuance time (ADR-019 section 4.1).
   - Emergency rotation removes a compromised key at once. Early removal always fails closed.
+- **Merchant invitation acceptance (accepted, [ADR-021](../decisions/ADR-021-merchant-invitations-and-membership-administration.md)):** the invitation token plus Identity's verified-email verdict, requested by the allow-listed service client `svc-tenant-merchant` with the scope `svc.identity.account-verification`. Identity returns a verdict, never an address. No verdict means no membership.
 - **Account security tokens and email (accepted, [ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)):** hashed, single-use confirmation and reset tokens consumed atomically with the account change. Notification owns production email delivery, and Identity hands emails over through a bounded in-process queue with status-only reconciliation.
 - The Identity API contract is in [IDENTITY_API_CONTRACT.md](../api/IDENTITY_API_CONTRACT.md).
 - **Service-level authorization is mandatory.** Gateway authorization does not replace it.
@@ -311,3 +316,4 @@ These are **open**. They must not be decided silently. Each one is decided throu
 - Email confirmation and password reset token semantics, and security email delivery ([ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md), Phase 2.2).
 - Signing and encryption key rollover and the retention of retired keys ([ADR-019](../decisions/ADR-019-signing-and-encryption-key-rollover-and-retirement.md), Phase 2.3).
 - Tenant and merchant naming (`TenantMerchant`) and the tenant-merchant cardinality, one merchant per tenant ([ADR-020](../decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md), Phase 3 S1).
+- Merchant invitations, the invitation email match (D14), per-tenant serialization of membership changes, and the membership audit trail ([ADR-021](../decisions/ADR-021-merchant-invitations-and-membership-administration.md), Phase 3 S2).

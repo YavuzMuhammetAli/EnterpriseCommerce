@@ -2,7 +2,10 @@
 
 The design and the implementation progress of the Tenant & Merchant service. It works within [ADR-014](../decisions/ADR-014-logical-tenant-isolation.md) (logical tenant isolation) and [ADR-020](../decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md) (the `TenantMerchant` name, and one merchant per tenant). The API is specified in [TENANT_MERCHANT_API_CONTRACT.md](../api/TENANT_MERCHANT_API_CONTRACT.md).
 
-- **Status:** Phase 3 is authorized and implemented in small slices. **Slice S1** (service foundation and tenant provisioning) is implemented and tested locally. Later slices are not started.
+- **Status:** Phase 3 is authorized and implemented in small slices.
+  - **Slice S1** (service foundation and tenant provisioning) is implemented and tested locally.
+  - **Slice S2** (merchant membership management) is implemented and tested locally. Its design is in [PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md](PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md).
+  - Later slices are not started.
 - **Verification levels used below:**
   - **Implemented:** in the code.
   - **Tested locally:** automated tests against a real SQL Server 2022 (Compose) and LocalDB. A manual smoke run with a real Identity token is noted where it applies.
@@ -45,7 +48,7 @@ Roles are owned and enforced here and never appear in tokens (ADR-017 section 2)
 | `MerchantAdmin` | Administers it | yes | yes |
 | `MerchantStaff` | A merchant employee | yes | no |
 
-S1 defines only the read permissions its endpoints need. Write permissions arrive with the endpoints that use them.
+S1 defined only the read permissions its endpoints needed. **S2** adds the write permissions and the per-target rules; the complete matrix is in [PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md section 3](PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md#3-role-and-permission-matrix).
 
 **Rules:**
 
@@ -57,7 +60,7 @@ S1 defines only the read permissions its endpoints need. Write permissions arriv
   - An invalid transition is an outcome (`InvalidTransition`), not an exception.
 - **The last active owner** cannot be suspended, removed or demoted (`LastActiveOwner`).
   - In S1 this is a pure domain rule with unit tests.
-  - **Deferred to S2:** enforcing it under concurrency (a locked count of active owners in the same transaction) when the membership-management endpoints exist.
+  - **Enforced under concurrency since S2:** every membership change counts the active owners under a per-tenant write lock, and a database trigger refuses any change that would leave no active owner ([PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md section 6](PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md#6-concurrency-and-the-last-active-owner-guarantee)).
 - **Only active members** see anything. A suspended or removed member is treated like a non-member.
 
 ## 4. Provisioning (S1)
@@ -166,9 +169,23 @@ The first event, provisionally `TenantProvisioned` on a tenant topic, is designe
   - `403` for the same token on the member API
 - A user-token smoke run through the merchant BFF and the Gateway was not done (finding I29 covers the full local flow).
 
+### S2: merchant membership management
+
+Design, decisions and evidence: [PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md](PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md) and [ADR-021](../decisions/ADR-021-merchant-invitations-and-membership-administration.md).
+
+| Item | Implemented | Tested locally |
+|---|---|---|
+| Invitations: create, list, read, cancel, accept; a single-use token stored as a hash and returned once | yes | unit, SQL Server |
+| D14: acceptance requires Identity's verified-email verdict (new internal Identity endpoint, `svc-tenant-merchant` client) | yes | unit, SQL Server (stub Identity), Identity integration, end to end with the real Identity |
+| Membership administration: suspend, reactivate, remove, role change, with the role matrix and the self-modification ban | yes | unit, SQL Server |
+| The last-active-owner rule under concurrency: a per-tenant write lock, plus a trigger backstop | yes | SQL Server concurrency tests, including a mutation run without the lock |
+| Append-only audit, atomic with each change | yes | SQL Server, including rollback on a failed audit write |
+| The caller's tenants (`GET /api/v1/tenants`) | yes | SQL Server, end to end |
+| Gateway Development route for acceptance; BFF and Gateway path | yes | Gateway tests, BFF end-to-end tests |
+| Integration events and outbox | no (deferred, ADR-012) | architecture test |
+
 ### Later slices (not started)
 
-- **S2:** merchant employee invitations and acceptance (PHASE_2_2 section 5.1.2), membership role and status management with the concurrent last-owner rule, and the caller's "my tenants" list.
 - Self-service onboarding and merchant applications.
 - Tenant suspension and closure (with Admin).
 - Subscriptions and usage.

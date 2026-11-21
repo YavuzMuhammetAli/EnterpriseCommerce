@@ -102,6 +102,7 @@ Common status codes:
 | List sessions | `GET /api/v1/users/me/sessions` | REST | Bearer |
 | Revoke session | `DELETE /api/v1/users/me/sessions/{sessionId}` | REST | Bearer |
 | Account disable and reactivate | `POST /internal/v1/accounts/{accountId}/disable`, `POST /internal/v1/accounts/{accountId}/reactivate` ([section 2.12](#212-account-disablement-and-reactivation-internal)) | REST (internal) | Service token only (allow-listed `svc-` client, scope `svc.identity.account-lifecycle`) |
+| Account email verification | `POST /internal/v1/accounts/{accountId}/email-verification` ([section 2.13](#213-account-email-verification-internal)) | REST (internal) | Service token only (allow-listed `svc-` client, scope `svc.identity.account-verification`) |
 
 Page paths are implementation details of Identity.Api and are not a client contract. Clients reach the pages through `/connect/authorize` or through links that Identity issues.
 
@@ -268,6 +269,44 @@ Access tokens already issued stay valid until they expire (ADR-017 section 6). T
   | `403` | A valid token that is not an allowed service caller, for example a user token |
   | `404` | Unknown account. The caller is a trusted service, so this is no enumeration risk. |
   | `503` | The change could not be committed. Nothing changed. |
+
+### 2.13 Account email verification (internal)
+
+**Implemented (Phase 3 S2, [ADR-021](../decisions/ADR-021-merchant-invitations-and-membership-administration.md)).** Called by Tenant & Merchant before it accepts a merchant invitation (decision D14). The question is: *is this the verified email address of this active account?* The Gateway never routes `/internal/**`.
+
+`POST /internal/v1/accounts/{accountId}/email-verification` with `{ "email": "new.hire@example.test" }`.
+
+- **Authentication:** `Authorization: Bearer <access token>` from the client credentials grant. Identity accepts the token only if all of these hold:
+  - `ec_ptype=service`
+  - the audience `Identity:AccountAdministration:Audience` (default `identity-api`)
+  - the scope `svc.identity.account-verification`, which is separate from the lifecycle scope: neither grants the other
+  - `sub == client_id`, with the `svc-` prefix, listed in `Identity:AccountVerification:AllowedClientIds`
+
+  The list is empty by default, which denies every caller. Startup refuses an entry that is not a service client.
+- **Request:**
+  - `accountId` is the user's `sub`.
+  - `email` must be a plain address that passes Identity's account email rules; it is normalized the same way as stored addresses.
+  - Any other member answers `400`.
+- **Data minimization:** the caller sends the address it holds, and Identity answers with a verdict. **The account's own address is never returned, and the address is never logged.**
+- **Decision order:**
+  1. Unknown account: `404`.
+  2. Not `Active`: `Inactive`.
+  3. Email not confirmed: `Unverified`.
+  4. A different normalized address: `Mismatch`.
+  5. Otherwise: `Match`.
+- **Responses:**
+
+  | Code | Meaning |
+  |---|---|
+  | `200` | `{ "accountId": "...", "result": "Match" \| "Mismatch" \| "Unverified" \| "Inactive" }` |
+  | `400` | Validation problem details (`email`, `accountId`), or a malformed body or unknown member |
+  | `401` | No valid token for Identity |
+  | `403` | A valid token that is not an allowed verification caller: a user token, a token with only the lifecycle scope, or a client that is not allow-listed |
+  | `404` | Unknown account. The caller is a trusted service, so this is no enumeration risk. |
+  | `503` | The database is unavailable. No verdict is given, and the caller must fail closed. |
+
+- **Read only.** It changes nothing and needs no `Idempotency-Key`.
+- **Caller registration:** configuration only ([IDENTITY_OPERATIONS.md section 1.3](../security/IDENTITY_OPERATIONS.md#13-email-verification-for-tenant--merchant)).
 
 <a id="3-jwt-access-token-claims-baseline"></a>
 

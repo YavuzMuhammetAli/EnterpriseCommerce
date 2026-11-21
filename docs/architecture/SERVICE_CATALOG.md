@@ -11,7 +11,7 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
 | # | Service | Planned project prefix | Data store | Status |
 |---|---|---|---|---|
 | 1 | Identity | `EnterpriseCommerce.Identity` | SQL Server | Implemented in Phase 2.3 (slices S1 to S7) and tested locally. Not production-verified, and production gates are open ([IDENTITY_OPERATIONS.md section 7](../security/IDENTITY_OPERATIONS.md#7-verification-level-and-remaining-production-gates)). |
-| 2 | Tenant & Merchant | `EnterpriseCommerce.TenantMerchant` ([ADR-020](../decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md)) | SQL Server | Phase 3 slice S1 (foundation and tenant provisioning) implemented and tested locally. Not production-verified ([PHASE_3_TENANT_MERCHANT.md](PHASE_3_TENANT_MERCHANT.md)). |
+| 2 | Tenant & Merchant | `EnterpriseCommerce.TenantMerchant` ([ADR-020](../decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md)) | SQL Server | Phase 3 slices S1 (foundation and tenant provisioning) and S2 (membership management) implemented and tested locally. Not production-verified ([PHASE_3_TENANT_MERCHANT.md](PHASE_3_TENANT_MERCHANT.md)). |
 | 3 | Catalog | `EnterpriseCommerce.Catalog` | MongoDB | Planned |
 | 4 | Inventory | `EnterpriseCommerce.Inventory` | SQL Server | Planned |
 | 5 | Cart | `EnterpriseCommerce.Cart` | SQL Server + Redis (acceleration only) | Planned |
@@ -41,6 +41,7 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
   - ASP.NET Core Identity roles are not authoritative for platform or merchant roles.
 - Token, session and protocol strategy (decided in Phase 2.2, [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md)): Identity has its own host behind the Gateway, hosts the account UI for every credential entry, and owns the per-user security version and the refresh-token redemption ledger.
 - Account security tokens ([ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)): Identity creates, hashes and consumes confirmation and reset tokens, and hands security emails to Notification through a bounded in-process queue. It does not own email delivery.
+- Email verification for invitations ([ADR-021](../decisions/ADR-021-merchant-invitations-and-membership-administration.md)): Identity answers Tenant & Merchant's service client whether an address is the verified email of an active account ([IDENTITY_API_CONTRACT.md section 2.13](../api/IDENTITY_API_CONTRACT.md#213-account-email-verification-internal)). It returns a verdict, never the account's address.
 - Account status: Identity owns the authentication status of an account. Admin decides on disablement and reactivation and calls Identity's internal API with a service token ([IDENTITY_API_CONTRACT.md section 2.12](../api/IDENTITY_API_CONTRACT.md#212-account-disablement-and-reactivation-internal)). Admin keeps the administrative audit trail; Identity records the security event.
 - **Implemented in Phase 2.3** and tested locally against SQL Server 2022 (progress and verification notes: [PHASE_2_IDENTITY_DESIGN_BRIEF.md](PHASE_2_IDENTITY_DESIGN_BRIEF.md#phase-23-implementation-progress); operations: [IDENTITY_OPERATIONS.md](../security/IDENTITY_OPERATIONS.md)):
   - **Persistence (S1):** EF Core migrations, and the authoritative security transaction with a whole-transaction deadlock retry and post-commit cleanup.
@@ -101,9 +102,15 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
     - Every request is authorized from the service's own membership data.
     - Cross-tenant access answers `404`, and an insufficient role `403`.
   - **Host:** local JWT bearer validation (ADR-017 section 4), a fail-closed fallback policy, `X-Correlation-ID`, problem details, and health checks.
+- **Implemented in Phase 3 S2** ([PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md](PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md), [ADR-021](../decisions/ADR-021-merchant-invitations-and-membership-administration.md)):
+  - **Invitations:** a single-use token stored only as a hash and returned once to the inviter; acceptance requires Identity's verified-email verdict, and the subject is always the token's `sub`.
+  - **Membership administration:** suspend, reactivate, remove and change roles under an explicit role matrix. `MerchantOwner` is still granted only by provisioning.
+  - **The last-active-owner guarantee under concurrency:** a per-tenant write lock, plus a trigger backstop.
+  - **An append-only audit trail**, written atomically with every change.
+  - **The caller's tenant list.**
 - **Not implemented yet:**
-  - integration events and the outbox: none in S1 (ADR-012)
-  - invitations, and membership role and status management
+  - integration events and the outbox: none in S1 or S2 (ADR-012)
+  - invitation email delivery (Notification), and the merchant-portal front end
   - self-service onboarding and merchant applications
   - tenant suspension and closure
   - subscriptions and usage

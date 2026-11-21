@@ -476,6 +476,7 @@ Registration creates an **identity only**. It never creates a tenant, merchant, 
   3. The invitee opens the link in the merchant portal. If not signed in, the BFF starts the normal login flow. Identity offers "Create account" on its login page.
   4. After authentication, the portal calls Tenant & Merchant to accept the invitation. Tenant & Merchant validates the invitation secret (single use, expiry) and records the membership for the authenticated `sub`.
   5. **Open (D14):** whether Tenant & Merchant must also check that the account's verified email matches the invited email. That needs a verified email from Identity (an `email` claim for the merchant portal audience only, or an internal Identity lookup). Possession of the single-use secret sent to the invited address is the minimum.
+     **Resolved (2026-11-21, [ADR-021](../decisions/ADR-021-merchant-invitations-and-membership-administration.md)):** both are required. Tenant & Merchant asks an internal Identity endpoint whether the caller's verified email is the invited address; no `email` claim is added to tokens.
 - **Account creation is never membership.** An account becomes a merchant user only when Tenant & Merchant records a membership.
 
 #### 5.1.3 Platform administrator invitation
@@ -1442,7 +1443,7 @@ The owner approved the decisions on 2026-11-18. **The ADRs are the decision sour
 | D11 | Delivery of credential-bearing emails | **Accepted, revised:** Notification delivers. Identity hands emails over through a bounded in-process queue (E2 in the worker). E3 is deferred. | ADR-018 |
 | D12 | Confirmed email before sign-in | **Accepted:** yes, for every account | ADR-017 section 9, ADR-018 |
 | D13 | Account disablement representation | **Accepted:** a dedicated account status, not lockout | ADR-017 section 9, ADR-018 |
-| D14 | Invitation acceptance email match | **Deferred** to the Tenant & Merchant design | [11.3](#113-deferred-decisions) |
+| D14 | Invitation acceptance email match | **Deferred** to the Tenant & Merchant design. **Resolved in Phase 3 S2:** the secret plus Identity's verified-email verdict. | [ADR-021](../decisions/ADR-021-merchant-invitations-and-membership-administration.md) |
 | D15 | Endpoint mapping, issuer and routing | **Accepted:** the [section 8](#8-endpoint-mapping-proposal) mapping. A dedicated Identity host behind the Gateway. | ADR-017 section 10, [IDENTITY_API_CONTRACT.md](../api/IDENTITY_API_CONTRACT.md) |
 | D16 | Lockout and SSO cookie parameters | **Accepted:** 5 failures, 15 minutes. Security stamp validation every 5 minutes. | ADR-017 section 9 |
 | D17 | MFA for administrators before production-like deployment | **Deferred** (required before any production-like deployment) | [11.3](#113-deferred-decisions) |
@@ -1472,7 +1473,7 @@ The owner approved the decisions on 2026-11-18. **The ADRs are the decision sour
 
 | Item | Planned resolution |
 |---|---|
-| D14: invitation acceptance email match | Tenant & Merchant design |
+| D14: invitation acceptance email match | Tenant & Merchant design. **Resolved by [ADR-021](../decisions/ADR-021-merchant-invitations-and-membership-administration.md).** |
 | D17: MFA for administrators | A later MFA design, before any production-like deployment |
 | D19: concrete Data Protection and signing key stores | Deployment phase |
 | E3: opaque-reference email handoff through the outbox | After the ADR-012 outbox design |

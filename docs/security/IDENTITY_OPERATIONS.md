@@ -55,6 +55,20 @@ The account keeps the last change as `StatusChangedAt`, `StatusReason` and `Stat
 - Forced password reset when a security-related disablement is reactivated (proposal in PHASE_2_2_AUTHENTICATION_FLOWS.md section 5.6.6). Until it exists, that is a procedure: the user resets the password through "forgot password".
 - The user-disabled integration event (ADR-015 O13).
 
+### 1.3 Email verification for Tenant & Merchant
+
+The internal endpoint `POST /internal/v1/accounts/{accountId}/email-verification` ([IDENTITY_API_CONTRACT.md section 2.13](../api/IDENTITY_API_CONTRACT.md#213-account-email-verification-internal), [ADR-021](../decisions/ADR-021-merchant-invitations-and-membership-administration.md)) answers whether an address is the verified email of an active account. It is read only. It returns a verdict, never an address, and never logs the address.
+
+- **Its own boundary:**
+  - the scope `svc.identity.account-verification` and the allow-list `Identity:AccountVerification:AllowedClientIds`, empty by default
+  - the lifecycle scope does not grant it, and it grants nothing else
+- **Registering Tenant & Merchant needs configuration only:**
+  - a `Service` client `svc-tenant-merchant` with its `JsonWebKeySet` and `ServiceScopes: [{ Scope: svc.identity.account-verification, Audience: identity-api }]`
+  - `svc-tenant-merchant` added to `Identity:AccountVerification:AllowedClientIds`
+  - on Tenant & Merchant's side, `TenantMerchant:IdentityVerification` (TENANT_MERCHANT_API_CONTRACT.md section 6) with the matching private key
+- **Locally:** `dotnet run deploy/dev/bff-dev-keys.cs` generates the key outside the repository, the Identity variables (`identity-clients.ps1` or `.sh`), and Tenant & Merchant's variables (`tenant-merchant-identity.ps1` or `.sh`).
+- **Log:** event 3510 records the subject, the verdict and the calling client.
+
 ## 2. Retention cleanup
 
 ### 2.1 Policy per record category
@@ -360,6 +374,7 @@ None of these is complete.
 | A rotation procedure for the Data Protection key-encryption certificate | Not implemented. Replacing the certificate today makes the existing keys unreadable (section 4). |
 | Admin service integration: the real Admin service with its `svc-admin` registration, and MFA for administrators (D17) | Admin does not exist, and the internal API is tested with a test client. MFA is deferred (PHASE_2_2 section 11.3). |
 | Notification integration: its internal security email endpoint | Not implemented. Identity refuses to start outside Development without it (ADR-018). |
+| The deployed `svc-tenant-merchant` registration and key (section 1.3) | Configuration only. Tested with real client-credentials tokens in the BFF end-to-end suite; no deployed key store exists. |
 | Real Safari on macOS and iOS | Open (ADR-016 section 8). Playwright WebKit is no evidence (finding I26). |
 | A metrics exporter, dashboards, alerting and operational monitoring | Observability phase. The alert candidates are in section 6. |
 | Retention periods for account security tokens and delivery records | Open decision (I35, PROJECT_DECISIONS section 13) |

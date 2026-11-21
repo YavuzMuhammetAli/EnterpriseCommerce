@@ -9,7 +9,7 @@ A multi-tenant, multi-vendor e-commerce marketplace built with .NET 10 microserv
 >   - Phase 2.1 selected ASP.NET Core Identity with OpenIddict ([ADR-015](docs/decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)).
 >   - Phase 2.2 accepted the authentication, token, session and browser client design ([ADR-016](docs/decisions/ADR-016-browser-client-architecture-backend-for-frontend.md) to [ADR-018](docs/decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)).
 >   - Phase 2.3 implemented it in slices S1 to S7.
-> - **Phase 3** (Tenant & Merchant) is in progress: slice S1, the service foundation and tenant provisioning, is implemented ([PHASE_3_TENANT_MERCHANT.md](docs/architecture/PHASE_3_TENANT_MERCHANT.md)).
+> - **Phase 3** (Tenant & Merchant) is in progress: slices S1 (the service foundation and tenant provisioning) and S2 (merchant membership management) are implemented ([PHASE_3_TENANT_MERCHANT.md](docs/architecture/PHASE_3_TENANT_MERCHANT.md)).
 >
 > See [Current status](#current-status).
 
@@ -36,7 +36,8 @@ A multi-tenant, multi-vendor e-commerce marketplace built with .NET 10 microserv
 | [PHASE_2_IDENTITY_DESIGN_BRIEF.md](docs/architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md) | Identity design scope and Phase 2.3 implementation progress |
 | [PHASE_3_TENANT_MERCHANT.md](docs/architecture/PHASE_3_TENANT_MERCHANT.md) | Tenant & Merchant design and implementation progress |
 | [IDENTITY_API_CONTRACT.md](docs/api/IDENTITY_API_CONTRACT.md) | Identity API contract (accepted Phase 2.2 revision) and API conventions |
-| [TENANT_MERCHANT_API_CONTRACT.md](docs/api/TENANT_MERCHANT_API_CONTRACT.md) | Tenant & Merchant API contract (Phase 3 S1) |
+| [PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md](docs/architecture/PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md) | Phase 3 S2: invitations, membership administration, the last-owner guarantee, audit |
+| [TENANT_MERCHANT_API_CONTRACT.md](docs/api/TENANT_MERCHANT_API_CONTRACT.md) | Tenant & Merchant API contract (Phase 3 S1 and S2) |
 
 ## Technology stack
 
@@ -172,6 +173,7 @@ TenantMerchant__Database__ApplyMigrationsAtStartup=true dotnet run --project src
 
 - Tokens are validated against Identity at `https://localhost:7101/` (`TenantMerchant:Authentication:Issuer`), so Identity must run to call the API.
 - No client may provision tenants until one is allow-listed: `TenantMerchant__Provisioning__AllowedClientIds__0=svc-<caller>`, plus a matching service client in Identity ([contract section 3](docs/api/TENANT_MERCHANT_API_CONTRACT.md#3-internal-api-service-callers)).
+- Invitation acceptance asks Identity to verify the invitee's email. `dotnet run deploy/dev/bff-dev-keys.cs` generates the `svc-tenant-merchant` key and both sides' settings (`identity-clients.*` for Identity, `tenant-merchant-identity.*` for this API). Without them, acceptance answers `503` in Development.
 - The Gateway's Development route forwards `https://localhost:7000/api/v1/tenants/**` to it.
 
 ## Run local infrastructure (Docker Compose profiles)
@@ -219,11 +221,17 @@ The suite contains unit tests (exception handling), integration tests (the real 
 - **Provisioning** creates the tenant, its merchant profile and the initial `MerchantOwner` membership in one transaction. It is idempotent, and only allow-listed service clients may call it.
 - **The member API** is authorized from the service's own membership data.
 
+**Implemented (Phase 3 S2, Tenant & Merchant):** merchant membership management ([ADR-021](docs/decisions/ADR-021-merchant-invitations-and-membership-administration.md)).
+
+- **Invitations** carry a single-use token that is stored only as a hash. Acceptance requires Identity's verdict that the caller's verified email is the invited address.
+- **Membership administration** (suspend, reactivate, remove, change roles) follows an explicit role matrix. It is serialized per tenant, so a tenant never loses its last active owner, even under concurrent requests.
+- **Every change is audited** in the same transaction, append-only.
+
 Naming and model: [ADR-020](docs/decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md). No integration event yet.
 
 **Not implemented yet:**
 
-- Invitations, membership management, merchant applications, subscriptions and usage (later Tenant & Merchant slices)
+- Invitation email delivery, merchant applications, subscriptions and usage (later Tenant & Merchant slices and Notification)
 - Product catalog, inventory operations, cart, checkout, orders, payments, fulfillment, notifications and admin features
 - MongoDB persistence
 - Kafka topics and event flows, the outbox pattern and sagas
@@ -237,7 +245,7 @@ Naming and model: [ADR-020](docs/decisions/ADR-020-tenant-merchant-naming-and-te
 1. **Phase 1:** repository and solution foundation *(complete, audited)*
 2. **Phase 2:** Identity design and implementation *(implemented and tested locally; production gates open, see [brief](docs/architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md))*
 3. Observability foundation: OpenTelemetry, Collector, Prometheus, Grafana, Loki *(not started; Tenant & Merchant was authorized first)*
-4. Tenant & Merchant *(Phase 3, in progress: S1 done)*, Catalog and Inventory
+4. Tenant & Merchant *(Phase 3, in progress: S1 and S2 done)*, Catalog and Inventory
 5. Cart, Order and simulated Payment, for single-merchant checkout
 6. Fulfillment, Notification and Admin
 7. Multi-merchant checkout

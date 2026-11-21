@@ -101,7 +101,8 @@ jobs:
           # Compact JWS/JWE values (tokens, codes, client assertions) and sensitive OAuth parameters must never appear.
           # Account security tokens (confirmation and reset links) are 43 URL-safe characters after "token=".
           # PEM private keys (signing, encryption, client or Data Protection certificates) must never appear either.
-          if grep -nE 'eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|(code_verifier|client_assertion|refresh_token|id_token_hint)=[^&[:space:]]{8,}|[?&]token=[A-Za-z0-9_-]{43}|-----BEGIN [A-Z ]*PRIVATE KEY-----' test-output.log; then
+          # Merchant invitation tokens (ADR-021) are "ecmi_" and 43 URL-safe characters.
+          if grep -nE 'eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|(code_verifier|client_assertion|refresh_token|id_token_hint)=[^&[:space:]]{8,}|[?&]token=[A-Za-z0-9_-]{43}|ecmi_[A-Za-z0-9_-]{43}|-----BEGIN [A-Z ]*PRIVATE KEY-----' test-output.log; then
             echo "::error::Secret-like material found in the test output."
             exit 1
           fi
