@@ -211,15 +211,19 @@ It routes Identity and each backend-for-frontend by host name, and it is the onl
   - each BFF by host name (`storefront`, `merchant` and `admin.localhost:7000`), with `X-Forwarded` set
   - a `/identity` path-prefix route to Identity, for development diagnostics only (ADR-017 section 10)
   - the Tenant & Merchant member API: `/api/v1/tenants/**` on host `localhost:7000` (Phase 3 S1)
-- **Internal paths are never forwarded.** `/internal/**` answers `404` on every host, case-insensitively (IDENTITY_API_CONTRACT.md section 2.12).
+- **Internal paths are never forwarded.** A path whose first segment is `internal` answers `404` on every host, by every route and in every environment.
+  - The check is case-insensitive, after percent-decoding and resolving empty and dot segments.
+  - It runs on the incoming path, and again on the outgoing path of every proxied request after the route's transforms, so a prefix-removing or rewriting route cannot produce an internal destination (IDENTITY_API_CONTRACT.md section 2.12; finding P3-1, resolved).
 - **Edge rate limiting** for the Identity account pages: the `identity-account` policy, a fixed window per client IP (default 30 requests per minute), answering `429` with `Retry-After`. Counters are kept in memory per instance. Identity applies its own limits as well.
 - **Its own `/health` liveness,** never proxied. Problem details for errors, and Serilog request logging with YARP logs at Warning.
 - **No token validation and no authorization.** Services authorize every request themselves (ADR-007, ADR-017 section 4).
 
 **Verification:**
 
-- **Tested:** internal-path blocking and the forwarding of other paths (`EdgeRoutingTests`), and the committed Development route set: no route matches an internal path, and the tenant route exposes only the member API (`DevelopmentRouteTests`).
-- **Known gap (P3-1, [PHASE_3_TENANT_MERCHANT.md section 10](PHASE_3_TENANT_MERCHANT.md#10-findings-residual-risks-and-production-gates)):** the Development-only `/identity` prefix route forwards `/identity/internal/...` to Identity as `/internal/...`. Identity still requires an allow-listed service token there.
+- **Tested:**
+  - internal-path blocking, including through prefix-removing and rewriting routes, and the forwarding of other paths (`EdgeRoutingTests`)
+  - the committed Development route set (`DevelopmentRouteTests`)
+  - every committed route on real Kestrel with a recording backend, across hosts and alternate path forms (`InternalPathExposureTests`; [PHASE_3_TENANT_MERCHANT.md section 10](PHASE_3_TENANT_MERCHANT.md#10-findings-residual-risks-and-production-gates), P3-1)
 - **Tested on the Identity side only:** Identity's trust of the Gateway's forwarded headers is tested against a stand-in proxy (`TrustedProxyTests`), not through the real Gateway.
 - **Not covered by an automated test:** the rate limiter.
 - **Not verified:** the full local flow through the Gateway (finding I29).

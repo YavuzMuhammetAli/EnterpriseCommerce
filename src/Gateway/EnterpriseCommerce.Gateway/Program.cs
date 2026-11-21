@@ -1,6 +1,7 @@
 using System.Threading.RateLimiting;
 using Serilog;
 using Serilog.Events;
+using Yarp.ReverseProxy.Transforms;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,7 +34,19 @@ builder.Services.AddRateLimiter(options =>
 // Routes and clusters are externalized in configuration ("ReverseProxy" section).
 builder.Services
     .AddReverseProxy()
-    .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
+    .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
+    // Applied to every route, after the route's own transforms: the path actually sent to the destination is checked,
+    // so no prefix removal or rewrite can turn a public path into an internal one (InternalPaths). A non-200 status
+    // set here stops YARP before it sends anything.
+    .AddTransforms(context => context.AddRequestTransform(transform =>
+    {
+        if (InternalPaths.IsInternal(transform.Path.Value) || InternalPaths.IsInternal(transform.ProxyRequest.RequestUri?.AbsolutePath))
+        {
+            transform.HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
+        }
+
+        return ValueTask.CompletedTask;
+    }));
 
 var app = builder.Build();
 
@@ -53,11 +66,11 @@ app.MapHealthChecks("/health");
 
 app.UseRateLimiter();
 
-// Internal service-to-service endpoints (/internal/...) are never exposed at the edge, on any host (ADR-007 edge
-// concern; IDENTITY_API_CONTRACT.md section 2.12). Services still authorize every internal call themselves.
+// Internal service-to-service endpoints (/internal/...) are never exposed at the edge, on any host (InternalPaths).
+// This is the incoming check; the outgoing check is the request transform above.
 app.Use((context, next) =>
 {
-    if (context.Request.Path.StartsWithSegments(InternalPaths.Prefix, StringComparison.OrdinalIgnoreCase))
+    if (InternalPaths.IsInternal(context.Request.Path.Value))
     {
         context.Response.StatusCode = StatusCodes.Status404NotFound;
         return Task.CompletedTask;
@@ -69,9 +82,3 @@ app.Use((context, next) =>
 app.MapReverseProxy();
 
 await app.RunAsync();
-
-/// <summary>Path prefixes the Gateway never forwards.</summary>
-internal static class InternalPaths
-{
-    public const string Prefix = "/internal";
-}

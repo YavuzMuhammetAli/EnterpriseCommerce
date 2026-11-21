@@ -189,11 +189,25 @@ The first event, provisionally `TenantProvisioned` on a tenant topic, is designe
 
 **Findings:**
 
-- **P3-1 (pre-existing, Development only, defense in depth):** the Gateway's Development route `/identity/{**catch-all}` removes its prefix. A request to `/identity/internal/...` passes the Gateway's `/internal` block and reaches Identity as `/internal/...`.
-  - Identity still requires an allow-listed service token there, so nothing is exposed without one.
-  - Deployed routes do not contain this route.
-  - Not changed in S1, because it is outside the slice.
-  - Recommended: block internal paths after path transforms as well, or remove the diagnostics route.
+- **P3-1 (resolved 2026-11-21):** the Gateway's internal paths could be reached through a path-rewriting route.
+  - **Root cause.** The Gateway blocked `/internal` only on the *incoming* path, before YARP applied a route's transforms. The Development route `/identity/{**catch-all}` removes its prefix, so `/identity/internal/...` passed the block and was forwarded to Identity as `/internal/...`.
+    - The route has no host restriction and outranks the host catch-all routes, so this worked **on every host**.
+    - Case variants, percent-encoded letters (`%69nternal`), dot segments and absolute-form request targets got through the same way.
+    - Identity still required an allow-listed service token there, but the Gateway rule did not hold.
+  - **Rule now ([src/Gateway/EnterpriseCommerce.Gateway/InternalPaths.cs](../../src/Gateway/EnterpriseCommerce.Gateway/InternalPaths.cs)):** no request whose path is internal is forwarded, on any host, by any route, in any environment.
+    - A path is internal when its first segment is `internal` in any letter case, after repeated percent-decoding, treating `\` as a separator, and resolving empty, `.` and `..` segments.
+    - The check runs twice. Once on the incoming path, before routing. Once on the outgoing path of every proxied request, as a global YARP request transform that runs after the route's own transforms.
+    - It answers `404`, and nothing is sent to the destination.
+    - Paths that merely contain `internal` later, such as `/internalized/...`, are still forwarded.
+  - **Evidence:** `InternalPathExposureTests` runs the real Gateway on Kestrel with the committed Development routes, a recording backend behind every cluster, and raw HTTP/1.1 requests, so that no client-side URI normalization hides a path form. It covers:
+    - the public Identity endpoints and the tenant member API, which are still forwarded
+    - `/identity/internal/**` and `/internal/**` on seven hosts
+    - 22 alternate path forms on three hosts
+    - a probe of every committed route
+
+    `EdgeRoutingTests` (Production environment) adds prefix-removing and rewriting routes and checks that their internal destinations are refused.
+
+    Against the previous code, 37 of these 59 Gateway tests failed, 21 distinct requests reached the backend as internal paths, and the injected routes forwarded.
 - **P3-2:** no service implements `X-Correlation-ID` except TenantMerchant. Identity does not echo or generate it yet.
 - **P3-3:** host code is now duplicated between Identity and TenantMerchant:
   - problem details

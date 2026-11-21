@@ -17,6 +17,16 @@ public sealed class EdgeRoutingTests : IDisposable
         builder.UseSetting("ReverseProxy:Routes:catch-all:ClusterId", "unreachable");
         builder.UseSetting("ReverseProxy:Routes:catch-all:Match:Path", "{**catch-all}");
         builder.UseSetting("ReverseProxy:Clusters:unreachable:Destinations:primary:Address", "http://127.0.0.1:1/");
+
+        // A prefix-removing route, as any environment could configure: the outgoing path is checked after it.
+        builder.UseSetting("ReverseProxy:Routes:prefixed:ClusterId", "unreachable");
+        builder.UseSetting("ReverseProxy:Routes:prefixed:Match:Path", "/svc/{**catch-all}");
+        builder.UseSetting("ReverseProxy:Routes:prefixed:Transforms:0:PathRemovePrefix", "/svc");
+
+        // A rewriting route whose destination path is internal whatever the request path is.
+        builder.UseSetting("ReverseProxy:Routes:rewritten:ClusterId", "unreachable");
+        builder.UseSetting("ReverseProxy:Routes:rewritten:Match:Path", "/rewritten/{**rest}");
+        builder.UseSetting("ReverseProxy:Routes:rewritten:Transforms:0:PathPattern", "/internal/v1/{**rest}");
     });
 
     [Theory]
@@ -25,6 +35,9 @@ public sealed class EdgeRoutingTests : IDisposable
     [InlineData("/internal/v1/tenants")]
     [InlineData("/Internal/V1/Tenants/0196f0a0-0000-7000-8000-000000000001")]
     [InlineData("/internal")]
+    [InlineData("/svc/internal/v1/accounts/123/disable")]
+    [InlineData("/svc/INTERNAL/v1/tenants")]
+    [InlineData("/rewritten/accounts/123/disable")]
     public async Task InternalPaths_AreNotForwarded(string path)
     {
         using var client = _gateway.CreateClient();
@@ -38,6 +51,7 @@ public sealed class EdgeRoutingTests : IDisposable
     [InlineData("/api/v1/auth/logout-all")]
     [InlineData("/api/v1/tenants")]
     [InlineData("/internalized/path")]
+    [InlineData("/svc/api/v1/public")]
     public async Task OtherPaths_AreForwarded(string path)
     {
         using var client = _gateway.CreateClient();
