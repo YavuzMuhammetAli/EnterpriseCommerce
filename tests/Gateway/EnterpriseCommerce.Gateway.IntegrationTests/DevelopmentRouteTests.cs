@@ -38,6 +38,17 @@ public sealed class DevelopmentRouteTests : IDisposable
         Assert.Equal(["localhost:7000"], route.Hosts);
     }
 
+    [Fact]
+    public void TheInvitationAcceptanceRoute_ExposesOnlyTheMerchantInvitationPaths()
+    {
+        // ADR-021: the invitee is not a member yet, so acceptance is not under /api/v1/tenants/{tenantId}.
+        var route = Assert.Single(Routes(), candidate => candidate.Name == "tenant-merchant-invitations");
+
+        Assert.Equal("/api/v1/merchant-invitations/{**catch-all}", route.Path);
+        Assert.Equal(["localhost:7000"], route.Hosts);
+        Assert.Equal(2, Routes().Count(candidate => candidate.Name.StartsWith("tenant-merchant", StringComparison.Ordinal)));
+    }
+
     [Theory]
     [InlineData("/internal/v1/tenants")]
     [InlineData("/internal/v1/tenants/0196f0a0-0000-7000-8000-000000000001")]

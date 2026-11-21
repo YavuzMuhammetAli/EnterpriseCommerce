@@ -231,6 +231,8 @@ public partial class BffTestEnvironment : IAsyncLifetime
             {
                 builder.ConfigureTestServices(services => services.AddSingleton(IdentityLogSink));
             }
+
+            ConfigureIdentity(builder, index);
         });
 
         if (UseKestrel)
@@ -243,6 +245,14 @@ public partial class BffTestEnvironment : IAsyncLifetime
         {
             _ = _identity.Server;
         }
+    }
+
+    /// <summary>
+    /// Extra Identity configuration for derived environments, for example service clients.
+    /// <paramref name="nextClientIndex"/> is the first free <c>Identity:Clients</c> index.
+    /// </summary>
+    protected virtual void ConfigureIdentity(IWebHostBuilder builder, int nextClientIndex)
+    {
     }
 
     private static int FreePort()
@@ -499,7 +509,7 @@ public partial class BffTestEnvironment : IAsyncLifetime
         {
             await _identity.DisposeAsync();
             await DeleteRedisKeysAsync();
-            await DropDatabaseAsync();
+            await DropDatabaseAsync(_database);
         }
 
         foreach (var frontEnd in FrontEnds)
@@ -527,7 +537,8 @@ public partial class BffTestEnvironment : IAsyncLifetime
         }
     }
 
-    private async Task DropDatabaseAsync()
+    /// <summary>Drops a throwaway test database if it exists.</summary>
+    protected static async Task DropDatabaseAsync(string databaseName)
     {
         SqlConnection.ClearAllPools();
         await using var connection = new SqlConnection(TestInfrastructure.SqlServerBuilder("master").ConnectionString);
@@ -542,7 +553,7 @@ public partial class BffTestEnvironment : IAsyncLifetime
                 EXEC (@sql);
             END
             """;
-        command.Parameters.AddWithValue("@databaseName", _database);
+        command.Parameters.AddWithValue("@databaseName", databaseName);
         await command.ExecuteNonQueryAsync();
     }
 

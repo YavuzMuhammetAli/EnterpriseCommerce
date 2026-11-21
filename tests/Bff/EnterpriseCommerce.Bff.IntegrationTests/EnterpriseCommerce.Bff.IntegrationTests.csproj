@@ -11,6 +11,12 @@
       Identity's is reached through the IdentityApi alias.
     -->
     <ProjectReference Include="..\..\..\src\Services\Identity\EnterpriseCommerce.Identity.Api\EnterpriseCommerce.Identity.Api.csproj" Aliases="IdentityApi" />
+    <!--
+      The merchant membership flow runs end to end (MerchantMembershipFlowTests): BFF, the real Gateway, the real
+      Tenant & Merchant host and the real Identity, all in memory. Their top-level Programs are reached through aliases.
+    -->
+    <ProjectReference Include="..\..\..\src\Gateway\EnterpriseCommerce.Gateway\EnterpriseCommerce.Gateway.csproj" Aliases="GatewayApp" />
+    <ProjectReference Include="..\..\..\src\Services\TenantMerchant\EnterpriseCommerce.TenantMerchant.Api\EnterpriseCommerce.TenantMerchant.Api.csproj" Aliases="TenantMerchantApi" />
   </ItemGroup>
 
 </Project>

@@ -81,6 +81,9 @@ public sealed class InternalPathExposureTests(KestrelGatewayFixture gateway) : I
     [InlineData("/internal%2Fv1/accounts/1/disable")]
     [InlineData("/%69nternal/v1/accounts/1/disable")]
     [InlineData("/api/v1/tenants/../../../internal/v1/tenants")]
+    [InlineData("/api/v1/merchant-invitations/../../../internal/v1/tenants")]
+    [InlineData("/api/v1/merchant-invitations/%2e%2e/%2e%2e/%2e%2e/internal/v1/accounts/1/email-verification")]
+    [InlineData("/internal/v1/accounts/1/email-verification")]
     [InlineData("http://localhost:5000/internal/v1/accounts/1/disable")]
     [InlineData("http://localhost:5000/identity/internal/v1/accounts/1/disable")]
     public async Task AlternatePathForms_CannotBypassTheBlock(string target)
@@ -98,6 +101,8 @@ public sealed class InternalPathExposureTests(KestrelGatewayFixture gateway) : I
     [Theory]
     [InlineData($"/api/v1/tenants/{TenantId}")]
     [InlineData($"/api/v1/tenants/{TenantId}/memberships?page=2&pageSize=50")]
+    [InlineData("/api/v1/tenants")]
+    [InlineData($"/api/v1/tenants/{TenantId}/invitations?status=Pending")]
     public async Task TheTenantMemberApi_IsStillForwarded(string target)
     {
         var response = await gateway.SendAsync("GET", target, "localhost:7000");
@@ -105,6 +110,15 @@ public sealed class InternalPathExposureTests(KestrelGatewayFixture gateway) : I
         Assert.True(response.Forwarded, $"{target} was not forwarded (status {response.Status}).");
         Assert.Equal(200, response.Status);
         Assert.Equal(target, response.BackendTarget);
+    }
+
+    [Fact]
+    public async Task InvitationAcceptance_IsForwarded()
+    {
+        var response = await gateway.SendAsync("POST", "/api/v1/merchant-invitations/accept", "localhost:7000");
+
+        Assert.True(response.Forwarded, $"Acceptance was not forwarded (status {response.Status}).");
+        Assert.Equal("/api/v1/merchant-invitations/accept", response.BackendTarget);
     }
 
     [Theory]
