@@ -15,6 +15,7 @@ public sealed class ProjectStructureTests
         foreach (var layer in SourceProject.Layers)
         {
             Assert.Contains($"EnterpriseCommerce.Identity.{layer}", names);
+            Assert.Contains($"EnterpriseCommerce.TenantMerchant.{layer}", names);
         }
     }
 

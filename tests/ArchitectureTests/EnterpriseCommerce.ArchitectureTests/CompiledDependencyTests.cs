@@ -3,7 +3,7 @@ using System.Reflection;
 namespace EnterpriseCommerce.ArchitectureTests;
 
 /// <summary>
-/// Compiled dependency rules: inspects the assemblies the Identity layers actually reference.
+/// Compiled dependency rules: inspects the assemblies the service layers actually reference.
 /// Complements <see cref="DependencyRuleTests"/>, which checks declared references.
 /// </summary>
 public sealed class CompiledDependencyTests
@@ -35,7 +35,25 @@ public sealed class CompiledDependencyTests
             "EnterpriseCommerce.Identity.Infrastructure",
             ["EnterpriseCommerce.Identity.Api"]
         },
+        {
+            "EnterpriseCommerce.TenantMerchant.Domain",
+            ["EnterpriseCommerce.TenantMerchant.Application", "EnterpriseCommerce.TenantMerchant.Infrastructure", "EnterpriseCommerce.TenantMerchant.Api"]
+        },
+        {
+            "EnterpriseCommerce.TenantMerchant.Application",
+            ["EnterpriseCommerce.TenantMerchant.Infrastructure", "EnterpriseCommerce.TenantMerchant.Api"]
+        },
+        {
+            "EnterpriseCommerce.TenantMerchant.Infrastructure",
+            ["EnterpriseCommerce.TenantMerchant.Api"]
+        },
     };
+
+    /// <summary>Every compiled layer of every implemented service.</summary>
+    public static TheoryData<string> ServiceAssemblies() =>
+    [
+        .. new[] { "Identity", "TenantMerchant" }.SelectMany(service => SourceProject.Layers.Select(layer => $"EnterpriseCommerce.{service}.{layer}")),
+    ];
 
     [Theory]
     [MemberData(nameof(LayerRules))]
@@ -49,6 +67,8 @@ public sealed class CompiledDependencyTests
     [Theory]
     [InlineData("EnterpriseCommerce.Identity.Domain")]
     [InlineData("EnterpriseCommerce.Identity.Application")]
+    [InlineData("EnterpriseCommerce.TenantMerchant.Domain")]
+    [InlineData("EnterpriseCommerce.TenantMerchant.Application")]
     public void InnerLayer_DoesNotReferenceInfrastructureAssemblies(string assemblyName)
     {
         var violations = ReferencedAssemblyNames(assemblyName)
@@ -57,11 +77,26 @@ public sealed class CompiledDependencyTests
         Assert.Empty(violations);
     }
 
-    [Fact]
-    public void Domain_ReferencesNoOtherEnterpriseCommerceAssembly()
+    [Theory]
+    [InlineData("EnterpriseCommerce.Identity.Domain")]
+    [InlineData("EnterpriseCommerce.TenantMerchant.Domain")]
+    public void Domain_ReferencesNoOtherEnterpriseCommerceAssembly(string assemblyName)
     {
-        var violations = ReferencedAssemblyNames("EnterpriseCommerce.Identity.Domain")
+        var violations = ReferencedAssemblyNames(assemblyName)
             .Where(name => name.StartsWith("EnterpriseCommerce.", StringComparison.Ordinal));
+
+        Assert.Empty(violations);
+    }
+
+    [Theory]
+    [MemberData(nameof(ServiceAssemblies))]
+    public void ServiceAssembly_ReferencesNoOtherServiceAssembly(string assemblyName)
+    {
+        var service = assemblyName.Split('.')[1];
+        var violations = ReferencedAssemblyNames(assemblyName)
+            .Where(name => name.StartsWith("EnterpriseCommerce.", StringComparison.Ordinal))
+            .Where(name => !name.StartsWith($"EnterpriseCommerce.{service}.", StringComparison.Ordinal)
+                && !name.StartsWith("EnterpriseCommerce.BuildingBlocks.", StringComparison.Ordinal));
 
         Assert.Empty(violations);
     }

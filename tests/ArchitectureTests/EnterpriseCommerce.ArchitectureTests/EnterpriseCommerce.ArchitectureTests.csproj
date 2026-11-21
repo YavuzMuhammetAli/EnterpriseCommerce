@@ -15,4 +15,11 @@
     <ProjectReference Include="..\..\..\src\Services\Identity\EnterpriseCommerce.Identity.Infrastructure\EnterpriseCommerce.Identity.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Services\TenantMerchant\EnterpriseCommerce.TenantMerchant.Api\EnterpriseCommerce.TenantMerchant.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Services\TenantMerchant\EnterpriseCommerce.TenantMerchant.Application\EnterpriseCommerce.TenantMerchant.Application.csproj" />
+    <ProjectReference Include="..\..\..\src\Services\TenantMerchant\EnterpriseCommerce.TenantMerchant.Domain\EnterpriseCommerce.TenantMerchant.Domain.csproj" />
+    <ProjectReference Include="..\..\..\src\Services\TenantMerchant\EnterpriseCommerce.TenantMerchant.Infrastructure\EnterpriseCommerce.TenantMerchant.Infrastructure.csproj" />
+  </ItemGroup>
+
 </Project>
