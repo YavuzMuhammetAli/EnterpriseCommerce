@@ -22,6 +22,8 @@ public sealed class EdgeRoutingTests : IDisposable
     [Theory]
     [InlineData("/internal/v1/accounts/123/disable")]
     [InlineData("/INTERNAL/v1/accounts/123/disable")]
+    [InlineData("/internal/v1/tenants")]
+    [InlineData("/Internal/V1/Tenants/0196f0a0-0000-7000-8000-000000000001")]
     [InlineData("/internal")]
     public async Task InternalPaths_AreNotForwarded(string path)
     {
@@ -34,6 +36,7 @@ public sealed class EdgeRoutingTests : IDisposable
 
     [Theory]
     [InlineData("/api/v1/auth/logout-all")]
+    [InlineData("/api/v1/tenants")]
     [InlineData("/internalized/path")]
     public async Task OtherPaths_AreForwarded(string path)
     {
