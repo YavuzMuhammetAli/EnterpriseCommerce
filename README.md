@@ -9,7 +9,7 @@ A multi-tenant, multi-vendor e-commerce marketplace built with .NET 10 microserv
 >   - Phase 2.1 selected ASP.NET Core Identity with OpenIddict ([ADR-015](docs/decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)).
 >   - Phase 2.2 accepted the authentication, token, session and browser client design ([ADR-016](docs/decisions/ADR-016-browser-client-architecture-backend-for-frontend.md) to [ADR-018](docs/decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)).
 >   - Phase 2.3 implemented it in slices S1 to S7.
-> - **Phase 3** (Tenant & Merchant) is in progress: slices S1 (the service foundation and tenant provisioning) and S2 (merchant membership management) are implemented ([PHASE_3_TENANT_MERCHANT.md](docs/architecture/PHASE_3_TENANT_MERCHANT.md)).
+> - **Phase 3** (Tenant & Merchant) is in progress: slices S1 (the service foundation and tenant provisioning), S2 (merchant membership management) and S3 (self-service merchant onboarding) are implemented ([PHASE_3_TENANT_MERCHANT.md](docs/architecture/PHASE_3_TENANT_MERCHANT.md)).
 >
 > See [Current status](#current-status).
 
@@ -37,7 +37,8 @@ A multi-tenant, multi-vendor e-commerce marketplace built with .NET 10 microserv
 | [PHASE_3_TENANT_MERCHANT.md](docs/architecture/PHASE_3_TENANT_MERCHANT.md) | Tenant & Merchant design and implementation progress |
 | [IDENTITY_API_CONTRACT.md](docs/api/IDENTITY_API_CONTRACT.md) | Identity API contract (accepted Phase 2.2 revision) and API conventions |
 | [PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md](docs/architecture/PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md) | Phase 3 S2: invitations, membership administration, the last-owner guarantee, audit |
-| [TENANT_MERCHANT_API_CONTRACT.md](docs/api/TENANT_MERCHANT_API_CONTRACT.md) | Tenant & Merchant API contract (Phase 3 S1 and S2) |
+| [PHASE_3_S3_SELF_SERVICE_ONBOARDING.md](docs/architecture/PHASE_3_S3_SELF_SERVICE_ONBOARDING.md) | Phase 3 S3: self-service merchant onboarding, the per-user limit, per-user idempotency |
+| [TENANT_MERCHANT_API_CONTRACT.md](docs/api/TENANT_MERCHANT_API_CONTRACT.md) | Tenant & Merchant API contract (Phase 3 S1 to S3) |
 
 ## Technology stack
 
@@ -227,6 +228,8 @@ The suite contains unit tests (exception handling), integration tests (the real 
 - **Membership administration** (suspend, reactivate, remove, change roles) follows an explicit role matrix. It is serialized per tenant, so a tenant never loses its last active owner, even under concurrent requests.
 - **Every change is audited** in the same transaction, append-only.
 
+**Implemented (Phase 3 S3, Tenant & Merchant):** self-service merchant onboarding ([ADR-022](docs/decisions/ADR-022-self-service-tenant-onboarding.md)). A signed-in merchant-portal user creates a tenant and becomes its owner, within a per-user limit (one by default). Idempotency keys are scoped per user, and both rules hold under concurrent requests.
+
 Naming and model: [ADR-020](docs/decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md). No integration event yet.
 
 **Not implemented yet:**
@@ -245,7 +248,7 @@ Naming and model: [ADR-020](docs/decisions/ADR-020-tenant-merchant-naming-and-te
 1. **Phase 1:** repository and solution foundation *(complete, audited)*
 2. **Phase 2:** Identity design and implementation *(implemented and tested locally; production gates open, see [brief](docs/architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md))*
 3. Observability foundation: OpenTelemetry, Collector, Prometheus, Grafana, Loki *(not started; Tenant & Merchant was authorized first)*
-4. Tenant & Merchant *(Phase 3, in progress: S1 and S2 done)*, Catalog and Inventory
+4. Tenant & Merchant *(Phase 3, in progress: S1 to S3 done)*, Catalog and Inventory
 5. Cart, Order and simulated Payment, for single-merchant checkout
 6. Fulfillment, Notification and Admin
 7. Multi-merchant checkout

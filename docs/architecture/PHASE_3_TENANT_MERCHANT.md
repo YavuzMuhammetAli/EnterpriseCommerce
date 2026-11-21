@@ -5,6 +5,7 @@ The design and the implementation progress of the Tenant & Merchant service. It 
 - **Status:** Phase 3 is authorized and implemented in small slices.
   - **Slice S1** (service foundation and tenant provisioning) is implemented and tested locally.
   - **Slice S2** (merchant membership management) is implemented and tested locally. Its design is in [PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md](PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md).
+  - **Slice S3** (self-service merchant onboarding) is implemented and tested locally. Its design is in [PHASE_3_S3_SELF_SERVICE_ONBOARDING.md](PHASE_3_S3_SELF_SERVICE_ONBOARDING.md), its decisions in [ADR-022](../decisions/ADR-022-self-service-tenant-onboarding.md).
   - Later slices are not started.
 - **Verification levels used below:**
   - **Implemented:** in the code.
@@ -26,7 +27,8 @@ The design and the implementation progress of the Tenant & Merchant service. It 
 - `Slug`: the immutable handle; rules in section 4.
 - `Status`.
 - `CreatedAt`, in UTC.
-- The provisioning record: the client, the idempotency key, the request hash and the actor reference.
+- `Origin` (S3): `Provisioned` or `SelfService`; for a self-service tenant also `SelfServiceSubjectId`, the creating subject.
+- The provisioning record: the client, the idempotency key, the request hash and the actor reference. A self-service tenant records the merchant BFF's client, the user's key and the subject here (S3).
 
 S1 has the status `Active` only. Suspension and closure come with Admin tenant management.
 
@@ -52,7 +54,7 @@ S1 defined only the read permissions its endpoints needed. **S2** adds the write
 
 **Rules:**
 
-- **Owner rights only through provisioning.** `Membership.CreateOwner` is the only way to `MerchantOwner`, and only trusted tenant provisioning calls it.
+- **Owner rights only with a new tenant.** `Membership.CreateOwner` is the only way to `MerchantOwner`. In S1 only trusted tenant provisioning called it. Since S3, self-service onboarding also calls it, for the caller of a tenant it creates ([ADR-022](../decisions/ADR-022-self-service-tenant-onboarding.md), amending ADR-021 section 4). No operation makes anyone an owner of an existing tenant.
   - `CreateMember` refuses `MerchantOwner`, and `ChangeRole` to `MerchantOwner` returns `OwnerRoleReserved`.
   - Ownership transfer is a later, separately designed operation.
 - **Status transitions:** `Active` ⇄ `Suspended`, and `Active` or `Suspended` → `Removed`.
@@ -67,7 +69,7 @@ S1 defined only the read permissions its endpoints needed. **S2** adds the write
 
 A trusted service caller (Admin, in future) provisions a tenant for an existing Identity subject. There is **no public or self-service path in S1**.
 
-The accepted self-service onboarding of PHASE_2_2_AUTHENTICATION_FLOWS.md section 5.1.2 builds on the same model in a later slice, together with merchant applications.
+The accepted self-service onboarding of PHASE_2_2_AUTHENTICATION_FLOWS.md section 5.1.2 builds on the same model. It is implemented in **S3** (`POST /api/v1/tenants`, [PHASE_3_S3_SELF_SERVICE_ONBOARDING.md](PHASE_3_S3_SELF_SERVICE_ONBOARDING.md)). Merchant applications and review are deferred to the Admin phase.
 
 **Slug rules:**
 
@@ -75,7 +77,7 @@ The accepted self-service onboarding of PHASE_2_2_AUTHENTICATION_FLOWS.md sectio
 - Unique and immutable.
 - Never normalized: a non-conforming value is rejected, not changed.
 
-**Idempotency** (closes [IDENTITY_API_CONTRACT.md section 4](../api/IDENTITY_API_CONTRACT.md#4-open-items-for-phase-2-review) item 2 for this endpoint):
+**Idempotency** (closes [IDENTITY_API_CONTRACT.md section 4](../api/IDENTITY_API_CONTRACT.md#4-remaining-open-items) item 2 for this endpoint):
 
 - `Idempotency-Key` is required, and unique per calling client.
 - **It is stored on the tenant row and kept for the tenant's lifetime.** There is no separate store and no expiry.
@@ -102,7 +104,7 @@ One SQL Server database per service (ADR-003, ADR-011), schema `dbo`, created by
 
 | Table | Key and constraints |
 |---|---|
-| `Tenants` | PK `Id`; unique `UX_Tenants_Slug` (`varchar(63)`); unique `UX_Tenants_ProvisionedByClientId_ProvisioningKey`; `CK_Tenants_Status`; `rowversion` |
+| `Tenants` | PK `Id`; unique `UX_Tenants_Slug` (`varchar(63)`); unique `UX_Tenants_ProvisionedByClientId_ProvisioningKey` (filtered on `Origin = 'Provisioned'` since S3); unique `UX_Tenants_SelfServiceSubjectId_ProvisioningKey` (filtered on `Origin = 'SelfService'`, S3); `CK_Tenants_Status`, `CK_Tenants_Origin`, `CK_Tenants_Origin_SelfServiceSubject` (S3); `rowversion` |
 | `MerchantProfiles` | PK and FK `TenantId` → `Tenants` (same database); `rowversion` |
 | `Memberships` | PK `Id`; FK `TenantId` → `Tenants`; filtered unique `UX_Memberships_TenantId_SubjectId_Current` on (`TenantId`, `SubjectId`) `WHERE Status <> 'Removed'`; `IX_Memberships_TenantId_CreatedAt` (listing order, initial owner, FK); `CK_Memberships_Role`, `CK_Memberships_Status`; `rowversion` |
 
@@ -131,7 +133,7 @@ One SQL Server database per service (ADR-003, ADR-011), schema `dbo`, created by
 
 ## 7. Integration events
 
-**S1 publishes no integration event and contains no outbox code** (owner decision, section 9). The reason is ADR-012: no outbox code before its design is approved, and the Kafka client, topic and schema conventions are still open.
+**S1 publishes no integration event and contains no outbox code** (owner decision, section 9). Nor do S2 and S3. The reason is ADR-012: no outbox code before its design is approved, and the Kafka client, topic and schema conventions are still open.
 
 The first event, provisionally `TenantProvisioned` on a tenant topic, is designed in the first event-flow phase together with the outbox. Until then:
 
@@ -184,9 +186,41 @@ Design, decisions and evidence: [PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md](PHASE_3_S2
 | Gateway Development route for acceptance; BFF and Gateway path | yes | Gateway tests, BFF end-to-end tests |
 | Integration events and outbox | no (deferred, ADR-012) | architecture test |
 
+### S3: self-service merchant onboarding
+
+Design, decisions and evidence: [PHASE_3_S3_SELF_SERVICE_ONBOARDING.md](PHASE_3_S3_SELF_SERVICE_ONBOARDING.md) and [ADR-022](../decisions/ADR-022-self-service-tenant-onboarding.md).
+
+| Item | Implemented | Tested locally |
+|---|---|---|
+| `POST /api/v1/tenants`: tenant, profile, the caller's owner membership and audit record in one transaction | yes | unit, SQL Server |
+| The owner is always the token's subject; body owner fields refused; forged claims and headers ignored | yes | SQL Server, end to end |
+| Idempotency per subject (a second key namespace; the S1 index filtered to provisioned tenants) | yes | unit, SQL Server, including two users with one key |
+| Per-subject limit (default 1), serialized by a per-subject application lock | yes | unit, SQL Server races, a held-lock test, a mutation run without the lock |
+| Migration `SelfServiceOnboarding`, with a guarded rollback | yes | SQL Server 2022 and LocalDB (inventory, backfill, down and up, refusal) |
+| Gateway and BFF path (no code change) | yes | Gateway tests, BFF end-to-end tests |
+| Integration events and outbox | no (deferred, ADR-012) | architecture test |
+
+**Tests at S3 (local run of 2026-11-21, SQL Server 2022 and the session Redis, `EC_REQUIRE_INFRA_TESTS=true`, browsers on):**
+
+| Project | Tests | S2 |
+|---|---|---|
+| TenantMerchant.UnitTests | 266 | 236 |
+| TenantMerchant.IntegrationTests (SQL Server) | 162 | 115 |
+| Gateway.IntegrationTests | 70 | 66 |
+| Bff.IntegrationTests | 63 | 60 |
+| Identity, BFF unit and browser, architecture | 533 | 533 (unchanged) |
+| **Solution** | **1094** | 1010 |
+
+- Release build: 0 warnings, 0 errors.
+- No test was skipped.
+- The TenantMerchant integration suite also passed against LocalDB.
+- `dotnet test --solution EnterpriseCommerce.sln -c Release`: **1094 tests, 1094 passed, 0 failed, 0 skipped**.
+- An earlier full run had one failure: the browser test `AfterAPasswordChange_TheBffReauthorizesSilently` (Chromium) timed out after 30 seconds waiting for network idle under the parallel load. The browser suite then passed 18 of 18 in three isolated runs, and the whole suite passed in the run above. S3 changes no BFF or Identity code.
+- **CI** has not run on these commits; they are not pushed.
+
 ### Later slices (not started)
 
-- Self-service onboarding and merchant applications.
+- Merchant applications and review (with Admin).
 - Tenant suspension and closure (with Admin).
 - Subscriptions and usage.
 - The event flow (section 7).
@@ -201,6 +235,8 @@ Design, decisions and evidence: [PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md](PHASE_3_S2
 | Integration event | None in S1 | this document, section 7 |
 | Idempotency-Key retention (provisioning) | Kept on the tenant row for its lifetime | this document, section 4 |
 | Pagination shape | `page` (1-based) and `pageSize` (20 by default, at most 100); `{ items, page, pageSize, totalCount }` | [docs/api/README.md](../api/README.md#conventions) |
+
+Later decisions: S2 in [ADR-021](../decisions/ADR-021-merchant-invitations-and-membership-administration.md). S3 in [ADR-022](../decisions/ADR-022-self-service-tenant-onboarding.md): self-service onboarding with immediate activation, a per-subject limit (1 by default), per-subject idempotency, and an owner created only with its new tenant.
 
 ## 10. Findings, residual risks and production gates
 

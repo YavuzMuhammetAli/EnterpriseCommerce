@@ -41,7 +41,7 @@ The architecture prioritizes **maintainability, scalability, security, separatio
 |---|---|---|
 | Runtime | .NET 10 LTS | In use |
 | API | ASP.NET Core Web API | In use |
-| ORM | Entity Framework Core | In use (Identity persistence and migrations, Phase 2.3; Tenant & Merchant, Phase 3 S1) |
+| ORM | Entity Framework Core | In use (Identity persistence and migrations, Phase 2.3; Tenant & Merchant, Phase 3 S1 to S3) |
 | Relational database | SQL Server | In use (Identity and Tenant & Merchant databases, Phase 2.3 and Phase 3 S1; local container) |
 | Document database | MongoDB | Local container available |
 | Cache | Redis | Local container available. A separate, dedicated `noeviction` Redis is in use as the BFF session store (Phase 2.3 S7, ADR-016), not as a cache. |
@@ -171,6 +171,10 @@ Governing ADR: [ADR-014](../decisions/ADR-014-logical-tenant-isolation.md).
   - An invitation's single-use token is stored only as a hash and returned once to the inviter until Notification delivers it.
   - Acceptance also requires Identity's verdict that the caller's verified email is the invited address (D14), through a narrow internal endpoint; access tokens still carry no email.
   - Every membership change is serialized per tenant (an update lock on the tenant row) and commits with an append-only audit record. A tenant can never be left without an active owner, and a trigger backs this up.
+- **Self-service onboarding (accepted, [ADR-022](../decisions/ADR-022-self-service-tenant-onboarding.md)):**
+  - A merchant-portal user creates a tenant and becomes its owner, active at once. Merchant applications and review wait for Admin.
+  - One tenant per user by default (configurable), and idempotency keys scoped per user, both serialized per user.
+  - An owner membership is created only together with its new tenant (amends ADR-021 section 4).
 - **Design-level details within the accepted model** are worked out in later phases and must conform to ADR-014. They are not open architectural decisions:
   - the tenant context claim shape: resolved by [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md). Access tokens carry no tenant claim, and the tenant is an explicit request parameter validated by the owning service
   - the membership data shared with other services (Tenant & Merchant design; it needs the first event flow, [PHASE_3_TENANT_MERCHANT.md section 7](PHASE_3_TENANT_MERCHANT.md#7-integration-events))
@@ -317,3 +321,4 @@ These are **open**. They must not be decided silently. Each one is decided throu
 - Signing and encryption key rollover and the retention of retired keys ([ADR-019](../decisions/ADR-019-signing-and-encryption-key-rollover-and-retirement.md), Phase 2.3).
 - Tenant and merchant naming (`TenantMerchant`) and the tenant-merchant cardinality, one merchant per tenant ([ADR-020](../decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md), Phase 3 S1).
 - Merchant invitations, the invitation email match (D14), per-tenant serialization of membership changes, and the membership audit trail ([ADR-021](../decisions/ADR-021-merchant-invitations-and-membership-administration.md), Phase 3 S2).
+- Self-service tenant onboarding: immediate activation, the per-user limit, per-user idempotency, and the owner rule for new tenants ([ADR-022](../decisions/ADR-022-self-service-tenant-onboarding.md), Phase 3 S3).

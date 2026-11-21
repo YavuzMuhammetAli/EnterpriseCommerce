@@ -1,6 +1,6 @@
 # ADR-021: Merchant Invitations and Membership Administration
 
-- **Status:** Accepted
+- **Status:** Accepted (section 4 owner rule amended by [ADR-022](ADR-022-self-service-tenant-onboarding.md): self-service onboarding also creates the owner of a new tenant)
 - **Date:** 2026-11-21
 - **Phase:** 3 (Tenant & Merchant), slice S2
 - **Resolves:**

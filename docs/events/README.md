@@ -4,7 +4,7 @@ Integration event contracts go here, one document per event or per topic, once t
 
 There are no integration events or topics yet. Kafka runs locally in KRaft mode with automatic topic creation disabled.
 
-Tenant & Merchant (Phase 3 S1) deliberately publishes no event and contains no outbox code, in line with ADR-012. Its first event (provisionally `TenantProvisioned`) is designed with the outbox in the first event-flow phase ([PHASE_3_TENANT_MERCHANT.md section 7](../architecture/PHASE_3_TENANT_MERCHANT.md#7-integration-events)).
+Tenant & Merchant (Phase 3 S1 to S3) deliberately publishes no event and contains no outbox code, in line with ADR-012. Its first event (provisionally `TenantProvisioned`) is designed with the outbox in the first event-flow phase ([PHASE_3_TENANT_MERCHANT.md section 7](../architecture/PHASE_3_TENANT_MERCHANT.md#7-integration-events)).
 
 Accepted rules for every contract documented here ([ADR-012](../decisions/ADR-012-transactional-outbox-and-asynchronous-commands.md), [ADR-013](../decisions/ADR-013-saga-based-workflow-coordination.md), [ADR-014](../decisions/ADR-014-logical-tenant-isolation.md)):
 

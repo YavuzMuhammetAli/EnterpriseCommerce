@@ -104,14 +104,17 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
   - **Host:** local JWT bearer validation (ADR-017 section 4), a fail-closed fallback policy, `X-Correlation-ID`, problem details, and health checks.
 - **Implemented in Phase 3 S2** ([PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md](PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md), [ADR-021](../decisions/ADR-021-merchant-invitations-and-membership-administration.md)):
   - **Invitations:** a single-use token stored only as a hash and returned once to the inviter; acceptance requires Identity's verified-email verdict, and the subject is always the token's `sub`.
-  - **Membership administration:** suspend, reactivate, remove and change roles under an explicit role matrix. `MerchantOwner` is still granted only by provisioning.
+  - **Membership administration:** suspend, reactivate, remove and change roles under an explicit role matrix. No role change or invitation grants `MerchantOwner`.
   - **The last-active-owner guarantee under concurrency:** a per-tenant write lock, plus a trigger backstop.
   - **An append-only audit trail**, written atomically with every change.
   - **The caller's tenant list.**
+- **Implemented in Phase 3 S3** ([PHASE_3_S3_SELF_SERVICE_ONBOARDING.md](PHASE_3_S3_SELF_SERVICE_ONBOARDING.md), [ADR-022](../decisions/ADR-022-self-service-tenant-onboarding.md)):
+  - **Self-service onboarding:** `POST /api/v1/tenants` creates an active tenant, its merchant profile and the caller's `MerchantOwner` membership in one transaction. An owner is created only together with its new tenant, by provisioning or by this endpoint.
+  - **Per-user limit and idempotency:** one tenant per user by default (configurable, 1 to 10), and keys scoped per user. Both hold under concurrency through a per-user application lock.
 - **Not implemented yet:**
-  - integration events and the outbox: none in S1 or S2 (ADR-012)
+  - integration events and the outbox: none in S1 to S3 (ADR-012)
   - invitation email delivery (Notification), and the merchant-portal front end
-  - self-service onboarding and merchant applications
+  - merchant applications and review (with Admin)
   - tenant suspension and closure
   - subscriptions and usage
 - **External integrations, not complete:** Admin, the intended provisioning caller, does not exist. No client is allow-listed outside the tests.

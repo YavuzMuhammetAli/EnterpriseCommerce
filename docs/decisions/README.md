@@ -26,6 +26,7 @@ The consolidated, current view of all decisions is [PROJECT_DECISIONS.md](../arc
 | [ADR-018](ADR-018-account-security-tokens-and-security-email-delivery.md) | Account Security Tokens and Security Email Delivery | Accepted | |
 | [ADR-019](ADR-019-signing-and-encryption-key-rollover-and-retirement.md) | Signing and Encryption Key Rollover and Retirement | Accepted | |
 | [ADR-020](ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md) | Tenant & Merchant Naming and Tenant-Merchant Cardinality | Accepted | |
-| [ADR-021](ADR-021-merchant-invitations-and-membership-administration.md) | Merchant Invitations and Membership Administration | Accepted | |
+| [ADR-021](ADR-021-merchant-invitations-and-membership-administration.md) | Merchant Invitations and Membership Administration | Accepted (amended) | ADR-022 (section 4 owner rule) |
+| [ADR-022](ADR-022-self-service-tenant-onboarding.md) | Self-Service Tenant Onboarding | Accepted | |
 
 New ADRs use the next number and the same four sections: Context, Decision, Consequences and Alternatives considered.

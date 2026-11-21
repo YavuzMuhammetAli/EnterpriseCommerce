@@ -1,7 +1,7 @@
 # Tenant & Merchant API Contract
 
-- **Status:** Accepted and implemented for Phase 3 slices S1 (provisioning, member reads) and S2 (memberships, invitations). Later slices extend it. An endpoint exists only once its slice is merged.
-- **Design:** [PHASE_3_TENANT_MERCHANT.md](../architecture/PHASE_3_TENANT_MERCHANT.md) and, for S2, [PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md](../architecture/PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md). Decisions: [ADR-020](../decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md) (naming, the tenant-merchant model) and [ADR-021](../decisions/ADR-021-merchant-invitations-and-membership-administration.md) (invitations, membership administration).
+- **Status:** Accepted and implemented for Phase 3 slices S1 (provisioning, member reads), S2 (memberships, invitations) and S3 (self-service onboarding). Later slices extend it. An endpoint exists only once its slice is merged.
+- **Design:** [PHASE_3_TENANT_MERCHANT.md](../architecture/PHASE_3_TENANT_MERCHANT.md) and, for S2, [PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md](../architecture/PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md). Decisions: [ADR-020](../decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md) (naming, the tenant-merchant model) and [ADR-021](../decisions/ADR-021-merchant-invitations-and-membership-administration.md) (invitations, membership administration). For S3, [PHASE_3_S3_SELF_SERVICE_ONBOARDING.md](../architecture/PHASE_3_S3_SELF_SERVICE_ONBOARDING.md) and [ADR-022](../decisions/ADR-022-self-service-tenant-onboarding.md) (self-service onboarding).
 - **Conventions:** the cross-service conventions of [IDENTITY_API_CONTRACT.md section 1](IDENTITY_API_CONTRACT.md#1-conventions-baseline) apply: `/api/v1`, lowercase kebab-case paths, camelCase JSON, `X-Correlation-ID`, `Idempotency-Key`, and RFC 9457 problem details. Pagination follows [README.md](README.md#conventions).
 
 ## 1. Summary
@@ -16,13 +16,14 @@
 | `GET /api/v1/tenants/{tenantId}/memberships/{membershipId}` | `MerchantOwner`, `MerchantAdmin` | [4.4](#44-read-a-membership) |
 | `POST /api/v1/tenants/{tenantId}/memberships/{membershipId}/suspend`, `/reactivate`, `/remove` | `MerchantOwner`; `MerchantAdmin` for staff | [4.5](#45-suspend-reactivate-or-remove-a-membership) |
 | `PUT /api/v1/tenants/{tenantId}/memberships/{membershipId}/role` | `MerchantOwner` | [4.6](#46-change-a-memberships-role) |
+| `POST /api/v1/tenants` | Any merchant-portal user, within the per-user limit (they become the owner) | [4.7](#47-create-a-tenant-self-service-onboarding) |
 | `POST /api/v1/tenants/{tenantId}/invitations` | `MerchantOwner`; `MerchantAdmin` for staff | [5.1](#51-create-an-invitation) |
 | `GET /api/v1/tenants/{tenantId}/invitations`, `GET .../invitations/{invitationId}` | `MerchantOwner`, `MerchantAdmin` | [5.2](#52-list-invitations), [5.3](#53-read-an-invitation) |
 | `POST /api/v1/tenants/{tenantId}/invitations/{invitationId}/cancel` | `MerchantOwner`; `MerchantAdmin` for staff invitations | [5.4](#54-cancel-an-invitation) |
 | `POST /api/v1/merchant-invitations/accept` | Any merchant-portal user holding the token, whose verified email is the invited address | [5.5](#55-accept-an-invitation) |
 | `GET /health`, `/health/live`, `/health/ready` | Anonymous | [8](#8-health) |
 
-There is no endpoint that grants `MerchantOwner` except provisioning. Invitations and role changes grant only `MerchantAdmin` and `MerchantStaff`.
+An owner membership is created only together with its new tenant: by provisioning (3.1) for the subject it names, or by self-service onboarding (4.7) for the caller ([ADR-022](../decisions/ADR-022-self-service-tenant-onboarding.md)). No endpoint makes anyone an owner of an existing tenant. Invitations and role changes grant only `MerchantAdmin` and `MerchantStaff`.
 
 ## 2. Authentication
 
@@ -164,7 +165,7 @@ A non-GUID `tenantId`, `membershipId` or `invitationId` answers `404`.
 | Change a role (4.6) | any other member | `403` | `403` |
 
 - **Nobody** changes their own membership: `403` `self-modification-forbidden`.
-- **`MerchantOwner` is never granted** through this API: `422` `owner-role-reserved`, for anyone who may otherwise invite or change roles.
+- **`MerchantOwner` is never granted** in an existing tenant: `422` `owner-role-reserved`, for anyone who may otherwise invite or change roles. Only a new tenant gets an owner (4.7).
 
 **Writes are serialized per tenant.** Every change below runs in one transaction that first locks the tenant row, re-authorizes the caller, applies the change and writes its audit record ([ADR-021 section 3](../decisions/ADR-021-merchant-invitations-and-membership-administration.md#3-tenant-scoped-write-serialization)).
 
@@ -175,7 +176,7 @@ A non-GUID `tenantId`, `membershipId` or `invitationId` answers `404`.
 
 - Repeating a change that is already in effect answers `200` with the current state, and writes and audits nothing.
 - Repeating an acceptance by the same caller is a replay (5.5).
-- No endpoint of this section needs `Idempotency-Key`.
+- No endpoint of this section needs `Idempotency-Key`, except tenant creation (4.7), which creates a new resource.
 
 ### 4.1 Read a tenant (member)
 
@@ -250,6 +251,44 @@ A suspended member is treated as a non-member from their next request on.
 - `"MerchantOwner"` answers `422` `owner-role-reserved`.
 - Any other value, a numeric value, a missing role or an unknown member answers `400`.
 - Responses are otherwise as in 4.5.
+
+### 4.7 Create a tenant (self-service onboarding)
+
+`POST /api/v1/tenants` (S3, [ADR-022](../decisions/ADR-022-self-service-tenant-onboarding.md)): a merchant-portal user creates a tenant and becomes its owner (PHASE_2_2 section 5.1.2).
+
+Creates, in **one** transaction, an `Active` tenant, its merchant profile, a `MerchantOwner` membership for the token's `sub`, and its audit record (`SelfServiceOwnerMembershipCreated`, actor: the user).
+
+- **Callers:** the member policy of this section, and a `client_id` in the token (recorded for audit; `403` without one). No tenant membership is needed.
+- **The owner is always the caller.** The body cannot name an owner, a role or a membership.
+
+| Header | Rule |
+|---|---|
+| `Idempotency-Key` | **Required.** The format of 3.1. It is unique **per user** and kept for the life of the tenant. Two users never share a key, whatever they send. |
+
+**Body:** `{ "slug": "acme", "displayName": "Acme Store" }`.
+
+- `slug` and `displayName` follow the rules of 3.1.
+- Any other member (for example `ownerSubjectId`, `role`, `memberships`, `status` or `id`) is rejected with `400`.
+
+**Limit:** a user may create at most `TenantMerchant:Onboarding:MaxTenantsPerSubject` tenants this way.
+
+- 1 by default, 1 to 10; the host refuses to start outside that range.
+- Provisioned tenants and memberships from invitations do not count.
+
+**Responses:**
+
+| Code | Meaning |
+|---|---|
+| `201` | Created. `Location: /api/v1/tenants/{id}`. The body is the tenant with the caller's membership, as in 4.1 (`role` `MerchantOwner`). |
+| `200` | A retry: this user already used this key for this request (slug, display name). The same tenant is returned and nothing new is created. |
+| `400` | Validation problem with `errors` per field (including `Idempotency-Key`), or a malformed body |
+| `401`, `403` | Section 2, and a token without `client_id` |
+| `404` | `tenant-not-found`: the key names a tenant of this user in which they are no longer an active member |
+| `409` | `tenant-slug-taken`: another tenant has the slug. `tenant-limit-reached`: the user has created the maximum number of tenants. |
+| `422` | `idempotency-key-reused`: this user used the key before for a different request |
+| `503` | The database could not complete the request, or another request of the same user held its onboarding lock for 5 seconds. Nothing was created; retry with the same key. `Retry-After` is set. |
+
+**Order of checks:** the key (a replay is answered even at the limit), then the limit, then the slug. One user's requests are serialized; other users' requests are not.
 
 ## 5. Invitations
 
@@ -390,7 +429,7 @@ Tenant & Merchant calls Identity's internal email verification endpoint as the s
 ## 7. Gateway
 
 - **Development routes:**
-  - `tenant-merchant-api`: host `localhost:7000`, path `/api/v1/tenants/{**catch-all}` (it also matches `/api/v1/tenants`).
+  - `tenant-merchant-api`: host `localhost:7000`, path `/api/v1/tenants/{**catch-all}` (it also matches `/api/v1/tenants`, including `POST` for onboarding, S3).
   - `tenant-merchant-invitations`: host `localhost:7000`, path `/api/v1/merchant-invitations/{**catch-all}`.
   - Both forward to `https://localhost:7102/`. The merchant BFF's `Bff:DownstreamApiAddress` is then `https://localhost:7000/`.
 - **`/internal/**` answers `404` on every host.**
@@ -428,5 +467,6 @@ Problem details (`application/problem+json`) carry `type`, `title`, `status`, `i
 | `invitation-account-ineligible` | 403 | S2 |
 | `already-a-member` | 409 | S2 |
 | `identity-unavailable` | 503 | S2 |
+| `tenant-limit-reached` | 409 | S3 |
 
 Exception details are never returned.
