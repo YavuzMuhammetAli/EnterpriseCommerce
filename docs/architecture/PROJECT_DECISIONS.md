@@ -10,7 +10,7 @@ How this document relates to the others:
 
 **Change policy:** a decision in this document changes only through a new ADR that supersedes or amends the old one. This document is then updated in the same change. If this document and an ADR disagree, stop and resolve the inconsistency. Never guess.
 
-Last consolidated: 2026-11-17 (Phase 1 final audit). Updated 2026-11-17 for Phase 2.1 (Identity provider selection, [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)). Updated 2026-11-18 for Phase 2.2 (browser client architecture, token and session strategy, account security tokens: [ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md), [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md), [ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)). Updated 2026-11-20 for Phase 2.3 slice S6 (signing and encryption key rollover and retirement, [ADR-019](../decisions/ADR-019-signing-and-encryption-key-rollover-and-retirement.md)).
+Last consolidated: 2026-11-17 (Phase 1 final audit). Updated 2026-11-17 for Phase 2.1 (Identity provider selection, [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)). Updated 2026-11-18 for Phase 2.2 (browser client architecture, token and session strategy, account security tokens: [ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md), [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md), [ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)). Updated 2026-11-20 for Phase 2.3 slice S6 (signing and encryption key rollover and retirement, [ADR-019](../decisions/ADR-019-signing-and-encryption-key-rollover-and-retirement.md)). Updated 2026-11-21 for Phase 3 slice S1 (Tenant & Merchant naming and tenant-merchant cardinality, [ADR-020](../decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md)).
 
 ---
 
@@ -41,8 +41,8 @@ The architecture prioritizes **maintainability, scalability, security, separatio
 |---|---|---|
 | Runtime | .NET 10 LTS | In use |
 | API | ASP.NET Core Web API | In use |
-| ORM | Entity Framework Core | In use (Identity persistence and migrations, Phase 2.3) |
-| Relational database | SQL Server | In use (Identity database, Phase 2.3; local container) |
+| ORM | Entity Framework Core | In use (Identity persistence and migrations, Phase 2.3; Tenant & Merchant, Phase 3 S1) |
+| Relational database | SQL Server | In use (Identity and Tenant & Merchant databases, Phase 2.3 and Phase 3 S1; local container) |
 | Document database | MongoDB | Local container available |
 | Cache | Redis | Local container available. A separate, dedicated `noeviction` Redis is in use as the BFF session store (Phase 2.3 S7, ADR-016), not as a cache. |
 | Messaging | Apache Kafka (KRaft) | Local container available |
@@ -164,10 +164,13 @@ Governing ADR: [ADR-014](../decisions/ADR-014-logical-tenant-isolation.md).
 **Decision status:**
 
 - **The initial tenancy model is accepted. It is not an open decision.** That covers logical isolation, no database per tenant, Tenant & Merchant as owner of the tenant and merchant lifecycle, service-enforced tenant-level and resource-level authorization, and the rule that claims are not proof.
-- **Open:** only the exact naming conventions, including whether `TenantMerchant` is the right project name (section 13).
+- **Naming and cardinality (resolved, [ADR-020](../decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md)):**
+  - The service is `TenantMerchant` (projects `EnterpriseCommerce.TenantMerchant.*`, audience `tenant-merchant-api`, scopes `svc.tenant-merchant.*`).
+  - **A tenant is one merchant organization.** Memberships and merchant roles are tenant-scoped, and other services scope merchant-owned data by the tenant ID.
 - **Design-level details within the accepted model** are worked out in later phases and must conform to ADR-014. They are not open architectural decisions:
   - the tenant context claim shape: resolved by [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md). Access tokens carry no tenant claim, and the tenant is an explicit request parameter validated by the owning service
-  - the membership data shared with other services (Tenant & Merchant design)
+  - the membership data shared with other services (Tenant & Merchant design; it needs the first event flow, [PHASE_3_TENANT_MERCHANT.md section 7](PHASE_3_TENANT_MERCHANT.md#7-integration-events))
+  - the merchant role catalog and the membership rules: `MerchantOwner`, `MerchantAdmin` and `MerchantStaff`, defined in [PHASE_3_TENANT_MERCHANT.md section 3](PHASE_3_TENANT_MERCHANT.md#3-merchant-roles-permissions-and-membership-rules)
   - the per-service enforcement technique, for example EF Core query filters versus explicit scoping (each service's design)
 
 ## 8. Checkout and order processing
@@ -294,7 +297,6 @@ These are **open**. They must not be decided silently. Each one is decided throu
 | Kafka client library | First event-flow phase |
 | Outbox implementation details | First event-flow phase |
 | Mediator library selection (if any) | When the first service needs it ([ADR-009](../decisions/ADR-009-selective-cqrs.md)) |
-| Tenant and merchant naming conventions, including whether `TenantMerchant` is the right project name. This is the only open tenancy item; the tenancy model itself is accepted (section 7) | Tenant & Merchant design phase |
 | Detailed per-service database schemas | Each service's design phase |
 | SQL Server 2022 versus SQL Server 2025 | Before the first production-like deployment |
 | Detailed observability implementation | Observability phase |
@@ -308,3 +310,4 @@ These are **open**. They must not be decided silently. Each one is decided throu
 - Token and session strategy, access token format, resource-server validation, and the direction for signing key storage and rotation ([ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md), Phase 2.2).
 - Email confirmation and password reset token semantics, and security email delivery ([ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md), Phase 2.2).
 - Signing and encryption key rollover and the retention of retired keys ([ADR-019](../decisions/ADR-019-signing-and-encryption-key-rollover-and-retirement.md), Phase 2.3).
+- Tenant and merchant naming (`TenantMerchant`) and the tenant-merchant cardinality, one merchant per tenant ([ADR-020](../decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md), Phase 3 S1).

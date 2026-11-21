@@ -1,6 +1,6 @@
 # ADR-014: Logical Tenant Isolation
 
-- **Status:** Accepted
+- **Status:** Accepted. Its open item (naming, rule 8) is resolved by [ADR-020](ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md) (2026-11-21), which also records one merchant per tenant. The decisions of this ADR are unchanged.
 - **Date:** 2026-11-17
 
 ## Context

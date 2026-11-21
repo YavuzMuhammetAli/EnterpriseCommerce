@@ -11,7 +11,7 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
 | # | Service | Planned project prefix | Data store | Status |
 |---|---|---|---|---|
 | 1 | Identity | `EnterpriseCommerce.Identity` | SQL Server | Implemented in Phase 2.3 (slices S1 to S7) and tested locally. Not production-verified, and production gates are open ([IDENTITY_OPERATIONS.md section 7](../security/IDENTITY_OPERATIONS.md#7-verification-level-and-remaining-production-gates)). |
-| 2 | Tenant & Merchant | `EnterpriseCommerce.TenantMerchant` *(provisional name)* | SQL Server | Planned |
+| 2 | Tenant & Merchant | `EnterpriseCommerce.TenantMerchant` ([ADR-020](../decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md)) | SQL Server | Phase 3 slice S1 (foundation and tenant provisioning) implemented and tested locally. Not production-verified ([PHASE_3_TENANT_MERCHANT.md](PHASE_3_TENANT_MERCHANT.md)). |
 | 3 | Catalog | `EnterpriseCommerce.Catalog` | MongoDB | Planned |
 | 4 | Inventory | `EnterpriseCommerce.Inventory` | SQL Server | Planned |
 | 5 | Cart | `EnterpriseCommerce.Cart` | SQL Server + Redis (acceleration only) | Planned |
@@ -90,7 +90,24 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
 - Is the authority for tenant ownership and membership ([ADR-014](../decisions/ADR-014-logical-tenant-isolation.md)).
 - Does not own user credentials or authentication (Identity), or products (Catalog).
 - The tenancy model is **accepted** ([ADR-014](../decisions/ADR-014-logical-tenant-isolation.md)): logical isolation with no database per tenant, and this service as the owner of the tenant and merchant lifecycle.
-- Open decision: **naming only**. The final service and project name (`TenantMerchant` is provisional) and related naming conventions are still open.
+- **Name and cardinality ([ADR-020](../decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md)):** `TenantMerchant`. A tenant is one merchant organization, and memberships and merchant roles are tenant-scoped.
+- Merchant roles: `MerchantOwner`, `MerchantAdmin`, `MerchantStaff` ([PHASE_3_TENANT_MERCHANT.md section 3](PHASE_3_TENANT_MERCHANT.md#3-merchant-roles-permissions-and-membership-rules)). They are never put into Identity tokens.
+- **Implemented in Phase 3 S1** and tested locally against SQL Server 2022 and LocalDB (API: [TENANT_MERCHANT_API_CONTRACT.md](../api/TENANT_MERCHANT_API_CONTRACT.md)):
+  - **Persistence:** its own database with the EF Core migration `InitialTenantMerchantSchema`. Uniqueness, allowed values and one current membership per subject and tenant are database constraints, and every table has a `rowversion` token.
+  - **Provisioning:** `POST /internal/v1/tenants` creates the tenant, its merchant profile and the initial `MerchantOwner` membership in one transaction.
+    - It is idempotent per (client, `Idempotency-Key`) and race-safe.
+    - Callers are allow-listed `svc-` clients only (audience `tenant-merchant-api`, scope `svc.tenant-merchant.provisioning`). The list is empty by default.
+  - **Member API:** `GET /api/v1/tenants/{id}` and `GET /api/v1/tenants/{id}/memberships` for `ec-merchant` users.
+    - Every request is authorized from the service's own membership data.
+    - Cross-tenant access answers `404`, and an insufficient role `403`.
+  - **Host:** local JWT bearer validation (ADR-017 section 4), a fail-closed fallback policy, `X-Correlation-ID`, problem details, and health checks.
+- **Not implemented yet:**
+  - integration events and the outbox: none in S1 (ADR-012)
+  - invitations, and membership role and status management
+  - self-service onboarding and merchant applications
+  - tenant suspension and closure
+  - subscriptions and usage
+- **External integrations, not complete:** Admin, the intended provisioning caller, does not exist. No client is allow-listed outside the tests.
 
 ## 3. Catalog
 
@@ -193,6 +210,7 @@ It routes Identity and each backend-for-frontend by host name, and it is the onl
   - Identity by host name (`id.localhost:7000`)
   - each BFF by host name (`storefront`, `merchant` and `admin.localhost:7000`), with `X-Forwarded` set
   - a `/identity` path-prefix route to Identity, for development diagnostics only (ADR-017 section 10)
+  - the Tenant & Merchant member API: `/api/v1/tenants/**` on host `localhost:7000` (Phase 3 S1)
 - **Internal paths are never forwarded.** `/internal/**` answers `404` on every host, case-insensitively (IDENTITY_API_CONTRACT.md section 2.12).
 - **Edge rate limiting** for the Identity account pages: the `identity-account` policy, a fixed window per client IP (default 30 requests per minute), answering `429` with `Retry-After`. Counters are kept in memory per instance. Identity applies its own limits as well.
 - **Its own `/health` liveness,** never proxied. Problem details for errors, and Serilog request logging with YARP logs at Warning.
@@ -200,7 +218,8 @@ It routes Identity and each backend-for-frontend by host name, and it is the onl
 
 **Verification:**
 
-- **Tested:** internal-path blocking and the forwarding of other paths (`EdgeRoutingTests`).
+- **Tested:** internal-path blocking and the forwarding of other paths (`EdgeRoutingTests`), and the committed Development route set: no route matches an internal path, and the tenant route exposes only the member API (`DevelopmentRouteTests`).
+- **Known gap (P3-1, [PHASE_3_TENANT_MERCHANT.md section 10](PHASE_3_TENANT_MERCHANT.md#10-findings-residual-risks-and-production-gates)):** the Development-only `/identity` prefix route forwards `/identity/internal/...` to Identity as `/internal/...`. Identity still requires an allow-listed service token there.
 - **Tested on the Identity side only:** Identity's trust of the Gateway's forwarded headers is tested against a stand-in proxy (`TrustedProxyTests`), not through the real Gateway.
 - **Not covered by an automated test:** the rate limiter.
 - **Not verified:** the full local flow through the Gateway (finding I29).

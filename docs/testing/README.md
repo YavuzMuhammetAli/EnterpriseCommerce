@@ -7,8 +7,10 @@
 | `EnterpriseCommerce.{Service}.UnitTests` | Unit | Domain rules, application handlers and isolated components, with no I/O |
 | `EnterpriseCommerce.{Service}.IntegrationTests` | Integration | The real HTTP pipeline in memory (`WebApplicationFactory`), and later real infrastructure |
 | `EnterpriseCommerce.Bff.BrowserTests` | Browser | The BFF flows in Chromium, Firefox and WebKit (Playwright) against Identity and the BFF on real Kestrel listeners |
-| `EnterpriseCommerce.Gateway.IntegrationTests` | Integration | The Gateway's edge rules (internal paths are never forwarded) |
-| `EnterpriseCommerce.ArchitectureTests` | Architecture | Layer dependency direction, forbidden technologies in inner layers, no cross-service references, naming conventions |
+| `EnterpriseCommerce.Gateway.IntegrationTests` | Integration | The Gateway's edge rules (internal paths are never forwarded) and the committed Development route set |
+| `EnterpriseCommerce.ArchitectureTests` | Architecture | Layer dependency direction, forbidden technologies in inner layers, no cross-service references, naming conventions, and service ownership (credentials only in Identity, merchant roles never in Identity, no service naming another service's database) |
+
+The TenantMerchant integration tests sign real RS256 `at+jwt` tokens with a test issuer (`TestTokenIssuer`), which serves discovery and the JWKS to the service's own JWT bearer handler. The validation configuration is exercised end to end, without a dependency on the Identity projects.
 
 ## Tooling
 
@@ -29,7 +31,7 @@ Infrastructure comes from the Compose profiles; there are no per-test containers
 
 | Variable | Needed by | Example (local) |
 |---|---|---|
-| `EC_TEST_SQLSERVER` | Identity and BFF integration tests (throwaway databases, dropped afterwards) | `Server=127.0.0.1,1433;User ID=sa;Password=<MSSQL_SA_PASSWORD>;TrustServerCertificate=true` (`--profile sqlserver`) |
+| `EC_TEST_SQLSERVER` | Identity, BFF and TenantMerchant integration tests (throwaway databases, dropped afterwards) | `Server=127.0.0.1,1433;User ID=sa;Password=<MSSQL_SA_PASSWORD>;TrustServerCertificate=true` (`--profile sqlserver`) |
 | `EC_TEST_REDIS_SESSIONS` | BFF integration and browser tests (the dedicated `noeviction` session Redis; keys under one prefix per run, deleted afterwards) | `127.0.0.1:6380,password=<REDIS_SESSIONS_PASSWORD>` (`--profile bff`) |
 | `EC_TEST_REDIS_RESTART_CONTAINER` | The real Redis restart test (it runs in the serial collection, after the parallel tests) | `enterprisecommerce-redis-sessions-1` |
 | `EC_TEST_BROWSERS=true` | Playwright browser tests (they install the browsers on first run) | |

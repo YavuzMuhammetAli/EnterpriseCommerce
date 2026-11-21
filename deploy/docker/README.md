@@ -74,6 +74,15 @@ memory=8GB
 
 Services will receive connection settings through configuration and environment variables when they adopt these components. No connection string is hard-coded in source.
 
+One SQL Server instance hosts every SQL service's own database (ADR-011 rule 5), created by that service's migrations:
+
+| Service | Setting (environment or user secrets, never committed) | Example database |
+|---|---|---|
+| Identity | `ConnectionStrings__IdentityDatabase` | `EnterpriseCommerce_Identity` |
+| Tenant & Merchant | `ConnectionStrings__TenantMerchantDatabase` | `EnterpriseCommerce_TenantMerchant` |
+
+Append `;Database=<name>` to the SQL Server setting above. In Development, `Identity__Database__ApplyMigrationsAtStartup=true` and `TenantMerchant__Database__ApplyMigrationsAtStartup=true` apply the migrations at startup. Integration tests create and drop their own throwaway databases (`EC_TEST_SQLSERVER`, [docs/testing](../../docs/testing/README.md)).
+
 ## BFF session Redis (`bff` profile)
 
 The `redis-sessions` service is the dedicated session store of the backend-for-frontend (ADR-016 section 3). It is never used for caching.

@@ -126,7 +126,9 @@ Some duplication between services (for example, the small exception handler in e
 
 | Host | URL |
 |---|---|
-| Gateway | `http://localhost:5000` |
-| Identity API | `http://localhost:5101` |
+| Gateway | `http://localhost:5000`, `https://localhost:7000` |
+| Identity API | `http://localhost:5101`, `https://localhost:7101` |
+| Tenant & Merchant API | `http://localhost:5102`, `https://localhost:7102` |
+| BFF storefront, merchant, admin | `https://localhost:7201`, `7202`, `7203` |
 
-Future services get the next free port in the `51xx` range, recorded in this table.
+Future services get the next free port in the `51xx` range (and `71xx` for HTTPS), recorded in this table.

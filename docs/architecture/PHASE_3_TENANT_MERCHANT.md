@@ -1,0 +1,217 @@
+# Phase 3: Tenant & Merchant
+
+The design and the implementation progress of the Tenant & Merchant service. It works within [ADR-014](../decisions/ADR-014-logical-tenant-isolation.md) (logical tenant isolation) and [ADR-020](../decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md) (the `TenantMerchant` name, and one merchant per tenant). The API is specified in [TENANT_MERCHANT_API_CONTRACT.md](../api/TENANT_MERCHANT_API_CONTRACT.md).
+
+- **Status:** Phase 3 is authorized and implemented in small slices. **Slice S1** (service foundation and tenant provisioning) is implemented and tested locally. Later slices are not started.
+- **Verification levels used below:**
+  - **Implemented:** in the code.
+  - **Tested locally:** automated tests against a real SQL Server 2022 (Compose) and LocalDB. A manual smoke run with a real Identity token is noted where it applies.
+  - **Production gate:** required before a production-like deployment, and not done.
+
+## 1. Inputs and gaps
+
+- The original Phase 0.1 (service boundaries and event catalog), Phase 0.2 (database design) and Phase 0.3 (API) documents are not in the repository. [IDENTITY_API_CONTRACT.md](../api/IDENTITY_API_CONTRACT.md) already notes this for Phase 0.3. As a result:
+  - There was no tenant schema, no tenant API contract and no event catalog to follow. `docs/events` defines no topics, so a `tenant.events` topic does not exist.
+  - The schema, the contract and the rules below were designed in Phase 3 S1. The open questions were decided by the owner on 2026-11-21 (section 9).
+- [ADR-012](../decisions/ADR-012-transactional-outbox-and-asynchronous-commands.md) forbids outbox code before its design is approved. The Kafka client library, topic naming and schema format are still open (PROJECT_DECISIONS section 13).
+
+## 2. Domain model
+
+**Tenant.** One merchant organization, and the ADR-014 isolation boundary:
+
+- `Id`: a GUID (version 7).
+- `Slug`: the immutable handle; rules in section 4.
+- `Status`.
+- `CreatedAt`, in UTC.
+- The provisioning record: the client, the idempotency key, the request hash and the actor reference.
+
+S1 has the status `Active` only. Suspension and closure come with Admin tenant management.
+
+**Merchant profile.** Exactly one per tenant, written in the tenant's transaction: `DisplayName`, `CreatedAt`, `UpdatedAt`.
+
+**Membership.** A separate aggregate, because a tenant's memberships are unbounded:
+
+- `Id`, `TenantId`.
+- `SubjectId`: the Identity `sub`, an opaque external reference. No account data is stored.
+- `Role`, `Status`, `CreatedAt`, `StatusChangedAt`.
+
+## 3. Merchant roles, permissions and membership rules
+
+Roles are owned and enforced here and never appear in tokens (ADR-017 section 2).
+
+| Role | Meaning | `ViewTenant` | `ViewMemberships` |
+|---|---|---|---|
+| `MerchantOwner` | Owns the merchant organization | yes | yes |
+| `MerchantAdmin` | Administers it | yes | yes |
+| `MerchantStaff` | A merchant employee | yes | no |
+
+S1 defines only the read permissions its endpoints need. Write permissions arrive with the endpoints that use them.
+
+**Rules:**
+
+- **Owner rights only through provisioning.** `Membership.CreateOwner` is the only way to `MerchantOwner`, and only trusted tenant provisioning calls it.
+  - `CreateMember` refuses `MerchantOwner`, and `ChangeRole` to `MerchantOwner` returns `OwnerRoleReserved`.
+  - Ownership transfer is a later, separately designed operation.
+- **Status transitions:** `Active` ⇄ `Suspended`, and `Active` or `Suspended` → `Removed`.
+  - `Removed` is terminal. A later membership of the same subject is a new membership.
+  - An invalid transition is an outcome (`InvalidTransition`), not an exception.
+- **The last active owner** cannot be suspended, removed or demoted (`LastActiveOwner`).
+  - In S1 this is a pure domain rule with unit tests.
+  - **Deferred to S2:** enforcing it under concurrency (a locked count of active owners in the same transaction) when the membership-management endpoints exist.
+- **Only active members** see anything. A suspended or removed member is treated like a non-member.
+
+## 4. Provisioning (S1)
+
+A trusted service caller (Admin, in future) provisions a tenant for an existing Identity subject. There is **no public or self-service path in S1**.
+
+The accepted self-service onboarding of PHASE_2_2_AUTHENTICATION_FLOWS.md section 5.1.2 builds on the same model in a later slice, together with merchant applications.
+
+**Slug rules:**
+
+- 3 to 63 characters of `a-z`, `0-9` and single `-`, starting and ending with a letter or digit.
+- Unique and immutable.
+- Never normalized: a non-conforming value is rejected, not changed.
+
+**Idempotency** (closes [IDENTITY_API_CONTRACT.md section 4](../api/IDENTITY_API_CONTRACT.md#4-open-items-for-phase-2-review) item 2 for this endpoint):
+
+- `Idempotency-Key` is required, and unique per calling client.
+- **It is stored on the tenant row and kept for the tenant's lifetime.** There is no separate store and no expiry.
+- The request hash is SHA-256 over a versioned, length-prefixed encoding of the validated fields.
+- Outcomes:
+  - The same key with the same request returns `200` and the original tenant.
+  - The same key with a different request returns `422`.
+  - A different key with a taken slug returns `409`.
+
+**Flow:**
+
+1. Validate the fields.
+2. Look up the key.
+3. Check the slug.
+4. Insert the tenant, merchant profile and owner membership in **one** `SaveChanges`, which is one transaction.
+
+If a unique constraint rejects the insert, or the slug was taken between the lookups, the key is read again. A concurrent retry of the same request is therefore answered as a replay, and only a genuinely different tenant gives `409`. The SQL Server concurrency test found this race (a retry missed the key, then saw its twin's slug); a unit test now covers it.
+
+**Residual risk:** the service cannot verify that `ownerSubjectId` exists in Identity. The allow-listed caller is trusted to pass a real subject.
+
+## 5. Persistence
+
+One SQL Server database per service (ADR-003, ADR-011), schema `dbo`, created by the EF Core migration `InitialTenantMerchantSchema`.
+
+| Table | Key and constraints |
+|---|---|
+| `Tenants` | PK `Id`; unique `UX_Tenants_Slug` (`varchar(63)`); unique `UX_Tenants_ProvisionedByClientId_ProvisioningKey`; `CK_Tenants_Status`; `rowversion` |
+| `MerchantProfiles` | PK and FK `TenantId` → `Tenants` (same database); `rowversion` |
+| `Memberships` | PK `Id`; FK `TenantId` → `Tenants`; filtered unique `UX_Memberships_TenantId_SubjectId_Current` on (`TenantId`, `SubjectId`) `WHERE Status <> 'Removed'`; `IX_Memberships_TenantId_CreatedAt` (listing order, initial owner, FK); `CK_Memberships_Role`, `CK_Memberships_Status`; `rowversion` |
+
+- **No cross-service references:** there are no foreign keys or references to another service's database. Identity subjects are opaque strings.
+- **Times** are `datetimeoffset` values from `TimeProvider`, in UTC.
+- **Optimistic concurrency:** every table has a `rowversion` token, so that the updates of later slices fail on conflict instead of overwriting. Tested on memberships.
+- **Failures:** every SQL Server failure becomes `503` with `Retry-After`. Nothing is reported as done.
+  - There is no retry loop: the transaction is short and insert-only.
+  - A caller retries with the same key, which is safe.
+- **Migrations:** applied at startup only in Development, with `TenantMerchant:Database:ApplyMigrationsAtStartup=true`. Deployed environments apply them as a reviewed step.
+
+## 6. Authentication and authorization
+
+- **Token validation:** the standard JWT bearer handler, as in ADR-017 section 4: exact issuer, RS256, `at+jwt`, 30 seconds of skew, and audiences `tenant-merchant-api` and `ec-merchant`.
+  - A **fallback policy** requires an authenticated caller on every endpoint that does not state a policy. Health is explicitly anonymous.
+  - The role claim type is set to a claim no token carries, so a forged `role` claim can never become a role.
+- **Provisioning policy:** `ec_ptype=service`, the service audience, the scope `svc.tenant-merchant.provisioning`, `sub == client_id` with the `svc-` prefix, and an allow-listed client.
+  - The allow-list is empty by default.
+  - Startup refuses an entry without the `svc-` prefix.
+- **Member policy:** `ec_ptype=user`, the audience `ec-merchant`, a `sub`, and a non-`svc-` client.
+  - Tenant access is then decided per request by `TenantAccessAuthorizer`, from this service's membership data only:
+    - not visible gives `404`
+    - forbidden gives `403`
+  - Denials are logged as security events (event IDs 3100 and 3101, threat T20).
+- **No generic authorization framework:** one authorizer, two policies and a role-permission table.
+
+## 7. Integration events
+
+**S1 publishes no integration event and contains no outbox code** (owner decision, section 9). The reason is ADR-012: no outbox code before its design is approved, and the Kafka client, topic and schema conventions are still open.
+
+The first event, provisionally `TenantProvisioned` on a tenant topic, is designed in the first event-flow phase together with the outbox. Until then:
+
+- Other services cannot build local membership read models (ADR-014 rule 3).
+- The membership data shared with other services, an open design item of PROJECT_DECISIONS section 7, stays undecided.
+
+## 8. Slice progress
+
+### S1: service foundation and tenant provisioning
+
+| Item | Implemented | Tested locally |
+|---|---|---|
+| Four projects, solution, ports 5102 and 7102, Serilog, problem details, `X-Correlation-ID`, health | yes | yes |
+| Domain: tenant, merchant profile, membership, roles, transitions, last-owner rule | yes | unit |
+| Persistence: migration, constraints, `rowversion` | yes | SQL Server 2022 and LocalDB |
+| Provisioning: atomic, idempotent, race-safe | yes | unit, SQL Server (rollback, 8-way concurrency) |
+| Internal API and member API with authorization | yes | integration tests (security matrix, cross-tenant, roles, paging); a manual smoke run with a real Identity client-credentials token |
+| Gateway Development route; `/internal/**` blocked | yes | Gateway tests |
+| Architecture rules for the new service and ownership | yes | yes |
+| Integration event and outbox | no (deferred) | |
+
+**Tests at S1:**
+
+- TenantMerchant: 112 unit tests and 76 SQL Server integration tests.
+- Architecture: 58 tests. Gateway: 13 tests.
+- The full solution suite: 756 tests, 0 failed, 19 skipped. The skips are the BFF browser tests and the Redis restart test, which need `EC_TEST_BROWSERS` and `EC_TEST_REDIS_RESTART_CONTAINER`. CI runs them.
+
+**Manual smoke run (2026-11-21):**
+
+- Identity issued a client-credentials token to a temporary `svc-` client with scope `svc.tenant-merchant.provisioning` and audience `tenant-merchant-api`: RS256, `typ: at+jwt`, `expires_in` 299 seconds.
+- TenantMerchant accepted it:
+  - `201` on provisioning
+  - `200` on a replay
+  - `200` on the internal read
+  - `403` for the same token on the member API
+- A user-token smoke run through the merchant BFF and the Gateway was not done (finding I29 covers the full local flow).
+
+### Later slices (not started)
+
+- **S2:** merchant employee invitations and acceptance (PHASE_2_2 section 5.1.2), membership role and status management with the concurrent last-owner rule, and the caller's "my tenants" list.
+- Self-service onboarding and merchant applications.
+- Tenant suspension and closure (with Admin).
+- Subscriptions and usage.
+- The event flow (section 7).
+
+## 9. Decisions made in S1
+
+| Topic | Decision | Recorded in |
+|---|---|---|
+| Service name | `TenantMerchant` | ADR-020 |
+| Tenant and merchant | One merchant per tenant; memberships are tenant-scoped | ADR-020 |
+| Role catalog | `MerchantOwner`, `MerchantAdmin`, `MerchantStaff`, with the S1 rules of section 3 | this document |
+| Integration event | None in S1 | this document, section 7 |
+| Idempotency-Key retention (provisioning) | Kept on the tenant row for its lifetime | this document, section 4 |
+| Pagination shape | `page` (1-based) and `pageSize` (20 by default, at most 100); `{ items, page, pageSize, totalCount }` | [docs/api/README.md](../api/README.md#conventions) |
+
+## 10. Findings, residual risks and production gates
+
+**Findings:**
+
+- **P3-1 (pre-existing, Development only, defense in depth):** the Gateway's Development route `/identity/{**catch-all}` removes its prefix. A request to `/identity/internal/...` passes the Gateway's `/internal` block and reaches Identity as `/internal/...`.
+  - Identity still requires an allow-listed service token there, so nothing is exposed without one.
+  - Deployed routes do not contain this route.
+  - Not changed in S1, because it is outside the slice.
+  - Recommended: block internal paths after path transforms as well, or remove the diagnostics route.
+- **P3-2:** no service implements `X-Correlation-ID` except TenantMerchant. Identity does not echo or generate it yet.
+- **P3-3:** host code is now duplicated between Identity and TenantMerchant:
+  - problem details
+  - health conventions
+  - SQL error classification
+  - JWT bearer setup (Identity uses OpenIddict validation)
+
+  Extracting it into BuildingBlocks is a candidate. It needs a decision, and it would touch Identity.
+
+**Residual risks:**
+
+- The owner subject is not verified against Identity (section 4).
+- Access tokens stay valid until they expire (5 minutes for service tokens). Membership changes take effect at once, because they are read from the database on every request.
+
+**Production gates (open):**
+
+- Deployed Gateway routes and host names. Admin's client registration and its allow-listing.
+- An HTTPS metadata address on the internal network. Forwarded headers and host filtering, if the service is reached through the Gateway with public host names.
+- A separate migration step for deployed environments.
+- The integration event and outbox (section 7).
+- Load or soak testing of the concurrency behaviour beyond the local 8-way tests.

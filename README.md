@@ -2,7 +2,16 @@
 
 A multi-tenant, multi-vendor e-commerce marketplace built with .NET 10 microservices. It is a long-term, portfolio-grade project, designed with production-inspired practices: clear service boundaries, data ownership, asynchronous integration, automated architecture rules and reproducible local infrastructure.
 
-> **Status: Phase 1 (repository and solution foundation) is complete and audited.** Phase 2 (Identity) is in progress: Phase 2.1 selected ASP.NET Core Identity with OpenIddict ([ADR-015](docs/decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)), Phase 2.2 accepted the authentication, token, session and browser client design ([ADR-016](docs/decisions/ADR-016-browser-client-architecture-backend-for-frontend.md) to [ADR-018](docs/decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)), and Phase 2.3 implements Identity. See [Current status](#current-status).
+> **Status:**
+>
+> - **Phase 1** (repository and solution foundation) is complete and audited.
+> - **Phase 2** (Identity) is implemented and tested locally:
+>   - Phase 2.1 selected ASP.NET Core Identity with OpenIddict ([ADR-015](docs/decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)).
+>   - Phase 2.2 accepted the authentication, token, session and browser client design ([ADR-016](docs/decisions/ADR-016-browser-client-architecture-backend-for-frontend.md) to [ADR-018](docs/decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)).
+>   - Phase 2.3 implemented it in slices S1 to S7.
+> - **Phase 3** (Tenant & Merchant) is in progress: slice S1, the service foundation and tenant provisioning, is implemented ([PHASE_3_TENANT_MERCHANT.md](docs/architecture/PHASE_3_TENANT_MERCHANT.md)).
+>
+> See [Current status](#current-status).
 
 ## Architecture summary
 
@@ -22,10 +31,12 @@ A multi-tenant, multi-vendor e-commerce marketplace built with .NET 10 microserv
 | [CLAUDE.md](CLAUDE.md) | Operational rules for AI-assisted development sessions (reading order, rules, verification) |
 | [SERVICE_CATALOG.md](docs/architecture/SERVICE_CATALOG.md) | The ten business services and their responsibilities |
 | [SOLUTION_STRUCTURE.md](docs/architecture/SOLUTION_STRUCTURE.md) | Repository layout, layer rules and naming |
-| [Architecture Decision Records](docs/decisions/README.md) | Historical record of each decision (ADR-001 to ADR-018) |
+| [Architecture Decision Records](docs/decisions/README.md) | Historical record of each decision (ADR-001 to ADR-020) |
 | [PHASE_1_FINAL_AUDIT.md](docs/architecture/PHASE_1_FINAL_AUDIT.md) | Phase 1 audit results and findings |
-| [PHASE_2_IDENTITY_DESIGN_BRIEF.md](docs/architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md) | Scope of the next phase (Identity design) |
+| [PHASE_2_IDENTITY_DESIGN_BRIEF.md](docs/architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md) | Identity design scope and Phase 2.3 implementation progress |
+| [PHASE_3_TENANT_MERCHANT.md](docs/architecture/PHASE_3_TENANT_MERCHANT.md) | Tenant & Merchant design and implementation progress |
 | [IDENTITY_API_CONTRACT.md](docs/api/IDENTITY_API_CONTRACT.md) | Identity API contract (accepted Phase 2.2 revision) and API conventions |
+| [TENANT_MERCHANT_API_CONTRACT.md](docs/api/TENANT_MERCHANT_API_CONTRACT.md) | Tenant & Merchant API contract (Phase 3 S1) |
 
 ## Technology stack
 
@@ -52,10 +63,15 @@ EnterpriseCommerce/
 │   │   ├── EnterpriseCommerce.Identity.Application/   use cases
 │   │   ├── EnterpriseCommerce.Identity.Domain/        business rules (pure C#)
 │   │   └── EnterpriseCommerce.Identity.Infrastructure/
+│   ├── Services/TenantMerchant/                       Tenant & Merchant, same four layers
+│   ├── Bff/EnterpriseCommerce.Bff/                    backend-for-frontend (one per front end)
 │   └── BuildingBlocks/                                shared technical libraries (none yet)
 ├── tests/
 │   ├── Identity/EnterpriseCommerce.Identity.UnitTests/
 │   ├── Identity/EnterpriseCommerce.Identity.IntegrationTests/
+│   ├── TenantMerchant/EnterpriseCommerce.TenantMerchant.UnitTests/
+│   ├── TenantMerchant/EnterpriseCommerce.TenantMerchant.IntegrationTests/
+│   ├── Bff/ and Gateway/                              BFF and Gateway tests
 │   └── ArchitectureTests/EnterpriseCommerce.ArchitectureTests/
 ├── deploy/docker/                                     Compose file for local infrastructure
 ├── docs/                                              architecture, decisions, api, events, security, testing
@@ -144,6 +160,20 @@ dotnet run --project src/Gateway/EnterpriseCommerce.Gateway --launch-profile htt
 
 The BFF refuses to start unless the session Redis is reachable and uses `noeviction`. The browser flow through the Gateway needs a trusted local HTTPS certificate covering the `*.localhost` names: the default development certificate covers `localhost` only (finding I29 in [PHASE_2_2_AUTHENTICATION_FLOWS.md](docs/architecture/PHASE_2_2_AUTHENTICATION_FLOWS.md#117-implementation-findings-phase-23)).
 
+## Run the Tenant & Merchant API
+
+Ports: https 7102 and http 5102. Contract: [docs/api/TENANT_MERCHANT_API_CONTRACT.md](docs/api/TENANT_MERCHANT_API_CONTRACT.md).
+
+```bash
+cd deploy/docker && docker compose --profile sqlserver up -d --wait && cd ../..
+dotnet user-secrets set ConnectionStrings:TenantMerchantDatabase "Server=localhost,1433;Database=EnterpriseCommerce_TenantMerchant;User Id=sa;Password=<MSSQL_SA_PASSWORD>;TrustServerCertificate=True" --project src/Services/TenantMerchant/EnterpriseCommerce.TenantMerchant.Api
+TenantMerchant__Database__ApplyMigrationsAtStartup=true dotnet run --project src/Services/TenantMerchant/EnterpriseCommerce.TenantMerchant.Api --launch-profile https
+```
+
+- Tokens are validated against Identity at `https://localhost:7101/` (`TenantMerchant:Authentication:Issuer`), so Identity must run to call the API.
+- No client may provision tenants until one is allow-listed: `TenantMerchant__Provisioning__AllowedClientIds__0=svc-<caller>`, plus a matching service client in Identity ([contract section 3](docs/api/TENANT_MERCHANT_API_CONTRACT.md#3-internal-api-service-callers)).
+- The Gateway's Development route forwards `https://localhost:7000/api/v1/tenants/**` to it.
+
 ## Run local infrastructure (Docker Compose profiles)
 
 ```bash
@@ -182,25 +212,32 @@ The suite contains unit tests (exception handling), integration tests (the real 
 
 **Decided (Phase 2.1 and 2.2, documentation):** the Identity provider is ASP.NET Core Identity with OpenIddict, using OAuth 2.0 and OpenID Connect ([ADR-015](docs/decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)). Every front end uses a backend-for-frontend ([ADR-016](docs/decisions/ADR-016-browser-client-architecture-backend-for-frontend.md)). The token, session and protocol strategy is in [ADR-017](docs/decisions/ADR-017-token-session-and-protocol-strategy.md), and account security tokens and security email delivery are in [ADR-018](docs/decisions/ADR-018-account-security-tokens-and-security-email-delivery.md).
 
-**Not implemented yet (explicitly out of scope for Phase 1):**
+**Implemented (Phase 2.3, Identity):** slices S1 to S7: persistence, authentication and tokens, registration and email confirmation, session revocation and password management, routing, account lifecycle, key rollover, operations, and the BFF. They are tested locally and not production-verified. Progress: [PHASE_2_IDENTITY_DESIGN_BRIEF.md](docs/architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md#phase-23-implementation-progress).
 
-- User registration, login, password management, JWT/token issuance and refresh token rotation (designed in ADR-015 to ADR-018; implemented in Phase 2.3)
-- Authentication and authorization configuration
-- Tenant and merchant management
+**Implemented (Phase 3 S1, Tenant & Merchant):** the service foundation with its own SQL Server database, and tenant provisioning.
+
+- **Provisioning** creates the tenant, its merchant profile and the initial `MerchantOwner` membership in one transaction. It is idempotent, and only allow-listed service clients may call it.
+- **The member API** is authorized from the service's own membership data.
+
+Naming and model: [ADR-020](docs/decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md). No integration event yet.
+
+**Not implemented yet:**
+
+- Invitations, membership management, merchant applications, subscriptions and usage (later Tenant & Merchant slices)
 - Product catalog, inventory operations, cart, checkout, orders, payments, fulfillment, notifications and admin features
-- Any persistence (EF Core / MongoDB) and any database schema
+- MongoDB persistence
 - Kafka topics and event flows, the outbox pattern and sagas
 - Redis usage in any business service (the BFF session store is implemented in Phase 2.3 S7)
 - Application containers and Dockerfiles
 - OpenTelemetry, Prometheus, Grafana and Loki (planned as the observability phase)
-- The other nine business services (only documented so far)
+- The other eight business services (only documented so far)
 
 ## Roadmap (indicative)
 
 1. **Phase 1:** repository and solution foundation *(complete, audited)*
-2. **Phase 2:** Identity design: protocol and provider, token strategy, data model, authorization model *(in progress: 2.1 provider selection and 2.2 authentication design done, 2.3 implementation in progress; see [brief](docs/architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md))*
-3. Observability foundation: OpenTelemetry, Collector, Prometheus, Grafana, Loki
-4. Tenant & Merchant, Catalog and Inventory
+2. **Phase 2:** Identity design and implementation *(implemented and tested locally; production gates open, see [brief](docs/architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md))*
+3. Observability foundation: OpenTelemetry, Collector, Prometheus, Grafana, Loki *(not started; Tenant & Merchant was authorized first)*
+4. Tenant & Merchant *(Phase 3, in progress: S1 done)*, Catalog and Inventory
 5. Cart, Order and simulated Payment, for single-merchant checkout
 6. Fulfillment, Notification and Admin
 7. Multi-merchant checkout
