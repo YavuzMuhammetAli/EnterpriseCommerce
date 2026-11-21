@@ -113,6 +113,41 @@ public sealed class InternalPathExposureTests(KestrelGatewayFixture gateway) : I
     }
 
     [Fact]
+    public async Task SelfServiceOnboarding_IsForwarded()
+    {
+        // POST /api/v1/tenants (Phase 3 S3) uses the existing tenant route, which has no method restriction.
+        var response = await gateway.SendAsync("POST", "/api/v1/tenants", "localhost:7000");
+
+        Assert.True(response.Forwarded, $"Onboarding was not forwarded (status {response.Status}).");
+        Assert.Equal("/api/v1/tenants", response.BackendTarget);
+    }
+
+    [Theory]
+    [InlineData("/api/v1/tenants/../../../internal/v1/tenants")]
+    [InlineData("/api/v1/tenants/%2e%2e/%2e%2e/%2e%2e/internal/v1/tenants")]
+    public async Task SelfServiceOnboarding_CannotBeTurnedIntoInternalProvisioning(string target)
+    {
+        // The internal provisioning endpoint is the same resource name under /internal: no POST path form may reach it.
+        var response = await gateway.SendAsync("POST", target, "localhost:7000");
+
+        AssertBlocked(response, target);
+        Assert.Contains(response.Status, new[] { 400, 404 });
+    }
+
+    [Fact]
+    public async Task AnEncodedSlashAfterTheTenantPrefix_StaysOneInertSegment()
+    {
+        // "..%2f" is not a separator: the backend receives it re-encoded, as one literal segment under /api, which no
+        // Tenant & Merchant route matches. It never becomes a path under /internal.
+        var response = await gateway.SendAsync("POST", "/api/v1/tenants/..%2finternal/v1/tenants", "localhost:7000");
+
+        if (response.Forwarded)
+        {
+            Assert.Equal("/api/v1/tenants/..%252finternal/v1/tenants", response.BackendTarget);
+        }
+    }
+
+    [Fact]
     public async Task InvitationAcceptance_IsForwarded()
     {
         var response = await gateway.SendAsync("POST", "/api/v1/merchant-invitations/accept", "localhost:7000");
