@@ -57,7 +57,7 @@ The architecture prioritizes **maintainability, scalability, security, separatio
 | Dashboards | Grafana | Planned (observability phase) |
 | Log aggregation | Loki | Planned (observability phase) |
 | Testing | xUnit (v3) | In use |
-| CI/CD | GitHub Actions | In use: runs on every push and pull request to `main` (build and test with SQL Server 2022 and the session Redis, Playwright browser tests, Docker Compose validation). The runs up to the Phase 3 S3 commit `f67804f` (2026-11-21) succeeded. Commits that are not pushed are not CI-verified. |
+| CI/CD | GitHub Actions | In use: runs on every push and pull request to `main` (build and test with SQL Server 2022 and the session Redis, Playwright browser tests, Docker Compose validation). The runs up to the Phase 3 S3 commit `f67804f` (2026-11-21) succeeded. **Until 2026-11-23 the test steps could not fail on a test failure** (no `pipefail`; [CI-1](../testing/README.md#ci-1-test-steps-could-not-fail-on-a-test-failure-fixed-2026-11-23)), so those runs verify restore, build and the publish and secret checks, not the test results. Commits that are not pushed are not CI-verified. |
 | Source control | Git | In use |
 
 Rules:

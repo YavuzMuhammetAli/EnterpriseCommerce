@@ -437,7 +437,7 @@ On acceptance (done 2026-11-23):
   - `EC_REQUIRE_INFRA_TESTS=true`, `EC_TEST_BROWSERS=true` and `EC_TEST_REDIS_RESTART_CONTAINER` set
 
   The result was **1114 tests: 1113 passed, 1 failed, 0 skipped**.
-  - The failure was the browser test `AfterAPasswordChange_TheBffReauthorizesSilently` (Chromium), a Playwright 30-second load-state timeout under the parallel load. It is the same flaky test as at S3.
+  - The failure was the browser test `AfterAPasswordChange_TheBffReauthorizesSilently` (Chromium), a Playwright 30-second load-state timeout under the parallel load. It is the same flaky test as at S3, recorded as known issue [TS-1](../testing/README.md#ts-1-chromium-sign-in-timeout-under-the-full-parallel-run-open).
   - In two isolated runs of the browser suite, all **18 of 18** passed.
   - Step 1 changes no BFF or Identity code.
 - **Secret scan** of the test output (the CI patterns): clean.
@@ -445,7 +445,7 @@ On acceptance (done 2026-11-23):
 **Finding (pre-existing, not caused by step 1).** Locally, a configuration-less `dotnet restore EnterpriseCommerce.sln` followed by `dotnet build -c Release --no-restore` puts the Debug-only `EnterpriseCommerce.Identity.DevMailSink` into the restore graph. The build then copies it into the ArchitectureTests Release output, and `ReleaseBuild_IdentityApi_DoesNotReferenceOrShipTheMailSink` fails.
 - This was reproduced on the unchanged S3 baseline (`f67804f`) as well.
 - `dotnet restore -p:Configuration=Release`, or letting `dotnet build`/`dotnet test -c Release` restore, avoids it.
-- CI uses the same two commands and passed on the baseline. Why CI is not affected is **not yet explained**, and it needs a look before the CI workflow changes in step 5.
+- **Explained and fixed after the push (2026-11-23, finding [CI-1](../testing/README.md#ci-1-test-steps-could-not-fail-on-a-test-failure-fixed-2026-11-23)):** CI *was* affected. Its test steps ran without `pipefail`, so the piped `dotnet test` could not fail the step, and the failing test was hidden. Linux replays with the pinned SDK reproduce the failure. CI now restores for Release, and its test steps propagate failures. This closes the item that was to be checked before the CI changes of step 5.
 
 ### Design review of the contracts
 
