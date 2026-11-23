@@ -4,7 +4,7 @@ Slice S4 of the Tenant & Merchant service ([PHASE_3_TENANT_MERCHANT.md](PHASE_3_
 
 - **Decisions:** [ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md) (**accepted** 2026-11-23).
 - **Contracts:** [docs/events/README.md](../events/README.md) (conventions) and [TENANT_MERCHANT_EVENTS.md](../events/TENANT_MERCHANT_EVENTS.md) (`TenantCreated` v1).
-- **Status:** step 0 (decisions and contracts) complete; ADR-023 accepted. Steps 1 to 6 (implementation) not started.
+- **Status:** step 0 (decisions and contracts) and step 1 (the Kafka client package and the messaging architecture rules) complete; ADR-023 accepted. Steps 2 to 6 not started: no outbox, relay, producer or consumer code exists.
 
 ## 1. How the scope was set
 
@@ -384,7 +384,7 @@ The approved S4 scope contains no consumer or inbox code, so these tests are pla
 | Step | Content | Gate |
 |---|---|---|
 | 0 | ADR-023, the conventions, the contract, the schemas and sample, this document, status fixes | **Done:** ADR-023 accepted on 2026-11-23 |
-| 1 | Confluent.Kafka in `Directory.Packages.props`; the messaging architecture rules | Build, architecture tests |
+| 1 | Confluent.Kafka in `Directory.Packages.props`; the messaging architecture rules | **Done** (section 10): build, architecture tests, full suite |
 | 2 | Domain events on `Tenant` | Unit tests |
 | 3 | `OutboxMessage`, the mapper, the envelope serializer, the `SaveChanges` hook, the metadata path, the migration `IntegrationEventOutbox` | SQL Server atomicity tests, contract tests |
 | 4 | The relay, the producer adapter, leadership, cleanup, options validation, the health check, meters | Unit tests, SQL Server leadership tests |
@@ -399,7 +399,57 @@ On acceptance (done 2026-11-23):
 
 ## 10. Test evidence
 
-S4 is not implemented. Only the committed contract files were checked, during the design review of 2026-11-23:
+### Step 1: the Kafka client package and the messaging architecture rules (2026-11-23)
+
+**Package.**
+- `Confluent.Kafka` **2.16.0** is pinned in `Directory.Packages.props`, with a justification comment. It was the latest stable release, published on 2026-10-07.
+- Its `net10.0` target has a single dependency, `librdkafka.redist` **2.16.0**.
+- Licences: Apache-2.0 for the client. BSD-2-Clause for librdkafka, whose bundled components (`LICENSES.txt`) are under permissive licences.
+- Native builds: win-x64, win-x86, linux-x64, linux-arm64, linux-s390x, osx-x64 and osx-arm64.
+- Restore runs with NuGet audit (`all`, level `low`, warnings as errors) and reports no vulnerable package in any project.
+- `EnterpriseCommerce.TenantMerchant.Infrastructure` is the only project that references it. No code uses it yet, so no assembly references it when compiled.
+
+**Rules.** `MessagingBoundaryTests` replaces `MessagingDeferralTests` (19 cases) with 39 cases:
+
+| Rule | Cases |
+|---|---|
+| `Confluent.Kafka` is declared only by an allow-listed Infrastructure project (today `EnterpriseCommerce.TenantMerchant.Infrastructure`) | 11, one per `src` project |
+| The allow-list names only existing Infrastructure-layer projects | 1 |
+| No project declares a package ADR-023 rejects: MassTransit, NServiceBus, Rebus, Wolverine, DotNetCore.CAP, KafkaFlow, any other `Confluent.*` (Schema Registry, serializers), Apache.Avro, CloudNative.CloudEvents | 11 |
+| No compiled service assembly references `Confluent.Kafka` except the allow-listed ones. This adds the Api layer to the existing Domain and Application rules (ADR-005: Kafka client code only in Infrastructure). | 8 |
+| Types named `Outbox`, `IntegrationEvent`, `EventEnvelope`, `KafkaProducer` or `KafkaConsumer` exist only in the allow-listed Infrastructure assemblies | 8 |
+
+**Mutation checks.** Each was applied temporarily, then reverted:
+
+| Mutation | Result |
+|---|---|
+| `Confluent.Kafka` declared by `Identity.Infrastructure` | Only `KafkaClient_IsDeclaredOnlyByAllowListedInfrastructureProjects(Identity.Infrastructure)` fails |
+| `Confluent.SchemaRegistry` declared by `TenantMerchant.Infrastructure` | Only `NoProject_DeclaresARejectedMessagingPackage(TenantMerchant.Infrastructure)` fails |
+| A type `OutboxProbe` in `TenantMerchant.Application` | Only `MessagingTypes_ExistOnlyInAllowListedInfrastructureAssemblies(TenantMerchant.Application)` fails |
+| `TenantMerchant.Api` compiled against a `Confluent.Kafka` type | Only `KafkaClient_IsReferencedOnlyByAllowListedInfrastructureAssemblies(TenantMerchant.Api)` fails |
+
+**Results:**
+
+- **Build:** `dotnet build EnterpriseCommerce.sln -c Release`: 0 warnings, 0 errors.
+- **Architecture tests:** 97 passed (S3: 77; +39 new, −19 removed).
+- **Full suite**, run with:
+  - SQL Server 2022 (Compose `sqlserver`) and the session Redis (Compose `bff`)
+  - `EC_REQUIRE_INFRA_TESTS=true`, `EC_TEST_BROWSERS=true` and `EC_TEST_REDIS_RESTART_CONTAINER` set
+
+  The result was **1114 tests: 1113 passed, 1 failed, 0 skipped**.
+  - The failure was the browser test `AfterAPasswordChange_TheBffReauthorizesSilently` (Chromium), a Playwright 30-second load-state timeout under the parallel load. It is the same flaky test as at S3.
+  - In two isolated runs of the browser suite, all **18 of 18** passed.
+  - Step 1 changes no BFF or Identity code.
+- **Secret scan** of the test output (the CI patterns): clean.
+
+**Finding (pre-existing, not caused by step 1).** Locally, a configuration-less `dotnet restore EnterpriseCommerce.sln` followed by `dotnet build -c Release --no-restore` puts the Debug-only `EnterpriseCommerce.Identity.DevMailSink` into the restore graph. The build then copies it into the ArchitectureTests Release output, and `ReleaseBuild_IdentityApi_DoesNotReferenceOrShipTheMailSink` fails.
+- This was reproduced on the unchanged S3 baseline (`f67804f`) as well.
+- `dotnet restore -p:Configuration=Release`, or letting `dotnet build`/`dotnet test -c Release` restore, avoids it.
+- CI uses the same two commands and passed on the baseline. Why CI is not affected is **not yet explained**, and it needs a look before the CI workflow changes in step 5.
+
+### Design review of the contracts
+
+S4 was not implemented at the time of the review. Only the committed contract files were checked, during the design review of 2026-11-23:
 
 - **Validator:** Ajv 8.17.1 with ajv-formats 3.0.1 (JSON Schema 2020-12, ECMA-262 regular expressions with the `u` flag, `strict` mode). It was installed outside the repository; nothing was added to the solution.
 - **The golden sample** validates against `envelope.v1.schema.json`, and its payload against `TenantCreated.v1.schema.json`.

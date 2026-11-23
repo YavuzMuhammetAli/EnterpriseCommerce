@@ -39,7 +39,7 @@ A multi-tenant, multi-vendor e-commerce marketplace built with .NET 10 microserv
 | [PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md](docs/architecture/PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md) | Phase 3 S2: invitations, membership administration, the last-owner guarantee, audit |
 | [PHASE_3_S3_SELF_SERVICE_ONBOARDING.md](docs/architecture/PHASE_3_S3_SELF_SERVICE_ONBOARDING.md) | Phase 3 S3: self-service merchant onboarding, the per-user limit, per-user idempotency |
 | [TENANT_MERCHANT_API_CONTRACT.md](docs/api/TENANT_MERCHANT_API_CONTRACT.md) | Tenant & Merchant API contract (Phase 3 S1 to S3) |
-| [PHASE_3_S4_EVENT_FLOW.md](docs/architecture/PHASE_3_S4_EVENT_FLOW.md) | Phase 3 S4 (designed, ADR-023 accepted, implementation not started): the first integration event, the transactional outbox and the relay |
+| [PHASE_3_S4_EVENT_FLOW.md](docs/architecture/PHASE_3_S4_EVENT_FLOW.md) | Phase 3 S4 (designed, ADR-023 accepted, step 1 of 6 done): the first integration event, the transactional outbox and the relay |
 | [Integration events](docs/events/README.md) | Event conventions (envelope, topics, versioning) and contracts, starting with [TENANT_MERCHANT_EVENTS.md](docs/events/TENANT_MERCHANT_EVENTS.md) |
 
 ## Technology stack

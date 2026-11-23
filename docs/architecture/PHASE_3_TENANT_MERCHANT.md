@@ -6,7 +6,7 @@ The design and the implementation progress of the Tenant & Merchant service. It 
   - **Slice S1** (service foundation and tenant provisioning) is implemented and tested locally.
   - **Slice S2** (merchant membership management) is implemented and tested locally. Its design is in [PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md](PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md).
   - **Slice S3** (self-service merchant onboarding) is implemented and tested locally. Its design is in [PHASE_3_S3_SELF_SERVICE_ONBOARDING.md](PHASE_3_S3_SELF_SERVICE_ONBOARDING.md), its decisions in [ADR-022](../decisions/ADR-022-self-service-tenant-onboarding.md).
-  - **Slice S4** (the first integration event flow and the transactional outbox) is designed and its decisions are **accepted** ([ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md), 2026-11-23). The implementation has not started; no S4 code exists. Design: [PHASE_3_S4_EVENT_FLOW.md](PHASE_3_S4_EVENT_FLOW.md).
+  - **Slice S4** (the first integration event flow and the transactional outbox) is designed and its decisions are **accepted** ([ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md), 2026-11-23). Step 1 of 6 is done: the Confluent.Kafka package and the messaging architecture rules. No outbox, relay or consumer code exists yet. Design: [PHASE_3_S4_EVENT_FLOW.md](PHASE_3_S4_EVENT_FLOW.md).
   - Later slices are not started.
 - **Verification levels used below:**
   - **Implemented:** in the code.
@@ -224,7 +224,7 @@ Design, decisions and evidence: [PHASE_3_S3_SELF_SERVICE_ONBOARDING.md](PHASE_3_
 - Merchant applications and review (with Admin).
 - Tenant suspension and closure (with Admin).
 - Subscriptions and usage.
-- The event flow (section 7): **S4, designed and accepted (ADR-023)**, implementation not started ([PHASE_3_S4_EVENT_FLOW.md](PHASE_3_S4_EVENT_FLOW.md)).
+- The event flow (section 7): **S4, designed and accepted (ADR-023)**, step 1 of 6 done ([PHASE_3_S4_EVENT_FLOW.md](PHASE_3_S4_EVENT_FLOW.md)).
 
 ## 9. Decisions made in S1
 
