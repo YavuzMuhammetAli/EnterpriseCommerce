@@ -29,5 +29,7 @@ The consolidated, current view of all decisions is [PROJECT_DECISIONS.md](../arc
 | [ADR-021](ADR-021-merchant-invitations-and-membership-administration.md) | Merchant Invitations and Membership Administration | Accepted (amended) | ADR-022 (section 4 owner rule) |
 | [ADR-022](ADR-022-self-service-tenant-onboarding.md) | Self-Service Tenant Onboarding | Accepted | |
 | [ADR-023](ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md) | Integration Event Publishing and the Transactional Outbox Implementation | Accepted | |
+| [ADR-024](ADR-024-catalog-service-design.md) | Catalog Service Design | Accepted | |
+| [ADR-025](ADR-025-merchant-authorization-through-tenant-merchant-membership-verification.md) | Merchant Authorization through Tenant & Merchant Membership Verification | Accepted | |
 
 New ADRs use the next number and the same four sections: Context, Decision, Consequences and Alternatives considered.

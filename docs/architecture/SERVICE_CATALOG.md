@@ -12,7 +12,7 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
 |---|---|---|---|---|
 | 1 | Identity | `EnterpriseCommerce.Identity` | SQL Server | Implemented in Phase 2.3 (slices S1 to S7) and tested locally. Not production-verified, and production gates are open ([IDENTITY_OPERATIONS.md section 7](../security/IDENTITY_OPERATIONS.md#7-verification-level-and-remaining-production-gates)). |
 | 2 | Tenant & Merchant | `EnterpriseCommerce.TenantMerchant` ([ADR-020](../decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md)) | SQL Server | Phase 3 slices S1 (foundation and tenant provisioning), S2 (membership management) and S3 (self-service onboarding) implemented and tested locally. S4 (the first integration event, `TenantCreated`, through a transactional outbox and a Kafka relay, [ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md)) implemented and tested locally and in CI. Not production-verified ([PHASE_3_TENANT_MERCHANT.md](PHASE_3_TENANT_MERCHANT.md)). |
-| 3 | Catalog | `EnterpriseCommerce.Catalog` | MongoDB | Planned |
+| 3 | Catalog | `EnterpriseCommerce.Catalog` | MongoDB | Phase 4 in progress: design accepted ([ADR-024](../decisions/ADR-024-catalog-service-design.md), [ADR-025](../decisions/ADR-025-merchant-authorization-through-tenant-merchant-membership-verification.md), [PHASE_4_CATALOG.md](PHASE_4_CATALOG.md)) |
 | 4 | Inventory | `EnterpriseCommerce.Inventory` | SQL Server | Planned |
 | 5 | Cart | `EnterpriseCommerce.Cart` | SQL Server + Redis (acceleration only) | Planned |
 | 6 | Order | `EnterpriseCommerce.Order` | SQL Server | Planned |
@@ -131,8 +131,12 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
   - categories and product attributes
   - the product publication lifecycle
   - catalog search and retrieval
+  - product variants, their SKUs and their **list prices** ([ADR-024](../decisions/ADR-024-catalog-service-design.md) section 4; Order snapshots prices at checkout)
+  - tenant brands, and media references (no binary media)
 - Data store: MongoDB.
 - Does not own stock levels (Inventory) or order-time snapshots (Order).
+- Categories are a **platform taxonomy** written by allow-listed service clients; brands are **tenant-scoped** ([ADR-024](../decisions/ADR-024-catalog-service-design.md)).
+- Merchant requests are authorized per request by Tenant & Merchant's membership verification ([ADR-025](../decisions/ADR-025-merchant-authorization-through-tenant-merchant-membership-verification.md)). Design and progress: [PHASE_4_CATALOG.md](PHASE_4_CATALOG.md).
 
 ## 4. Inventory
 
