@@ -50,7 +50,10 @@ jobs:
           global-json-file: global.json
 
       - name: Restore
-        run: dotnet restore EnterpriseCommerce.sln
+        # Restore for the configuration that is built. A configuration-less restore evaluates as Debug, so the restore
+        # graph contains Identity.Api's Debug-only DevMailSink reference, and the following --no-restore Release build
+        # then copies the mail sink into test outputs (DevelopmentAdapterTests).
+        run: dotnet restore EnterpriseCommerce.sln -p:Configuration=Release
 
       - name: Start the BFF session Redis (noeviction, append-only; ADR-016 section 3)
         # Service containers cannot take a command line, so the dedicated session Redis is started here with the same
@@ -92,7 +95,9 @@ jobs:
           EC_TEST_REDIS_RESTART_CONTAINER: "redis-sessions"
           # Infrastructure tests must run in CI: a missing server fails the build instead of skipping.
           EC_REQUIRE_INFRA_TESTS: "true"
-        # The default bash shell uses pipefail, so a test failure still fails this step.
+        # An explicit `shell: bash` runs `bash --noprofile --norc -eo pipefail {0}`, so a test failure fails this step
+        # despite the pipe into tee. Without it a step runs `bash -e {0}`, and the pipe's status is tee's.
+        shell: bash
         run: dotnet test --solution EnterpriseCommerce.sln --configuration Release --no-build 2>&1 | tee test-output.log
 
       - name: Scan test output for secrets (ADR-017 section 11)
@@ -164,6 +169,8 @@ jobs:
           EC_TEST_REDIS_SESSIONS: "127.0.0.1:6380,password=CiOnly_Ephemeral_Sessions"
           EC_TEST_BROWSERS: "true"
           EC_REQUIRE_INFRA_TESTS: "true"
+        # Explicit bash: pipefail, so a test failure fails this step despite the pipe into tee (see the Test step).
+        shell: bash
         run: dotnet test --project tests/Bff/EnterpriseCommerce.Bff.BrowserTests --configuration Release --no-build 2>&1 | tee browser-test-output.log
 
       - name: Scan browser test output for secrets (ADR-017 section 11)
