@@ -2,10 +2,13 @@
 
   <!--
     Tenant & Merchant Infrastructure: EF Core persistence in the service's own SQL Server database (ADR-011, ADR-020),
-    and the HTTP client of Identity's internal email verification API (ADR-021).
+    and the HTTP client of Identity's internal email verification API (ADR-021). Kafka publication of the
+    transactional outbox (ADR-023) lives here too; the Confluent.Kafka reference is added in S4 step 1, before the
+    outbox relay of step 4 uses it.
   -->
 
   <ItemGroup>
+    <PackageReference Include="Confluent.Kafka" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
