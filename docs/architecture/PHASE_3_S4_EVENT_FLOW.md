@@ -437,7 +437,7 @@ On acceptance (done 2026-11-23):
   - `EC_REQUIRE_INFRA_TESTS=true`, `EC_TEST_BROWSERS=true` and `EC_TEST_REDIS_RESTART_CONTAINER` set
 
   The result was **1114 tests: 1113 passed, 1 failed, 0 skipped**.
-  - The failure was the browser test `AfterAPasswordChange_TheBffReauthorizesSilently` (Chromium), a Playwright 30-second load-state timeout under the parallel load. It is the same flaky test as at S3, recorded as known issue [TS-1](../testing/README.md#ts-1-chromium-sign-in-timeout-under-the-full-parallel-run-open).
+  - The failure was the browser test `AfterAPasswordChange_TheBffReauthorizesSilently` (Chromium), a Playwright 30-second load-state timeout under the parallel load. It is the same flaky test as at S3, recorded as known issue [TS-1](../testing/README.md#ts-1-30-second-navigation-timeouts-after-a-form-submission-open).
   - In two isolated runs of the browser suite, all **18 of 18** passed.
   - Step 1 changes no BFF or Identity code.
 - **Secret scan** of the test output (the CI patterns): clean.
