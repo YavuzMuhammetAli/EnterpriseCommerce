@@ -198,16 +198,21 @@ public sealed class BrowserFlowTests(BrowserEnvironment environment) : IClassFix
         var expired = await UserAsync(page);
         Assert.Equal(401, expired.GetProperty("status").GetInt32());
 
-        // Silent re-authorization through Identity's reissued SSO cookie: no login page.
+        // Silent re-authorization through Identity's reissued SSO cookie: no login page. It runs in a new page of the
+        // same context, which shares the cookies and the session state, because in the page that already visited both
+        // sites, Linux WebKit (Playwright 1.64.1) crashes the Playwright driver on this cross-site redirect chain
+        // (microsoft/playwright#43067, known issue TS-2 in docs/testing). Measured on Linux: 3 of 3 crashes in the same
+        // page, none in a new page. Return to the same page when TS-2's removal criteria are met.
+        var silent = await context.NewPageAsync();
         var visited = new ConcurrentBag<string>();
-        page.FrameNavigated += (_, frame) => visited.Add(frame.Url);
-        await page.GotoAsync(bff.Url("/bff/login?silent=1&returnUrl=%2F").AbsoluteUri);
-        await page.WaitForURLAsync(bff.Url("/").AbsoluteUri);
+        silent.FrameNavigated += (_, frame) => visited.Add(frame.Url);
+        await silent.GotoAsync(bff.Url("/bff/login?silent=1&returnUrl=%2F").AbsoluteUri);
+        await silent.WaitForURLAsync(bff.Url("/").AbsoluteUri);
 
         Assert.DoesNotContain(visited, url => url.Contains("/account/login", StringComparison.Ordinal));
         var after = (await context.CookiesAsync([bff.Origin.AbsoluteUri])).Single(c => c.Name == "__Host-Http-ec-storefront").Value;
         Assert.NotEqual(before, after);
-        Assert.Equal(200, (await UserAsync(page)).GetProperty("status").GetInt32());
+        Assert.Equal(200, (await UserAsync(silent)).GetProperty("status").GetInt32());
     }
 
     /// <summary>
