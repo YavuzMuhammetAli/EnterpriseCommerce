@@ -1,3 +1,4 @@
+using EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
 using EnterpriseCommerce.TenantMerchant.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -15,11 +16,14 @@ internal sealed class TenantMerchantDatabaseHealthCheck(TenantMerchantDbContext 
 
 /// <summary>
 /// <c>/health</c> and <c>/health/live</c> report process liveness only. <c>/health/ready</c> runs the readiness checks.
-/// Responses carry the status word only, never descriptions, exceptions or configuration. They are anonymous.
+/// <c>/health/outbox</c> runs the integration event relay's check only: it is never part of readiness, so a Kafka
+/// outage never takes the API out of rotation (ADR-023 section 6). Responses carry the status word only, never
+/// descriptions, exceptions or configuration; <c>Degraded</c> answers 200. They are anonymous.
 /// </summary>
 internal static class TenantMerchantHealthChecks
 {
     private const string ReadyTag = "ready";
+    private const string EventRelayTag = "outbox";
 
     /// <summary>Every dependency check gives up after this long, so a hanging dependency cannot hang the probe.</summary>
     public static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(5);
@@ -27,7 +31,8 @@ internal static class TenantMerchantHealthChecks
     public static IServiceCollection AddTenantMerchantHealthChecks(this IServiceCollection services)
     {
         services.AddHealthChecks()
-            .AddCheck<TenantMerchantDatabaseHealthCheck>("tenant-merchant-database", failureStatus: HealthStatus.Unhealthy, tags: [ReadyTag], timeout: CheckTimeout);
+            .AddCheck<TenantMerchantDatabaseHealthCheck>("tenant-merchant-database", failureStatus: HealthStatus.Unhealthy, tags: [ReadyTag], timeout: CheckTimeout)
+            .AddCheck<OutboxHealthCheck>("outbox", failureStatus: HealthStatus.Degraded, tags: [EventRelayTag], timeout: CheckTimeout);
         return services;
     }
 
@@ -37,6 +42,7 @@ internal static class TenantMerchantHealthChecks
         endpoints.MapHealthChecks("/health", liveness).AllowAnonymous();
         endpoints.MapHealthChecks("/health/live", liveness).AllowAnonymous();
         endpoints.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains(ReadyTag) }).AllowAnonymous();
+        endpoints.MapHealthChecks("/health/outbox", new HealthCheckOptions { Predicate = check => check.Tags.Contains(EventRelayTag) }).AllowAnonymous();
         return endpoints;
     }
 }
