@@ -57,12 +57,19 @@ public sealed class MongoTestDatabase : IAsyncDisposable
         return [.. indexes.Select(index => index["name"].AsString)];
     }
 
+    /// <summary>
+    /// Drops the database whenever a server is configured: the host under test creates it (indexes, documents) even
+    /// when the test itself never touched <see cref="Database"/>.
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
-        if (_client is not null)
+        if (!IsConfigured)
         {
-            await _client.DropDatabaseAsync(DatabaseName);
-            _client.Dispose();
+            return;
         }
+
+        _client ??= new MongoClient(ConnectionString);
+        await _client.DropDatabaseAsync(DatabaseName);
+        _client.Dispose();
     }
 }
