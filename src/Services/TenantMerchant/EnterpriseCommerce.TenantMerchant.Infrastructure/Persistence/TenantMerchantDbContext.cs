@@ -2,6 +2,7 @@ using EnterpriseCommerce.TenantMerchant.Domain.Audit;
 using EnterpriseCommerce.TenantMerchant.Domain.Invitations;
 using EnterpriseCommerce.TenantMerchant.Domain.Memberships;
 using EnterpriseCommerce.TenantMerchant.Domain.Tenants;
+using EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
 using Microsoft.EntityFrameworkCore;
 
 namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Persistence;
@@ -32,6 +33,8 @@ internal sealed class TenantMerchantDbContext(DbContextOptions<TenantMerchantDbC
     public const string PendingInvitationIndex = "UX_MerchantInvitations_TenantId_NormalizedEmail_Pending";
     public const string InvitationTokenHashIndex = "UX_MerchantInvitations_TokenHash";
     public const string RowVersion = "RowVersion";
+    public const string OutboxEventVersionIndex = "UX_OutboxMessages_EventId_EventVersion";
+    public const string OutboxEnvelopeSizeConstraint = "CK_OutboxMessages_EnvelopeSize";
 
     /// <summary>Refuses a membership change that leaves a tenant without an active owner (error 50001).</summary>
     public const string RequireActiveOwnerTrigger = "TR_Memberships_RequireActiveOwner";
@@ -46,6 +49,9 @@ internal sealed class TenantMerchantDbContext(DbContextOptions<TenantMerchantDbC
     public DbSet<MerchantInvitation> MerchantInvitations => Set<MerchantInvitation>();
 
     public DbSet<MembershipAuditRecord> MembershipAuditRecords => Set<MembershipAuditRecord>();
+
+    /// <summary>The transactional outbox (ADR-023 section 5). Written only by <see cref="SaveChangesAsync(bool, CancellationToken)"/>, read only by the relay.</summary>
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -64,6 +70,9 @@ internal sealed class TenantMerchantDbContext(DbContextOptions<TenantMerchantDbC
             });
             tenant.HasKey(t => t.Id);
             tenant.Property(t => t.Id).ValueGeneratedNever();
+
+            // Domain events are not state: they become outbox rows when the tenant is saved.
+            tenant.Ignore(t => t.DomainEvents);
             tenant.Property(t => t.Slug).HasMaxLength(TenantSlug.MaxLength).IsUnicode(false);
             tenant.Property(t => t.Status).HasConversion<string>().HasMaxLength(32);
 
@@ -220,7 +229,41 @@ internal sealed class TenantMerchantDbContext(DbContextOptions<TenantMerchantDbC
             audit.HasOne<Tenant>().WithMany().HasForeignKey(a => a.TenantId).OnDelete(DeleteBehavior.Restrict);
             audit.HasIndex(a => new { a.TenantId, a.OccurredAt });
         });
+
+        MapOutbox(modelBuilder);
     }
+
+    private static void MapOutbox(ModelBuilder modelBuilder) =>
+        modelBuilder.Entity<OutboxMessage>(message =>
+        {
+            message.ToTable("OutboxMessages", table =>
+            {
+                table.HasCheckConstraint("CK_OutboxMessages_EventVersion", "[EventVersion] > 0");
+                table.HasCheckConstraint("CK_OutboxMessages_Attempts", "[Attempts] >= 0");
+
+                // ADR-023 section 3: at most 64 KiB as UTF-8. The serializer checks it before the write as well.
+                table.HasCheckConstraint(
+                    OutboxEnvelopeSizeConstraint,
+                    $"DATALENGTH(CAST([Envelope] COLLATE Latin1_General_100_BIN2_UTF8 AS varchar(max))) <= {OutboxMessage.EnvelopeMaxBytes}");
+            });
+
+            // The identity is the publication order. No foreign key: the table is technical.
+            message.HasKey(m => m.Sequence).IsClustered();
+            message.Property(m => m.Sequence).UseIdentityColumn();
+            message.Property(m => m.Topic).HasMaxLength(OutboxMessage.TopicMaxLength).IsUnicode(false);
+            message.Property(m => m.MessageKey).HasMaxLength(OutboxMessage.MessageKeyMaxLength).IsUnicode(false);
+            message.Property(m => m.EventType).HasMaxLength(OutboxMessage.EventTypeMaxLength).IsUnicode(false);
+            message.Property(m => m.Envelope);
+            message.Property(m => m.Attempts).HasDefaultValue(0);
+            message.Property(m => m.LastError).HasMaxLength(OutboxMessage.LastErrorMaxLength);
+
+            // One message per (fact, version): a dual publication writes two versions of one event ID (ADR-023 section 3).
+            message.HasIndex(m => new { m.EventId, m.EventVersion }).IsUnique().HasDatabaseName(OutboxEventVersionIndex);
+
+            // The relay's poll and the cleanup.
+            message.HasIndex(m => m.Sequence).HasFilter("[PublishedAt] IS NULL").HasDatabaseName("IX_OutboxMessages_Pending");
+            message.HasIndex(m => m.PublishedAt).HasFilter("[PublishedAt] IS NOT NULL").HasDatabaseName("IX_OutboxMessages_Published");
+        });
 
     private static string AllowedValues<TEnum>(string column)
         where TEnum : struct, Enum =>

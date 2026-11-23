@@ -20,6 +20,7 @@ public sealed class MigrationTests(SqlServerTestDatabase database) : IClassFixtu
         Assert.Contains(applied, migration => migration.EndsWith("_InitialTenantMerchantSchema", StringComparison.Ordinal));
         Assert.Contains(applied, migration => migration.EndsWith("_MerchantMembershipAdministration", StringComparison.Ordinal));
         Assert.Contains(applied, migration => migration.EndsWith("_SelfServiceOnboarding", StringComparison.Ordinal));
+        Assert.Contains(applied, migration => migration.EndsWith("_IntegrationEventOutbox", StringComparison.Ordinal));
         Assert.Empty(await context.Database.GetPendingMigrationsAsync(ct));
         Assert.False(context.Database.HasPendingModelChanges(), "The model has changes that no migration captures.");
     }
@@ -43,6 +44,9 @@ public sealed class MigrationTests(SqlServerTestDatabase database) : IClassFixtu
             + "|MerchantInvitations.IX_MerchantInvitations_TenantId_CreatedAt:0:-"
             + "|MerchantInvitations.UX_MerchantInvitations_TenantId_NormalizedEmail_Pending:1:([Status]=N'Pending')"
             + "|MerchantInvitations.UX_MerchantInvitations_TokenHash:1:-"
+            + "|OutboxMessages.IX_OutboxMessages_Pending:0:([PublishedAt] IS NULL)"
+            + "|OutboxMessages.IX_OutboxMessages_Published:0:([PublishedAt] IS NOT NULL)"
+            + "|OutboxMessages.UX_OutboxMessages_EventId_EventVersion:1:-"
             + "|Tenants.UX_Tenants_ProvisionedByClientId_ProvisioningKey:1:([Origin]=N'Provisioned')"
             + "|Tenants.UX_Tenants_SelfServiceSubjectId_ProvisioningKey:1:([Origin]=N'SelfService')"
             + "|Tenants.UX_Tenants_Slug:1:-",
@@ -53,7 +57,9 @@ public sealed class MigrationTests(SqlServerTestDatabase database) : IClassFixtu
         Assert.Equal(
             "CK_MembershipAuditRecords_Action|CK_MembershipAuditRecords_ActorKind|CK_Memberships_Role|CK_Memberships_Status"
             + "|CK_MerchantInvitations_Accepted|CK_MerchantInvitations_Cancelled|CK_MerchantInvitations_Expired|CK_MerchantInvitations_Expiry"
-            + "|CK_MerchantInvitations_Role|CK_MerchantInvitations_Status|CK_Tenants_Origin|CK_Tenants_Origin_SelfServiceSubject|CK_Tenants_Status",
+            + "|CK_MerchantInvitations_Role|CK_MerchantInvitations_Status"
+            + "|CK_OutboxMessages_Attempts|CK_OutboxMessages_EnvelopeSize|CK_OutboxMessages_EventVersion"
+            + "|CK_Tenants_Origin|CK_Tenants_Origin_SelfServiceSubject|CK_Tenants_Status",
             checks);
 
         var foreignKeys = await database.ScalarAsync<string>(
@@ -93,6 +99,11 @@ public sealed class MigrationTests(SqlServerTestDatabase database) : IClassFixtu
             "SELECT (SELECT COUNT(*) FROM sys.objects WHERE name IN ('MerchantInvitations', 'MembershipAuditRecords', 'TR_Memberships_RequireActiveOwner', 'TR_MembershipAuditRecords_AppendOnly'))"
             + " + (SELECT COUNT(*) FROM sys.indexes WHERE name IN ('IX_Memberships_TenantId_ActiveOwner', 'IX_Memberships_SubjectId_Status'))";
 
+        // S4 down to S3: the outbox goes, and the S3 schema stays.
+        await migrator.MigrateAsync("SelfServiceOnboarding", cancellationToken: ct);
+        Assert.Equal(0, await database.ScalarAsync<int>(S4Objects));
+        Assert.Equal(5, await database.ScalarAsync<int>(S3Objects));
+
         // S3 down to S2: the origin columns, the self-service index and constraints go, and the S2 key index returns.
         await migrator.MigrateAsync("MerchantMembershipAdministration", cancellationToken: ct);
         Assert.Equal(0, await database.ScalarAsync<int>(S3Objects));
@@ -110,6 +121,7 @@ public sealed class MigrationTests(SqlServerTestDatabase database) : IClassFixtu
         await context.Database.MigrateAsync(ct);
         Assert.Equal(6, await database.ScalarAsync<int>(s2Objects));
         Assert.Equal(5, await database.ScalarAsync<int>(S3Objects));
+        Assert.Equal(1, await database.ScalarAsync<int>(S4Objects));
         Assert.Equal("([Origin]=N'Provisioned')", await database.ScalarAsync<string>(ProvisioningKeyFilter));
         Assert.Equal(5, await database.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name IN ('Tenants', 'MerchantProfiles', 'Memberships', 'MerchantInvitations', 'MembershipAuditRecords')"));
     }
@@ -164,13 +176,41 @@ public sealed class MigrationTests(SqlServerTestDatabase database) : IClassFixtu
 
             Assert.Equal(EnterpriseCommerce.TenantMerchant.Infrastructure.Persistence.Migrations.SelfServiceOnboarding.SelfServiceDataExistsError, refusal.Number);
             Assert.Equal(5, await database.ScalarAsync<int>(S3Objects));
+
+            // The later S4 migration (no pending events) was reverted before the S3 refusal; nothing of S3 was.
+            Assert.Equal(["IntegrationEventOutbox"], (await context.Database.GetPendingMigrationsAsync(ct)).Select(migration => migration[(migration.IndexOf('_', StringComparison.Ordinal) + 1)..]));
+        }
+        finally
+        {
+            await context.Database.MigrateAsync(ct);
+            await database.ExecuteAsync($"DELETE FROM MerchantProfiles WHERE TenantId = '{tenantId}'; DELETE FROM Tenants WHERE Id = '{tenantId}';");
+        }
+    }
+
+    [Fact]
+    public async Task OutboxMigration_RefusesToRollBack_WhileEventsArePending()
+    {
+        database.RequireAvailable();
+        await using var context = database.CreateContext();
+        var migrator = context.GetService<IMigrator>();
+        var ct = TestContext.Current.CancellationToken;
+        var pending = await OutboxRows.InsertAsync(database, Guid.CreateVersion7(), 1);
+        try
+        {
+            var refusal = await Assert.ThrowsAsync<Microsoft.Data.SqlClient.SqlException>(
+                () => migrator.MigrateAsync("SelfServiceOnboarding", cancellationToken: ct));
+
+            Assert.Equal(EnterpriseCommerce.TenantMerchant.Infrastructure.Persistence.Migrations.IntegrationEventOutbox.PendingEventsExistError, refusal.Number);
+            Assert.Equal(1, await database.ScalarAsync<int>($"SELECT COUNT(*) FROM OutboxMessages WHERE Sequence = {pending}"));
             Assert.Empty(await context.Database.GetPendingMigrationsAsync(ct));
         }
         finally
         {
-            await database.ExecuteAsync($"DELETE FROM MerchantProfiles WHERE TenantId = '{tenantId}'; DELETE FROM Tenants WHERE Id = '{tenantId}';");
+            await database.ExecuteAsync($"DELETE FROM OutboxMessages WHERE Sequence = {pending}");
         }
     }
+
+    private const string S4Objects = "SELECT COUNT(*) FROM sys.tables WHERE name = 'OutboxMessages'";
 
     private const string S3Objects =
         "SELECT (SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('Tenants') AND name IN ('Origin', 'SelfServiceSubjectId'))"

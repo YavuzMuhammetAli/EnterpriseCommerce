@@ -1,3 +1,5 @@
+using EnterpriseCommerce.TenantMerchant.Domain.Common;
+
 namespace EnterpriseCommerce.TenantMerchant.Domain.Tenants;
 
 /// <summary>The lifecycle status of a tenant. Suspension and closure arrive with Admin tenant management.</summary>
@@ -20,8 +22,10 @@ public enum TenantOrigin
 /// A tenant: one merchant organization and the logical isolation boundary of ADR-014 (ADR-020: tenant and merchant are
 /// one-to-one). Every tenant-owned record of every service carries its <see cref="Id"/>.
 /// </summary>
-public sealed class Tenant
+public sealed class Tenant : IHasDomainEvents
 {
+    private readonly List<IDomainEvent> _domainEvents = [];
+
     private Tenant()
     {
     }
@@ -67,6 +71,12 @@ public sealed class Tenant
     /// </summary>
     public string ProvisionedByActor { get; private set; } = string.Empty;
 
+    /// <inheritdoc />
+    public IReadOnlyList<IDomainEvent> DomainEvents => _domainEvents;
+
+    /// <inheritdoc />
+    public void ClearDomainEvents() => _domainEvents.Clear();
+
     /// <summary>
     /// Creates an active tenant with its merchant profile. The initial <see cref="Memberships.MerchantRole.MerchantOwner"/>
     /// membership is created alongside it, in the same transaction, by the provisioning use case.
@@ -81,7 +91,7 @@ public sealed class Tenant
         ArgumentNullException.ThrowIfNull(displayName);
         ArgumentNullException.ThrowIfNull(provisioning);
 
-        return new Tenant
+        var tenant = new Tenant
         {
             Id = Guid.CreateVersion7(now),
             Slug = slug.Value,
@@ -94,6 +104,8 @@ public sealed class Tenant
             ProvisioningRequestHash = [.. provisioning.RequestHash],
             ProvisionedByActor = provisioning.Actor.Value,
         };
+        tenant.RecordCreation();
+        return tenant;
     }
 
     /// <summary>
@@ -111,7 +123,7 @@ public sealed class Tenant
         ArgumentNullException.ThrowIfNull(displayName);
         ArgumentNullException.ThrowIfNull(request);
 
-        return new Tenant
+        var tenant = new Tenant
         {
             Id = Guid.CreateVersion7(now),
             Slug = slug.Value,
@@ -125,7 +137,12 @@ public sealed class Tenant
             ProvisioningRequestHash = [.. request.RequestHash],
             ProvisionedByActor = request.Subject.Value,
         };
+        tenant.RecordCreation();
+        return tenant;
     }
+
+    private void RecordCreation() =>
+        _domainEvents.Add(new TenantCreated(Id, Slug, MerchantProfile.DisplayName, Status, Origin, CreatedAt));
 }
 
 /// <summary>The merchant profile of a tenant: what the marketplace shows about the merchant.</summary>

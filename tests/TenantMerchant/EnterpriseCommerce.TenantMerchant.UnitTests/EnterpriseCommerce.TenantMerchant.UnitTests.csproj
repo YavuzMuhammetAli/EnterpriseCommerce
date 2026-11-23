@@ -5,6 +5,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Validates serialized integration events against the committed schemas under docs/events/schemas. -->
+    <PackageReference Include="Corvus.Json.Validator" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\..\src\Services\TenantMerchant\EnterpriseCommerce.TenantMerchant.Api\EnterpriseCommerce.TenantMerchant.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Services\TenantMerchant\EnterpriseCommerce.TenantMerchant.Application\EnterpriseCommerce.TenantMerchant.Application.csproj" />
     <ProjectReference Include="..\..\..\src\Services\TenantMerchant\EnterpriseCommerce.TenantMerchant.Domain\EnterpriseCommerce.TenantMerchant.Domain.csproj" />

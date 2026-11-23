@@ -19,7 +19,22 @@ public sealed class PersistenceModelTests : IDisposable
     {
         var tables = _context.Model.GetEntityTypes().Select(entity => entity.GetTableName()).Distinct().Order(StringComparer.Ordinal);
 
-        Assert.Equal(["MembershipAuditRecords", "Memberships", "MerchantInvitations", "MerchantProfiles", "Tenants"], tables);
+        Assert.Equal(["MembershipAuditRecords", "Memberships", "MerchantInvitations", "MerchantProfiles", "OutboxMessages", "Tenants"], tables);
+    }
+
+    [Fact]
+    public void Model_TheOutboxIsTechnical_WithoutForeignKeys_AndUniquePerFactAndVersion()
+    {
+        // ADR-023 section 5: no foreign key to a business table, and (EventId, EventVersion) unique so that a dual
+        // publication can write two versions of one fact.
+        var outbox = _context.Model.FindEntityType(typeof(EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging.OutboxMessage))!;
+
+        Assert.Empty(outbox.GetForeignKeys());
+        Assert.Empty(outbox.GetReferencingForeignKeys());
+        var unique = Assert.Single(outbox.GetIndexes(), index => index.IsUnique);
+        Assert.Equal(TenantMerchantDbContext.OutboxEventVersionIndex, unique.GetDatabaseName());
+        Assert.Equal(["EventId", "EventVersion"], unique.Properties.Select(property => property.Name));
+        Assert.Equal(["Sequence"], outbox.FindPrimaryKey()!.Properties.Select(property => property.Name));
     }
 
     [Fact]
@@ -77,7 +92,9 @@ public sealed class PersistenceModelTests : IDisposable
             .Select(entity => entity.GetTableName());
 
         // The audit table is never updated, so it has no concurrency token: its trigger refuses updates and deletes.
-        Assert.Equal(["MembershipAuditRecords"], withoutRowVersion);
+        // The outbox is technical: only the single leader relay updates it, with set-based statements conditioned on
+        // PublishedAt IS NULL, never through a tracked entity.
+        Assert.Equal(["MembershipAuditRecords", "OutboxMessages"], withoutRowVersion);
         var audit = _context.Model.FindEntityType(typeof(EnterpriseCommerce.TenantMerchant.Domain.Audit.MembershipAuditRecord))!;
         Assert.Contains(audit.GetDeclaredTriggers(), trigger => trigger.ModelName == TenantMerchantDbContext.AuditAppendOnlyTrigger);
     }

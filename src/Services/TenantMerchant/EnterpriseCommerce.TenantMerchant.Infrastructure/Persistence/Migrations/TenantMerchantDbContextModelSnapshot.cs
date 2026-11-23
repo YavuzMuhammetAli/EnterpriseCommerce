@@ -334,6 +334,86 @@ namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Persistence.Migration
                         });
                 });
 
+            modelBuilder.Entity("EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging.OutboxMessage", b =>
+                {
+                    b.Property<long>("Sequence")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Sequence"));
+
+                    b.Property<int>("Attempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<string>("Envelope")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(128)");
+
+                    b.Property<int>("EventVersion")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("LastAttemptAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<string>("MessageKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("PublishedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Topic")
+                        .IsRequired()
+                        .HasMaxLength(249)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(249)");
+
+                    b.HasKey("Sequence");
+
+                    SqlServerKeyBuilderExtensions.IsClustered(b.HasKey("Sequence"));
+
+                    b.HasIndex("PublishedAt")
+                        .HasDatabaseName("IX_OutboxMessages_Published")
+                        .HasFilter("[PublishedAt] IS NOT NULL");
+
+                    b.HasIndex("Sequence")
+                        .HasDatabaseName("IX_OutboxMessages_Pending")
+                        .HasFilter("[PublishedAt] IS NULL");
+
+                    b.HasIndex("EventId", "EventVersion")
+                        .IsUnique()
+                        .HasDatabaseName("UX_OutboxMessages_EventId_EventVersion");
+
+                    b.ToTable("OutboxMessages", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_OutboxMessages_Attempts", "[Attempts] >= 0");
+
+                            t.HasCheckConstraint("CK_OutboxMessages_EnvelopeSize", "DATALENGTH(CAST([Envelope] COLLATE Latin1_General_100_BIN2_UTF8 AS varchar(max))) <= 65536");
+
+                            t.HasCheckConstraint("CK_OutboxMessages_EventVersion", "[EventVersion] > 0");
+                        });
+                });
+
             modelBuilder.Entity("EnterpriseCommerce.TenantMerchant.Domain.Audit.MembershipAuditRecord", b =>
                 {
                     b.HasOne("EnterpriseCommerce.TenantMerchant.Domain.Tenants.Tenant", null)
