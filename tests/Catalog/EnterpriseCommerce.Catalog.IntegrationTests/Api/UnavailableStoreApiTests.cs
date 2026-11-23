@@ -26,4 +26,14 @@ public sealed class UnavailableStoreApiTests(CatalogApiFixture fixture) : IClass
             Assert.DoesNotContain("127.0.0.1", body, StringComparison.Ordinal);
         }
     }
+
+    [Fact]
+    public async Task PublicDiscovery_Answers503()
+    {
+        using var client = fixture.CreateClient();
+        using var response = await client.GetAsync("/api/v1/catalog/products", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal("5", response.Headers.RetryAfter?.ToString());
+    }
 }
