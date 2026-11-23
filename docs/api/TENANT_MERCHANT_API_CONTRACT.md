@@ -1,6 +1,6 @@
 # Tenant & Merchant API Contract
 
-- **Status:** Accepted and implemented for Phase 3 slices S1 (provisioning, member reads), S2 (memberships, invitations) and S3 (self-service onboarding). Later slices extend it. An endpoint exists only once its slice is merged.
+- **Status:** Accepted and implemented for Phase 3 slices S1 (provisioning, member reads), S2 (memberships, invitations) and S3 (self-service onboarding), and for Phase 4 the internal membership verification ([section 3.3](#33-verify-a-membership-internal), [ADR-025](../decisions/ADR-025-merchant-authorization-through-tenant-merchant-membership-verification.md)). Later slices extend it. An endpoint exists only once its slice is merged.
 - **Design:** [PHASE_3_TENANT_MERCHANT.md](../architecture/PHASE_3_TENANT_MERCHANT.md) and, for S2, [PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md](../architecture/PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md). Decisions: [ADR-020](../decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md) (naming, the tenant-merchant model) and [ADR-021](../decisions/ADR-021-merchant-invitations-and-membership-administration.md) (invitations, membership administration). For S3, [PHASE_3_S3_SELF_SERVICE_ONBOARDING.md](../architecture/PHASE_3_S3_SELF_SERVICE_ONBOARDING.md) and [ADR-022](../decisions/ADR-022-self-service-tenant-onboarding.md) (self-service onboarding).
 - **Conventions:** the cross-service conventions of [IDENTITY_API_CONTRACT.md section 1](IDENTITY_API_CONTRACT.md#1-conventions-baseline) apply: `/api/v1`, lowercase kebab-case paths, camelCase JSON, `X-Correlation-ID`, `Idempotency-Key`, and RFC 9457 problem details. Pagination follows [README.md](README.md#conventions).
 
@@ -10,6 +10,7 @@
 |---|---|---|
 | `POST /internal/v1/tenants` | Allow-listed service client (scope `svc.tenant-merchant.provisioning`) | [3.1](#31-provision-a-tenant) |
 | `GET /internal/v1/tenants/{tenantId}` | Allow-listed service client (same scope) | [3.2](#32-read-a-tenant-internal) |
+| `POST /internal/v1/tenants/{tenantId}/membership-verifications` | Allow-listed service client (scope `svc.tenant-merchant.membership-verification`) | [3.3](#33-verify-a-membership-internal) |
 | `GET /api/v1/tenants/{tenantId}` | Merchant-portal user who is an active member | [4.1](#41-read-a-tenant-member) |
 | `GET /api/v1/tenants/{tenantId}/memberships` | Merchant-portal user with `MerchantOwner` or `MerchantAdmin` | [4.2](#42-list-memberships) |
 | `GET /api/v1/tenants` | Any merchant-portal user (their own tenants) | [4.3](#43-list-my-tenants) |
@@ -46,7 +47,7 @@ Tokens carry no roles and no tenant ([ADR-017 section 2](../decisions/ADR-017-to
 
 The Gateway never routes `/internal/**`. These endpoints are reachable on the internal network only.
 
-A service token is accepted only if all of these hold:
+A service token is accepted by sections 3.1 and 3.2 only if all of these hold (section 3.3 has its own scope and allow-list):
 
 - `ec_ptype=service`
 - the audience `tenant-merchant-api`
@@ -133,6 +134,52 @@ Any other member (for example `role`, `memberships`, `status` or `id`) is reject
 - `200`: a provisioned tenant (section 3.1).
 - `404` `tenant-not-found`.
 - `401` and `403` as in section 2.
+
+### 3.3 Verify a membership (internal)
+
+`POST /internal/v1/tenants/{tenantId}/membership-verifications` (Phase 4, [ADR-025](../decisions/ADR-025-merchant-authorization-through-tenant-merchant-membership-verification.md) section 1). It is called by another service to authorize a merchant user against this service's authoritative membership data. The first caller is Catalog, as `svc-catalog`.
+
+**Caller.** A service token is accepted only if all of these hold:
+- `ec_ptype=service`
+- the audience `tenant-merchant-api`
+- the scope `svc.tenant-merchant.membership-verification`
+- `sub` equal to `client_id`, with the `svc-` prefix
+- the client is listed in `TenantMerchant:MembershipVerification:AllowedClientIds`
+
+The list is empty by default, and startup refuses an entry without the `svc-` prefix. This allow-list is independent of provisioning: a client allowed there gets `403` here, and the reverse.
+
+**Request.** Unknown members answer `400`. The subject travels in the body, never in the URL, so it does not reach request logs.
+
+```json
+{ "subjectId": "<Identity sub>" }
+```
+
+**Response.** `200` with `Cache-Control: no-store`:
+
+```json
+{ "active": true, "role": "MerchantAdmin" }
+```
+
+- `active` is `true` only for an `Active` membership in an `Active` tenant. `role` is `MerchantOwner`, `MerchantAdmin` or `MerchantStaff`.
+- **Every other case** answers `{ "active": false, "role": null }`: an unknown tenant, no membership, or a suspended or removed membership. The cases look identical.
+- **Nothing is cached** on either side. Every call reads the current state.
+
+**Errors:**
+- `400` `validation-failed`: `subjectId` is missing, longer than 128 characters, or contains white space or control characters.
+- `401` and `403` as in section 2.
+- `503` if the database is unavailable.
+
+**Identity configuration for the caller** (example values):
+
+```
+Identity__Clients__N__ClientId=svc-catalog
+Identity__Clients__N__Kind=Service
+Identity__Clients__N__ServiceScopes__0__Scope=svc.tenant-merchant.membership-verification
+Identity__Clients__N__ServiceScopes__0__Audience=tenant-merchant-api
+TenantMerchant__MembershipVerification__AllowedClientIds__0=svc-catalog
+```
+
+`deploy/dev/bff-dev-keys.cs` generates these values for local development.
 
 ## 4. Member API (merchant-portal users)
 

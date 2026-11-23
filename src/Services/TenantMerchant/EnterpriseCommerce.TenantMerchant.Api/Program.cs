@@ -77,6 +77,7 @@ if (app.Environment.IsDevelopment())
 
 app.MapTenantMerchantHealthChecks();
 app.MapInternalTenantEndpoints();
+app.MapInternalMembershipVerificationEndpoints();
 app.MapTenantEndpoints();
 app.MapMembershipEndpoints();
 app.MapInvitationEndpoints();

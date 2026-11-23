@@ -19,6 +19,9 @@ namespace EnterpriseCommerce.TenantMerchant.IntegrationTests.Infrastructure;
 /// </summary>
 public sealed class TenantMerchantApiFixture : IAsyncLifetime
 {
+    /// <summary>The only client allow-listed for the internal membership verification API (ADR-025).</summary>
+    public const string VerifierClient = "svc-test-catalog";
+
     private readonly string _keyPath = Path.Combine(Path.GetTempPath(), $"ec-tm-test-{Guid.NewGuid():N}.pem");
     private WebApplicationFactory<Program>? _factory;
 
@@ -66,6 +69,7 @@ public sealed class TenantMerchantApiFixture : IAsyncLifetime
                 builder.UseSetting($"TenantMerchant:Provisioning:AllowedClientIds:{index}", clientId);
             }
 
+            builder.UseSetting("TenantMerchant:MembershipVerification:AllowedClientIds:0", VerifierClient);
             builder.UseSetting("TenantMerchant:Database:ApplyMigrationsAtStartup", "false");
             builder.UseSetting("TenantMerchant:IdentityVerification:BaseAddress", StubIdentity.BaseAddress.AbsoluteUri);
             builder.UseSetting("TenantMerchant:IdentityVerification:PrivateKeyPath", _keyPath);

@@ -268,7 +268,7 @@ The trigger is the first consumer: Cart, Order or Inventory.
 |---|---|---|
 | 1 | Design decisions (ADR-024, ADR-025, this document) | done |
 | 2 | `BuildingBlocks.Authentication`, Tenant & Merchant moved to it | done |
-| 3 | Tenant & Merchant membership verification endpoint | planned |
+| 3 | Tenant & Merchant membership verification endpoint | done |
 | 4 | Catalog service foundation and architecture rules | planned |
 | 5 | Domain model | planned |
 | 6 | MongoDB persistence, indexes, readiness, CI MongoDB | planned |

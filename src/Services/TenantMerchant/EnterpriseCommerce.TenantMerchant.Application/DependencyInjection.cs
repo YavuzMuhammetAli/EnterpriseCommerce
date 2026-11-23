@@ -21,6 +21,7 @@ public static class DependencyInjection
         services.AddScoped<GetTenantForMemberHandler>();
         services.AddScoped<ListMembershipsHandler>();
         services.AddScoped<GetTenantForServiceHandler>();
+        services.AddScoped<VerifyMembershipHandler>();
         services.AddScoped<CreateInvitationHandler>();
         services.AddScoped<CancelInvitationHandler>();
         services.AddScoped<InvitationQueryHandler>();

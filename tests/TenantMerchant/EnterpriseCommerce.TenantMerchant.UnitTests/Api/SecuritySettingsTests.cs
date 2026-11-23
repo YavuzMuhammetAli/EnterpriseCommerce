@@ -13,6 +13,15 @@ public sealed class SecuritySettingsTests
     }
 
     [Fact]
+    public void MembershipVerificationSettings_AcceptOnlyServiceClients()
+    {
+        Assert.Empty(new MembershipVerificationSettings().Validate());
+        Assert.Empty(new MembershipVerificationSettings { AllowedClientIds = ["svc-catalog"] }.Validate());
+        Assert.NotEmpty(new MembershipVerificationSettings { AllowedClientIds = ["bff-merchant"] }.Validate());
+        Assert.NotEmpty(new MembershipVerificationSettings { AllowedClientIds = ["svc-"] }.Validate());
+    }
+
+    [Fact]
     public void AuthenticationSettings_RequireAnHttpsIssuerOutsideDevelopment()
     {
         Assert.NotEmpty(new TenantMerchantAuthenticationSettings().Validate(isDevelopment: true));

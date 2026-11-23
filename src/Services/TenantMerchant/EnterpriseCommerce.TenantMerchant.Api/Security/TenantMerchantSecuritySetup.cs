@@ -24,6 +24,9 @@ internal static class TenantMerchantSecuritySetup
     /// <summary>The allow-listed service caller of the internal provisioning API.</summary>
     public const string ProvisioningServicePolicy = "provisioning-service";
 
+    /// <summary>The allow-listed service caller of the internal membership verification API (ADR-025).</summary>
+    public const string MembershipVerificationServicePolicy = "membership-verification-service";
+
     /// <summary>An authenticated merchant-portal user. Membership is checked per request by the Application layer.</summary>
     public const string MerchantUserPolicy = "merchant-user";
 
@@ -33,14 +36,19 @@ internal static class TenantMerchantSecuritySetup
             ?? new TenantMerchantAuthenticationSettings();
         var provisioning = builder.Configuration.GetSection(ProvisioningSettings.SectionName).Get<ProvisioningSettings>()
             ?? new ProvisioningSettings();
+        var membershipVerification = builder.Configuration.GetSection(MembershipVerificationSettings.SectionName).Get<MembershipVerificationSettings>()
+            ?? new MembershipVerificationSettings();
 
-        var problems = authentication.Validate(builder.Environment.IsDevelopment()).Concat(provisioning.Validate()).ToList();
+        var problems = authentication.Validate(builder.Environment.IsDevelopment()).Concat(provisioning.Validate())
+            .Concat(membershipVerification.Validate())
+            .ToList();
         if (problems.Count > 0)
         {
             throw new InvalidOperationException($"Invalid Tenant & Merchant security configuration: {string.Join(" ", problems)}");
         }
 
         var allowedClients = provisioning.AllowedClientIds.ToHashSet(StringComparer.Ordinal);
+        var verificationClients = membershipVerification.AllowedClientIds.ToHashSet(StringComparer.Ordinal);
         var userAudiences = authentication.EffectiveUserAudiences;
 
         builder.Services.AddResourceServerJwtBearer(new ResourceServerTokenSettings(
@@ -59,6 +67,14 @@ internal static class TenantMerchantSecuritySetup
                     && CallerClaims.HasScope(context.User, ProvisioningSettings.Scope)
                     && CallerClaims.ServiceClientOf(context.User) is { } client
                     && allowedClients.Contains(client)))
+            .AddPolicy(MembershipVerificationServicePolicy, policy => policy
+                .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme)
+                .RequireAuthenticatedUser()
+                .RequireAssertion(context =>
+                    CallerClaims.HasAudience(context.User, authentication.ServiceAudience)
+                    && CallerClaims.HasScope(context.User, MembershipVerificationSettings.Scope)
+                    && CallerClaims.ServiceClientOf(context.User) is { } client
+                    && verificationClients.Contains(client)))
             .AddPolicy(MerchantUserPolicy, policy => policy
                 .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme)
                 .RequireAuthenticatedUser()
