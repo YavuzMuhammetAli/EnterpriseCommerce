@@ -45,6 +45,7 @@ internal sealed partial class GlobalExceptionHandler(
         else if (exception is DataStoreUnavailableException)
         {
             LogDataStoreUnavailable(logger, exception, httpContext.Request.Method, httpContext.Request.Path);
+            CatalogMetrics.RecordStoreUnavailable(HttpMethods.IsGet(httpContext.Request.Method) || HttpMethods.IsHead(httpContext.Request.Method) ? "read" : "write");
             httpContext.Response.Headers.RetryAfter = "5";
             problem = new ProblemDetails
             {

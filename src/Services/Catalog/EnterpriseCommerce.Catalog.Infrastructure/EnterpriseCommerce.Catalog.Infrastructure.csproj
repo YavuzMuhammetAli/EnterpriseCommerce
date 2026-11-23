@@ -13,6 +13,8 @@
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Http" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+    <!-- The private_key_jwt client assertion of the svc-catalog client (ADR-025 section 2). -->
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
     <PackageReference Include="MongoDB.Driver" />
   </ItemGroup>
 

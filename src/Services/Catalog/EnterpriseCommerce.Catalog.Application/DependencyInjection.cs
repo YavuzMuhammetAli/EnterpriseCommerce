@@ -1,3 +1,4 @@
+using EnterpriseCommerce.Catalog.Application.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EnterpriseCommerce.Catalog.Application;
@@ -9,6 +10,8 @@ public static class DependencyInjection
     public static IServiceCollection AddCatalogApplication(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+
+        services.AddScoped<CatalogAccessAuthorizer>();
         return services;
     }
 }

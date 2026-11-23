@@ -1,9 +1,11 @@
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http;
 using Serilog.Core;
 
 namespace EnterpriseCommerce.Catalog.IntegrationTests.Infrastructure;
@@ -18,9 +20,20 @@ public class CatalogApiFixture : IAsyncLifetime
     /// <summary>A MongoDB address nothing listens on, with a short server selection timeout.</summary>
     public const string UnreachableMongo = "mongodb://127.0.0.1:9/?serverSelectionTimeoutMS=300&connectTimeoutMS=300";
 
+    private readonly string _keyPath = Path.Combine(Path.GetTempPath(), $"ec-catalog-test-{Guid.NewGuid():N}.pem");
+    private readonly RSA _clientKey = RSA.Create(3072);
     private WebApplicationFactory<Program>? _factory;
 
+    public CatalogApiFixture()
+    {
+        File.WriteAllText(_keyPath, _clientKey.ExportPkcs8PrivateKeyPem());
+        TenantMerchant = new StubTenantMerchant(_clientKey);
+    }
+
     public TestTokenIssuer Tokens { get; } = new();
+
+    /// <summary>Identity's token endpoint and Tenant &amp; Merchant's verification endpoint, behind every outbound client.</summary>
+    public StubTenantMerchant TenantMerchant { get; }
 
     public CapturedLogs Logs { get; } = new();
 
@@ -37,11 +50,18 @@ public class CatalogApiFixture : IAsyncLifetime
             builder.UseSetting("Catalog:Taxonomy:AllowedClientIds:0", TestTokenIssuer.TaxonomyClient);
             builder.UseSetting("ConnectionStrings:CatalogDatabase", UnreachableMongo);
             builder.UseSetting("Catalog:Database:ServerSelectionTimeout", "00:00:00.300");
+            builder.UseSetting("Catalog:MembershipVerification:BaseAddress", StubTenantMerchant.BaseAddress.AbsoluteUri);
+            builder.UseSetting("Catalog:MembershipVerification:TokenEndpoint", StubTenantMerchant.TokenEndpoint.AbsoluteUri);
+            builder.UseSetting("Catalog:MembershipVerification:PrivateKeyPath", _keyPath);
             ConfigureHost(builder);
             configure?.Invoke(builder);
             builder.ConfigureTestServices(services =>
             {
                 services.AddSingleton<ILogEventSink>(Logs);
+
+                // Every outbound client of the host (only the membership verification clients exist) reaches the stub.
+                services.ConfigureAll<HttpClientFactoryOptions>(options =>
+                    options.HttpMessageHandlerBuilderActions.Add(handler => handler.PrimaryHandler = new NonDisposingHandler(TenantMerchant)));
                 services.Configure<JwtBearerOptions>(
                     JwtBearerDefaults.AuthenticationScheme,
                     options => options.BackchannelHttpHandler = Tokens.CreateBackChannel());
@@ -71,8 +91,17 @@ public class CatalogApiFixture : IAsyncLifetime
         }
 
         Tokens.Dispose();
+        TenantMerchant.Dispose();
+        _clientKey.Dispose();
+        File.Delete(_keyPath);
         GC.SuppressFinalize(this);
     }
+
+    /// <summary>A merchant-portal user token for <paramref name="subject"/>.</summary>
+    public string UserToken(string subject) => Tokens.CreateToken(TokenSpec.User(subject));
+
+    /// <summary>A service token of the allow-listed taxonomy client.</summary>
+    public string TaxonomyToken() => Tokens.CreateToken(new TokenSpec());
 
     /// <summary>Further host settings of a derived fixture.</summary>
     protected virtual void ConfigureHost(IWebHostBuilder builder)
@@ -82,5 +111,13 @@ public class CatalogApiFixture : IAsyncLifetime
     /// <summary>Further test services of a derived fixture.</summary>
     protected virtual void ConfigureServices(IServiceCollection services)
     {
+    }
+
+    /// <summary>Lets the HTTP client factory rotate handlers without disposing the shared stub.</summary>
+    private sealed class NonDisposingHandler(HttpMessageHandler inner) : DelegatingHandler(inner)
+    {
+        protected override void Dispose(bool disposing)
+        {
+        }
     }
 }

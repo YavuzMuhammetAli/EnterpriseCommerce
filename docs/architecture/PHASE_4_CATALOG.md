@@ -272,7 +272,7 @@ The trigger is the first consumer: Cart, Order or Inventory.
 | 4 | Catalog service foundation and architecture rules | done |
 | 5 | Domain model | done |
 | 6 | MongoDB persistence, indexes, readiness, CI MongoDB | done |
-| 7 | Merchant authorization through Tenant & Merchant | planned |
+| 7 | Merchant authorization through Tenant & Merchant | done |
 | 8 | Merchant product and brand APIs | planned |
 | 9 | Platform category taxonomy | planned |
 | 10 | Public discovery | planned |
