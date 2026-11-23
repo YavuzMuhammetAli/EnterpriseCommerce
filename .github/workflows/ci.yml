@@ -67,6 +67,23 @@ jobs:
           echo "::error::The session Redis did not start."
           exit 1
 
+      - name: Start Kafka (KRaft, single node; ADR-023)
+        # Same pinned image and settings as the kafka Compose service, as a named container so that the outage test
+        # (EC_TEST_KAFKA_RESTART_CONTAINER) can stop and start it. Automatic topic creation is off: the tests create
+        # their own topics. The cluster ID is generated for this runner only.
+        run: |
+          cluster_id=$(docker run --rm apache/kafka:4.4.0 /opt/kafka/bin/kafka-storage.sh random-uuid)
+          docker run -d --name kafka -p 9094:9094             -e CLUSTER_ID="$cluster_id"             -e KAFKA_NODE_ID=1             -e KAFKA_PROCESS_ROLES=broker,controller             -e KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094             -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092,EXTERNAL://localhost:9094             -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT             -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER             -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT             -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093             -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1             -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1             -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1             -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0             -e KAFKA_NUM_PARTITIONS=3             -e KAFKA_AUTO_CREATE_TOPICS_ENABLE=false             -e KAFKA_HEAP_OPTS="-Xms256m -Xmx512m"             apache/kafka:4.4.0
+          for i in $(seq 1 60); do
+            if docker exec -e KAFKA_HEAP_OPTS=-Xmx128m kafka /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Kafka did not start."
+          docker logs kafka
+          exit 1
+
       - name: Build (warnings are errors)
         run: dotnet build EnterpriseCommerce.sln --configuration Release --no-restore
 
@@ -93,6 +110,9 @@ jobs:
           EC_TEST_REDIS_SESSIONS: "127.0.0.1:6380,password=CiOnly_Ephemeral_Sessions"
           # The real restart test runs in the serial collection, after the parallel tests.
           EC_TEST_REDIS_RESTART_CONTAINER: "redis-sessions"
+          # The outbox relay's Kafka tests; the outage test stops and starts this container in the serial collection.
+          EC_TEST_KAFKA: "127.0.0.1:9094"
+          EC_TEST_KAFKA_RESTART_CONTAINER: "kafka"
           # Infrastructure tests must run in CI: a missing server fails the build instead of skipping.
           EC_REQUIRE_INFRA_TESTS: "true"
         # An explicit `shell: bash` runs `bash --noprofile --norc -eo pipefail {0}`, so a test failure fails this step

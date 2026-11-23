@@ -44,10 +44,16 @@ internal sealed class RecordingPublisher : IOutboxPublisher
 /// <summary>An outbox store whose marking fails, as if the process died after the broker acknowledged the batch.</summary>
 internal sealed class CrashBeforeMarkingStore(IOutboxStore inner) : IOutboxStore
 {
+    /// <summary>Set when the relay tried to mark, which it does only after the broker acknowledged a delivery.</summary>
+    public bool CrashedAfterDelivery { get; private set; }
+
     public Task<IReadOnlyList<PendingOutboxMessage>> ReadPendingAsync(int batchSize, CancellationToken cancellationToken) => inner.ReadPendingAsync(batchSize, cancellationToken);
 
-    public Task MarkPublishedAsync(IReadOnlyList<long> sequences, DateTimeOffset publishedAt, CancellationToken cancellationToken) =>
+    public Task MarkPublishedAsync(IReadOnlyList<long> sequences, DateTimeOffset publishedAt, CancellationToken cancellationToken)
+    {
+        CrashedAfterDelivery = true;
         throw new InvalidOperationException("Simulated crash after delivery, before marking.");
+    }
 
     public Task RecordFailureAsync(long sequence, DateTimeOffset attemptedAt, string error, CancellationToken cancellationToken) => inner.RecordFailureAsync(sequence, attemptedAt, error, cancellationToken);
 
