@@ -49,7 +49,13 @@ public sealed class BrowserFlowTests(BrowserEnvironment environment) : IClassFix
             AssertSameSite(engine, SameSiteAttribute.Lax, cookie.SameSite);
             Assert.Equal("/", cookie.Path);
         });
-        Assert.All(setCookies.Where(c => c.StartsWith("__Host-ec-storefront-oidc-", StringComparison.Ordinal)), c => Assert.Contains("samesite=lax", c.ToLowerInvariant(), StringComparison.Ordinal));
+        var correlationHeaders = setCookies.Where(c => c.StartsWith("__Host-ec-storefront-oidc-", StringComparison.Ordinal)).ToList();
+        if (ReportsRedirectSetCookieHeaders(engine))
+        {
+            Assert.Equal(2, correlationHeaders.Count);
+        }
+
+        Assert.All(correlationHeaders, c => Assert.Contains("samesite=lax", c.ToLowerInvariant(), StringComparison.Ordinal));
 
         await page.FillAsync("input[name='Input.Email']", email);
         await page.FillAsync("input[name='Input.Password']", BrowserEnvironment.Password);
@@ -62,10 +68,13 @@ public sealed class BrowserFlowTests(BrowserEnvironment environment) : IClassFix
         Assert.True(session.Secure);
         Assert.True(session.HttpOnly);
         AssertSameSite(engine, SameSiteAttribute.Strict, session.SameSite);
-        if (!IsWindowsWebKit(engine))
+        var sessionHeaders = setCookies.Where(c => c.StartsWith("__Host-Http-ec-storefront=", StringComparison.Ordinal)).ToList();
+        if (ReportsRedirectSetCookieHeaders(engine))
         {
-            Assert.Contains(setCookies, c => c.StartsWith("__Host-Http-ec-storefront=", StringComparison.Ordinal) && c.ToLowerInvariant().Contains("samesite=strict", StringComparison.Ordinal));
+            Assert.NotEmpty(sessionHeaders);
         }
+
+        Assert.All(sessionHeaders, c => Assert.Contains("samesite=strict", c.ToLowerInvariant(), StringComparison.Ordinal));
         Assert.Equal("/", session.Path);
         Assert.Equal(-1, session.Expires);
         Assert.DoesNotContain(cookies, c => c.Name.Contains("-oidc-", StringComparison.Ordinal));
@@ -202,13 +211,27 @@ public sealed class BrowserFlowTests(BrowserEnvironment environment) : IClassFix
     }
 
     /// <summary>
-    /// Playwright's WebKit build for Windows does not implement SameSite (its cookie store reports None for every
-    /// cookie) and does not report Set-Cookie headers of redirect responses. The integration tests verify every
-    /// Set-Cookie attribute on the wire; on that engine the CSRF defence rests on Fetch Metadata, Origin and the
-    /// antiforgery token, which <see cref="ACrossSiteFormPost_CannotLogTheUserOut"/> proves. Real Safari is a separate,
-    /// still open gate (ADR-016 section 8).
+    /// Playwright's WebKit build for Windows does not implement SameSite: its cookie store reports None for every
+    /// cookie. The integration tests verify every Set-Cookie attribute on the wire; on that engine the CSRF defence
+    /// rests on Fetch Metadata, Origin and the antiforgery token, which <see cref="ACrossSiteFormPost_CannotLogTheUserOut"/>
+    /// proves. Real Safari is a separate, still open gate (ADR-016 section 8).
     /// </summary>
     private static bool IsWindowsWebKit(string engine) => engine == "webkit" && OperatingSystem.IsWindows();
+
+    /// <summary>
+    /// Whether the engine reports the Set-Cookie headers of redirect responses through Playwright. The BFF sets its
+    /// cookies on redirects (<c>/bff/login</c> and <c>/bff/callback</c> answer 302), so the raw-header assertions need it.
+    /// </summary>
+    /// <remarks>
+    /// WebKit does not report them on any operating system. On Windows that was already known. On Linux, a probe with
+    /// Playwright 1.64.1 (WebKit 2370, image <c>mcr.microsoft.com/playwright/dotnet:v1.64.1-noble</c>, 2026-11-23)
+    /// found Set-Cookie on a 200 response but on none of four 302 responses (same-origin, form POST, cross-site chain,
+    /// cross-site form_post), through both <c>HeadersArrayAsync</c> and <c>AllHeadersAsync</c>, while the cookie store
+    /// kept every cookie with Secure, HttpOnly and SameSite=Strict. For WebKit, the cookie-store assertions remain, a
+    /// header that is reported must still carry the expected SameSite, and LoginFlowTests verify every Set-Cookie
+    /// attribute on the wire for all engines. Chromium and Firefox must report the headers.
+    /// </remarks>
+    private static bool ReportsRedirectSetCookieHeaders(string engine) => engine != "webkit";
 
     private static void AssertSameSite(string engine, SameSiteAttribute expected, SameSiteAttribute? actual)
     {
