@@ -1,4 +1,6 @@
 using EnterpriseCommerce.Catalog.Application.Authorization;
+using EnterpriseCommerce.Catalog.Application.Brands;
+using EnterpriseCommerce.Catalog.Application.Products;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EnterpriseCommerce.Catalog.Application;
@@ -12,6 +14,13 @@ public static class DependencyInjection
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddScoped<CatalogAccessAuthorizer>();
+        services.AddScoped<ProductReferences>();
+        services.AddScoped<CreateProductHandler>();
+        services.AddScoped<UpdateProductHandler>();
+        services.AddScoped<ReplaceProductMediaHandler>();
+        services.AddScoped<ProductLifecycleHandler>();
+        services.AddScoped<MerchantProductQueryHandler>();
+        services.AddScoped<BrandHandlers>();
         return services;
     }
 }

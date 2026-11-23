@@ -1,6 +1,8 @@
+using EnterpriseCommerce.Catalog.Api.Brands;
 using EnterpriseCommerce.Catalog.Api.Diagnostics;
 using EnterpriseCommerce.Catalog.Api.ExceptionHandling;
 using EnterpriseCommerce.Catalog.Api.Hosting;
+using EnterpriseCommerce.Catalog.Api.Products;
 using EnterpriseCommerce.Catalog.Api.Security;
 using EnterpriseCommerce.Catalog.Application;
 using EnterpriseCommerce.Catalog.Infrastructure;
@@ -76,5 +78,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapCatalogHealthChecks();
+app.MapMerchantProductEndpoints();
+app.MapBrandEndpoints();
 
 await app.RunAsync();
