@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- Composition root of the Catalog service (ADR-024). -->
+
+  <ItemGroup>
+    <!-- Local access token validation with the standard JWT bearer handler (ADR-017 section 4), through the building block. -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Serilog.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\EnterpriseCommerce.BuildingBlocks.Authentication\EnterpriseCommerce.BuildingBlocks.Authentication.csproj" />
+    <ProjectReference Include="..\EnterpriseCommerce.Catalog.Application\EnterpriseCommerce.Catalog.Application.csproj" />
+    <ProjectReference Include="..\EnterpriseCommerce.Catalog.Infrastructure\EnterpriseCommerce.Catalog.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EnterpriseCommerce.Catalog.IntegrationTests" />
+    <InternalsVisibleTo Include="EnterpriseCommerce.Catalog.UnitTests" />
+  </ItemGroup>
+
+</Project>

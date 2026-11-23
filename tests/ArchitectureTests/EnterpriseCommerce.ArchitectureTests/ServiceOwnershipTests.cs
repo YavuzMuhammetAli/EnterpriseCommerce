@@ -51,7 +51,11 @@ public sealed class ServiceOwnershipTests
     [InlineData("EnterpriseCommerce.TenantMerchant.Application")]
     [InlineData("EnterpriseCommerce.TenantMerchant.Infrastructure")]
     [InlineData("EnterpriseCommerce.TenantMerchant.Api")]
-    public void TenantMerchant_HoldsNoCredentials(string assemblyName)
+    [InlineData("EnterpriseCommerce.Catalog.Domain")]
+    [InlineData("EnterpriseCommerce.Catalog.Application")]
+    [InlineData("EnterpriseCommerce.Catalog.Infrastructure")]
+    [InlineData("EnterpriseCommerce.Catalog.Api")]
+    public void NonIdentityServices_HoldNoCredentials(string assemblyName)
     {
         const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
 

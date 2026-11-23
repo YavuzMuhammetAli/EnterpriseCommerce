@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Catalog Infrastructure: MongoDB persistence in the service's own database (ADR-011, ADR-024), and the HTTP client
+    of Tenant & Merchant's internal membership verification API (ADR-025). The only MongoDB driver code of the platform
+    (architecture test).
+  -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EnterpriseCommerce.Catalog.Application\EnterpriseCommerce.Catalog.Application.csproj" />
+    <ProjectReference Include="..\EnterpriseCommerce.Catalog.Domain\EnterpriseCommerce.Catalog.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EnterpriseCommerce.Catalog.Api" />
+    <InternalsVisibleTo Include="EnterpriseCommerce.Catalog.IntegrationTests" />
+    <InternalsVisibleTo Include="EnterpriseCommerce.Catalog.UnitTests" />
+  </ItemGroup>
+
+</Project>

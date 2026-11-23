@@ -22,4 +22,11 @@
     <ProjectReference Include="..\..\..\src\Services\TenantMerchant\EnterpriseCommerce.TenantMerchant.Infrastructure\EnterpriseCommerce.TenantMerchant.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Services\Catalog\EnterpriseCommerce.Catalog.Api\EnterpriseCommerce.Catalog.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Services\Catalog\EnterpriseCommerce.Catalog.Application\EnterpriseCommerce.Catalog.Application.csproj" />
+    <ProjectReference Include="..\..\..\src\Services\Catalog\EnterpriseCommerce.Catalog.Domain\EnterpriseCommerce.Catalog.Domain.csproj" />
+    <ProjectReference Include="..\..\..\src\Services\Catalog\EnterpriseCommerce.Catalog.Infrastructure\EnterpriseCommerce.Catalog.Infrastructure.csproj" />
+  </ItemGroup>
+
 </Project>

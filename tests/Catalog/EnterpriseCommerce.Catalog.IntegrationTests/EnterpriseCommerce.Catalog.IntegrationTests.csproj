@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <!-- Signs real RS256 at+jwt test tokens, validated by the service's own JWT bearer configuration, and checks the
+         svc-catalog client assertions received by the stub token endpoint. -->
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Services\Catalog\EnterpriseCommerce.Catalog.Api\EnterpriseCommerce.Catalog.Api.csproj" />
+  </ItemGroup>
+
+</Project>

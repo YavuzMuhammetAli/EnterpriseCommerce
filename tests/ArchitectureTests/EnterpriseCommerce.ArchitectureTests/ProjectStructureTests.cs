@@ -16,6 +16,7 @@ public sealed class ProjectStructureTests
         {
             Assert.Contains($"EnterpriseCommerce.Identity.{layer}", names);
             Assert.Contains($"EnterpriseCommerce.TenantMerchant.{layer}", names);
+            Assert.Contains($"EnterpriseCommerce.Catalog.{layer}", names);
         }
     }
 

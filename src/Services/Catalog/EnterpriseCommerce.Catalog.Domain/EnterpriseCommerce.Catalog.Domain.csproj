@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Catalog Domain layer: products with their variants, attributes and media references, the platform category
+    taxonomy and tenant brands (ADR-024). Must not reference other layers or any infrastructure technology
+    (EF Core, SQL Server, MongoDB, Kafka, Redis, ASP.NET Core).
+    Enforced by EnterpriseCommerce.ArchitectureTests.
+  -->
+
+</Project>
