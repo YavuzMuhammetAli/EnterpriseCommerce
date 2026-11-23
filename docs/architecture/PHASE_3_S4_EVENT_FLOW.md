@@ -4,7 +4,11 @@ Slice S4 of the Tenant & Merchant service ([PHASE_3_TENANT_MERCHANT.md](PHASE_3_
 
 - **Decisions:** [ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md) (**accepted** 2026-11-23).
 - **Contracts:** [docs/events/README.md](../events/README.md) (conventions) and [TENANT_MERCHANT_EVENTS.md](../events/TENANT_MERCHANT_EVENTS.md) (`TenantCreated` v1).
-- **Status:** step 0 (decisions and contracts) and step 1 (the Kafka client package and the messaging architecture rules) complete; ADR-023 accepted. Steps 2 to 6 not started: no outbox, relay, producer or consumer code exists.
+- **Status:** **complete** (2026-11-23). Steps 0 to 6 are done: the decisions and contracts, the Kafka client package and the messaging rules, the domain events, the outbox, the relay with its producer, health and meters, the Kafka tests and CI, and this evidence ([section 10](#10-test-evidence)).
+  - **Implemented and tested:** the producer side.
+  - **Accepted but not implemented:** the consumer rules of ADR-023 section 7 and the consumer acceptance tests C1 to C6, which bind the first consumer's slice.
+  - **Implementation decisions** that ADR-023 left open, and where the session brief differed: [section 12](#12-implementation-decisions-and-deviations-from-the-session-brief).
+  - **Operations:** [TENANT_MERCHANT_EVENT_RELAY.md](../operations/TENANT_MERCHANT_EVENT_RELAY.md).
 
 ## 1. How the scope was set
 
@@ -185,11 +189,13 @@ POST /api/v1/tenants       ─┤                                      │    ke
 | `Outbox:PollInterval` | 1 s | Idle polling interval |
 | `Outbox:BatchSize` | 100 | Rows per batch |
 | `Outbox:MaxBackoff` | 60 s | Cap of the exponential backoff (1 s base, jitter) |
+| `Outbox:HaltAfterAttempts` | 10 | Consecutive failures of the head row before the relay reports itself halted (implementation decision D3) |
 | `Outbox:PublishedRetention` | 7 days | Published rows older than this are deleted |
 | `Outbox:CleanupInterval` | 1 h | |
 | `Outbox:StaleAfter` | 5 min | The health check reports `Degraded` beyond this pending age |
 | `Kafka:BootstrapServers` | none | Required outside Development. Without it in Development, the relay is disabled with a warning. |
-| `Kafka:SecurityProtocol` and SASL or TLS settings | none | Outside Development, `Plaintext` is refused (a production gate) |
+| `Kafka:SecurityProtocol`, `Kafka:SslCaLocation`, `Kafka:SslCertificateLocation`, `Kafka:SslKeyLocation` | `Plaintext`, none | Outside Development only `Ssl` with a client certificate and key (mutual TLS) is accepted (D5). SASL is a production gate. |
+| `Kafka:MessageTimeout` | 30 s | `message.timeout.ms`: the bound of one delivery |
 
 **Cycle:**
 
@@ -243,8 +249,9 @@ POST /api/v1/tenants       ─┤                                      │    ke
   - Like the existing checks, it answers with the status word only.
 - **Meters** (`EnterpriseCommerce.TenantMerchant.Outbox`):
   - `outbox.pending` and `outbox.oldest_pending_age_seconds` (observable)
-  - `outbox.published` and `outbox.publish_failures` (counters)
-  - `outbox.leader` (observable, 0 or 1)
+  - `outbox.published`, `outbox.publish_failures` (tag `category`) and `outbox.halts` (tag `category`) (counters)
+  - `outbox.publish.duration` and `outbox.cycle.duration` (histograms, seconds)
+  - `outbox.leader` and `outbox.halted` (observable, 0 or 1)
   - no tenant or event IDs as tags
 
   No exporter is connected until the observability phase.
@@ -257,7 +264,10 @@ POST /api/v1/tenants       ─┤                                      │    ke
 
 **Topic provisioning:**
 
-- **Locally:** a manifest `deploy/docker/kafka/topics.txt` and a one-shot `kafka-init` service in the `kafka` profile, which runs `kafka-topics.sh --create --if-not-exists`. Verify that `docker compose up -d --wait` accepts a one-shot container that exits with 0. Otherwise use a documented script.
+- **Locally:** a manifest `deploy/docker/kafka/topics.txt` and a one-shot `kafka-init` service in the `kafka` profile, which runs `kafka/create-topics.sh` (`kafka-topics.sh --create --if-not-exists`).
+  - **Verified (step 5):** `docker compose up -d --wait` accepts the one-shot container, but it does **not** wait for it to finish: it returned while `kafka-init` was still running.
+  - `docker compose --profile kafka wait kafka-init` blocks until it exits and returns its exit code (0). It is the documented confirmation.
+  - A second run leaves the existing topic unchanged.
 - **Tests:** each test creates a unique topic with AdminClient and deletes it afterwards.
 - **Deployed environments:** infrastructure as code (deployment phase).
 
@@ -385,11 +395,11 @@ The approved S4 scope contains no consumer or inbox code, so these tests are pla
 |---|---|---|
 | 0 | ADR-023, the conventions, the contract, the schemas and sample, this document, status fixes | **Done:** ADR-023 accepted on 2026-11-23 |
 | 1 | Confluent.Kafka in `Directory.Packages.props`; the messaging architecture rules | **Done** (section 10): build, architecture tests, full suite |
-| 2 | Domain events on `Tenant` | Unit tests |
-| 3 | `OutboxMessage`, the mapper, the envelope serializer, the `SaveChanges` hook, the metadata path, the migration `IntegrationEventOutbox` | SQL Server atomicity tests, contract tests |
-| 4 | The relay, the producer adapter, leadership, cleanup, options validation, the health check, meters | Unit tests, SQL Server leadership tests |
-| 5 | Compose `kafka-init` and the topic manifest; Kafka integration and outage tests; the CI Kafka step | Kafka tests locally and in CI |
-| 6 | Evidence, doc updates (PROJECT_DECISIONS, SERVICE_CATALOG, CLAUDE.md, the testing guide, the Compose README) | Full verification report |
+| 2 | Domain events on `Tenant` | **Done:** unit tests |
+| 3 | `OutboxMessage`, the mapper, the envelope serializer, the `SaveChanges` hook, the metadata path, the migration `IntegrationEventOutbox` | **Done:** SQL Server atomicity tests, contract tests |
+| 4 | The relay, the producer adapter, leadership, cleanup, options validation, the health check, meters | **Done:** unit tests, SQL Server leadership tests |
+| 5 | Compose `kafka-init` and the topic manifest; Kafka integration and outage tests; the CI Kafka step | **Done:** Kafka tests locally; the CI step is committed and runs on the next push |
+| 6 | Evidence, doc updates (PROJECT_DECISIONS, SERVICE_CATALOG, CLAUDE.md, the testing guide, the Compose README) | **Done:** section 10 |
 
 On acceptance (done 2026-11-23):
 
@@ -447,6 +457,73 @@ On acceptance (done 2026-11-23):
 - `dotnet restore -p:Configuration=Release`, or letting `dotnet build`/`dotnet test -c Release` restore, avoids it.
 - **Explained and fixed after the push (2026-11-23, finding [CI-1](../testing/README.md#ci-1-test-steps-could-not-fail-on-a-test-failure-fixed-2026-11-23)):** CI *was* affected. Its test steps ran without `pipefail`, so the piped `dotnet test` could not fail the step, and the failing test was hidden. Linux replays with the pinned SDK reproduce the failure. CI now restores for Release, and its test steps propagate failures. This closes the item that was to be checked before the CI changes of step 5.
 
+### Steps 2 to 6: outbox, relay, Kafka tests and CI (2026-11-23)
+
+**What was built.** Code map:
+- `TenantMerchant.Domain/Common/DomainEvents.cs` and `Tenants/TenantCreated.cs`
+- `TenantMerchant.Application/Common/MessageMetadata.cs`
+- `TenantMerchant.Infrastructure/Messaging/`: the outbox entity, envelope, serializer, mapper, options, relay, Kafka publisher, leadership, store, state, metrics and health check
+- the migration `IntegrationEventOutbox`
+- `/health/outbox`
+- `deploy/docker/kafka/` and the `kafka-init` service
+- the CI Kafka container
+
+**The flow, from creation to acknowledgement:**
+
+1. A creation request (`POST /internal/v1/tenants` or `POST /api/v1/tenants`) reaches its handler, which builds the aggregates. `Tenant.Provision` or `Tenant.CreateBySelfService` records `TenantCreated`.
+2. The handler passes `MessageMetadata.ForRequest(correlationId)` to the store or session.
+3. `TenantMerchantDbContext.SaveChanges` maps the event to one envelope per published version:
+   - `eventId` = `Guid.CreateVersion7(occurredAt)`, once per fact
+   - `publishedVersions` = `[1]`
+
+   It adds the `OutboxMessages` row before the base save.
+4. One SQL Server transaction commits the five rows: the single `SaveChanges` of provisioning, or the onboarding gate's `READ COMMITTED` transaction. The HTTP response follows.
+5. The leader relay reads committed pending rows (`READPAST`, `Sequence` order) and produces each row to `Topic`:
+   - key `MessageKey` (the tenant ID)
+   - value: the envelope's UTF-8 bytes
+   - the five headers
+6. The relay awaits the broker's acknowledgement (`acks=all`, idempotent producer), then the next row.
+7. After the batch, one `UPDATE` sets `PublishedAt` on the acknowledged prefix.
+
+**Commits** (on `main` after `bd24896`, not pushed):
+
+| Commit | Content |
+|---|---|
+| `f4d0e55` | The outbox table, the envelope, the serializer, the mapper and the contract tests (steps 2 and 3) |
+| `84ef3db` | `TenantCreated` in both creation transactions (step 3) |
+| `0fce93b` | The leader relay and the Kafka publisher (step 4) |
+| `1644333` | Outbox health and configuration validation (step 4) |
+| `7f184d8` | The Compose topic manifest and `kafka-init` (step 5) |
+| `1907b9a` | Kafka integration tests and the CI Kafka step (step 5) |
+| `ab285cf` | Fix: the relay reads its settings on use, not in its constructor (found by the full run, below) |
+| `aec77a2` | The relay settings tested through the startup validator ([TS-3](../testing/README.md#ts-3-a-host-that-fails-to-start-can-surface-objectdisposedexception-in-webapplicationfactory-worked-around-for-the-relay-settings)) |
+| this commit | Documentation and evidence (step 6) |
+
+**Tests added** (counts from the final runs):
+
+| Project | S4 step 1 | Now | What the new tests prove |
+|---|---|---|---|
+| TenantMerchant.UnitTests | 266 | 457 | The domain events. The contract against the committed schemas (Corvus.Json.Validator), the exporter snapshot, the golden sample, the display-name differential over every BMP character in three positions, sensitive-data exclusion and dual-fact identity. The relay logic against fakes. The Kafka record, the producer settings and the error categories. The options rules and the startup validation. The health check states. The meters. |
+| TenantMerchant.IntegrationTests | 162 | 200 | **SQL Server:**<br>- one row per creation, with the request's or the generated correlation ID<br>- none for replays and refusals<br>- rollback through the audit and outbox tables (five rows or none, then exactly one on retry)<br>- the 8-way races and the held lock<br>- missing metadata<br>- an unpaired surrogate (`400`)<br>- the table constraints and the guarded migration<br>- committed-only reads, a rolled-back row, marking and cleanup<br>- two relays, a killed leader session, a crash before marking, a hosted relay<br>- `/health/outbox` against readiness<br>**Kafka:** end to end, order, dual facts, redelivery with identical bytes, a new relay, graceful shutdown, a missing topic, the real outage. |
+| ArchitectureTests | 97 | 97 | Unchanged and passing. `Confluent.Kafka` is compiled into TenantMerchant.Infrastructure only, and every messaging type lives there. |
+
+**Full verification** (Windows, Release):
+- **Infrastructure:** Compose SQL Server 2022 (`MSSQL_MEMORY_LIMIT_MB=1536`), the session Redis and Kafka 4.4.0 together. `EC_REQUIRE_INFRA_TESTS=true`, `EC_TEST_BROWSERS=true`, and both restart containers set.
+- **Restore** with `-p:Configuration=Release`. **Build:** 0 warnings, 0 errors.
+- **Exit codes:** captured without pipes.
+
+| Run | Result | Cause and action |
+|---|---|---|
+| 1 | 1341 tests: 1339 passed, **2 failed**, 0 skipped | `InvalidRelaySettings_StopTheHostFromStarting` (the two outbox cases): `ObjectDisposedException` instead of the validation message. **A defect found:** the relay read its settings in its constructor, and hosted services are resolved before the startup validation. Fixed in `ab285cf`, with a unit test. |
+| 2 | 1342 tests: 1340 passed, **2 failed**, 0 skipped | The same test, now the Kafka case: the race is in the test host's teardown, not in the validation ([TS-3](../testing/README.md#ts-3-a-host-that-fails-to-start-can-surface-objectdisposedexception-in-webapplicationfactory-worked-around-for-the-relay-settings)). The cases moved to the host's `IStartupValidator` in `aec77a2`. Also `AfterAPasswordChange_TheBffReauthorizesSilently` (Chromium), the 30-second timeout of [TS-1](../testing/README.md#ts-1-30-second-navigation-timeouts-after-a-form-submission-open). S4 changes no BFF or Identity code. |
+| 3 | **1343 tests: 1343 passed, 0 failed, 0 skipped** | Final code. The browser suite passed 18 of 18 in this run. |
+
+- **TenantMerchant suites against LocalDB and the Compose Kafka** (final code): unit 457, integration 200 and architecture 97, all passed, none skipped.
+- **Secret scan** of the three test logs (the CI patterns): clean.
+- **Docker Compose:** `config --quiet` for every profile. `kafka-init` was verified (exit code 0, and a second run is idempotent). The topic has 3 partitions, replication factor 1, `cleanup.policy=delete` and `retention.ms=604800000`.
+- **The CI Kafka step:** its script was executed locally under another container name and port: the broker started and answered the health wait. It runs in GitHub Actions on the next push; that run has not happened yet.
+- **Not measured:** throughput, latency and memory under load. No performance claim is made.
+
 ### Design review of the contracts
 
 S4 was not implemented at the time of the review. Only the committed contract files were checked, during the design review of 2026-11-23:
@@ -477,12 +554,43 @@ S4 was not implemented at the time of the review. Only the committed contract fi
 - `displayName` may be a person's name (a sole trader). It is public profile data, and topic retention bounds how long it stays in Kafka. Subject IDs are deliberately not published.
 - **Failing closed on unknown open-set values** is a consumer obligation that the producer cannot enforce. It is checked in each consumer's own tests and review.
 - **Dual publication with one `eventId`** relies on consumers acknowledging unsupported versions without an inbox row. That rule is part of the consumer contract and must be tested in the first consumer.
-- **To verify in step 3:** how the API answers a request body with an escaped unpaired surrogate. System.Text.Json throws `InvalidOperationException` instead of `JsonException` in an isolated check, which may surface as `500` instead of `400`. This is a possible S1 to S3 API defect, not verified against the running endpoints. It does not affect the event, because nothing is written.
+- **Verified in step 3 (resolved):** a request body with an escaped unpaired surrogate in `displayName` is refused with `400` by both creation endpoints, and nothing is written (`TenantCreatedOutboxTests`). The `InvalidOperationException` of the isolated check does not reach the endpoints, so there is no S1 to S3 defect.
+- **A frozen leader:** a relay process that hangs while its SQL session stays open keeps the leadership, and nothing is published until it is restarted. A crashed process or a broken connection releases the lock at once (tested). See D1.
+- **Deadlock retries** of self-service onboarding rebuild the aggregates in a fresh scope, so a rolled-back attempt leaves no outbox row. This is structural and is covered by the rollback and held-lock tests. A deadlock cannot be forced deterministically, and no test injects one.
+- **The meter's observable gauges** report the hosted relay of the process. Several hosts in one process, as in the tests, share one meter.
 
 **Production gates (open):**
 
-- Kafka TLS, SASL or mTLS, and ACLs: the producer may write only its topic.
+- Kafka authentication: mutual TLS is supported (D5). SASL needs a secret store design, because the service holds no credential. ACLs: the producer may write only its topic.
 - Replication factor 3, `min.insync.replicas=2`, and the partition count and retention of `tenant-merchant.events`.
 - Topics as infrastructure as code.
 - Alerting on the `outbox` `Degraded` state and the pending-age metric.
 - Load testing of the relay beyond the local tests.
+- A frozen-leader mitigation beyond liveness restarts, if measured operation shows a need (D1).
+- An exporter for the meters, and OpenTelemetry trace propagation (observability phase).
+
+## 12. Implementation decisions and deviations from the session brief
+
+**Implementation decisions.** ADR-023 left these operational details open. Each is the smallest choice that keeps ADR-023 unchanged, and none changes a decision of the ADR.
+
+| # | Decision | Why |
+|---|---|---|
+| D1 | **The leadership lease is the SQL session.** `sp_getapplock` (`Session`, timeout 0) is held on a dedicated, unpooled connection (application name `tenant-merchant-outbox-relay`). The leader checks `APPLOCK_MODE` on every cycle, and a broken connection ends its leadership at once. A process crash or network loss ends the session, and a standby takes over on its next attempt (every 5 poll intervals). | It is the lock of ADR-023 section 5. No lease column or claim table is needed. Known limit: a frozen process with an open session keeps the lock (section 11). |
+| D2 | **Failure categories.** Broker errors map to `transient`, `topic`, `authorization`, `rejected`, `configuration` or `unknown`. `LastError` stores `category:code`, never a message or payload. Metrics use the category as their only tag. | A bounded, loggable value for operators and metrics, which distinguishes transient from permanent failures |
+| D3 | **The halted state.** A permanent category (`topic`, `authorization`, `rejected`, `configuration`), or `HaltAfterAttempts` (10) consecutive failures of the head row, marks the relay halted:<br>- Error log 3312, then 3313 every 10th attempt<br>- `outbox.halts` and `outbox.halted`<br>- `/health/outbox` `Degraded`<br>The relay keeps retrying at the capped backoff and resumes by itself after the fix. | ADR-023 section 6: halt and alert, never skip. Retrying at a bounded rate makes the relay recover without a restart. |
+| D4 | **The backoff survives restarts.** The wait before the next attempt is derived from the row's stored `Attempts` and `LastAttemptAt`: `min(MaxBackoff, 1 s × 2^(attempts−1))` with jitter of 50 to 100 %. | No retry storm after a restart, and no in-memory state is needed |
+| D5 | **Kafka security outside Development is mutual TLS** (`Ssl` with a client certificate and key, files mounted as secrets). SASL is not supported in S4. | ADR-023 section 6 refuses an unencrypted, unauthenticated connection. The service may hold no credential (`ServiceOwnershipTests`), and a SASL secret needs a secret store design (production gate). |
+| D6 | **Producer settings:**<br>- `linger.ms=0`, because each message is awaited alone<br>- `allow.auto.create.topics=false`<br>- a producer that reaches a fatal state is rebuilt for the next attempt | Latency, ADR-023 section 2 (no application creates a topic), and recovery of the idempotent producer |
+| D7 | **Metrics and health additions** to section 7:<br>- `outbox.halts`, `outbox.halted`, `outbox.publish.duration` and `outbox.cycle.duration`<br>- the health check reads the backlog from the database, so standbys report it as well<br>- a database failure of the check is `Degraded` | Visibility of the terminal state and of processing time, with bounded tags |
+| D8 | **The JSON Schema validator for tests is Corvus.Json.Validator** (Apache-2.0). JsonSchema.Net's current releases ship under a custom EULA (OSMFEULA), and NJsonSchema targets draft 4. | Section 8 left the package choice to step 3 |
+| D9 | **The outbox row is technical.** It has no `rowversion`. It is updated only by set-based statements of the single leader, conditioned on `PublishedAt IS NULL`. The migration's `Down` refuses while rows are pending (error 50004). | A pending row is a committed fact and is never discarded |
+| D10 | **Synthetic dual-version rows only in tests.** The mapper publishes `TenantCreated` in `[1]` only. The serializer computes `publishedVersions` once per fact from its version list, so a future dual publication only adds a list entry and its payload mapping. | No speculative v2 (session brief, Milestone D) |
+
+**Deviations from the session brief.** The brief asked for some behaviour that ADR-023 decides otherwise. As the brief requires, the accepted decision was followed and the difference is recorded here.
+
+| The brief asked | ADR-023 decides | Implemented |
+|---|---|---|
+| A database-backed claim or lease with a bounded duration, so that multiple workers can claim rows | One leader per service through a session application lock. Row claiming (`UPDLOCK, READPAST`) is explicitly rejected, because it breaks per-key order (Alternatives). | The single leader of D1. Abandoned work is recovered by the next leader from the oldest pending row. |
+| A poison event must not block unrelated events indefinitely; a dead-letter mechanism | No automatic skipping on the producer side. A producer-side dead-letter topic or parking is rejected, because it breaks per-tenant order and hides lost facts (section 6). | A halt with visible state and a documented runbook (D3, [TENANT_MERCHANT_EVENT_RELAY.md section 6](../operations/TENANT_MERCHANT_EVENT_RELAY.md#6-failures-and-recovery)). No event is skipped, deleted or dead-lettered. |
+| Bounded retries, no infinite retry loop | Back off and retry until an operator fixes the cause | Retries are bounded **in rate** (at most one per `MaxBackoff`), not in count. After `HaltAfterAttempts` the relay is reported halted and stays observable. |
+| Readiness checks for the relay's dependencies | The `outbox` check is never part of readiness | The database stays in `/health/ready`. Kafka is reported only by `/health/outbox`, so a Kafka outage never removes the API from rotation. |

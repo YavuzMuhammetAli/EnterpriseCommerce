@@ -21,7 +21,7 @@
 | `GET /api/v1/tenants/{tenantId}/invitations`, `GET .../invitations/{invitationId}` | `MerchantOwner`, `MerchantAdmin` | [5.2](#52-list-invitations), [5.3](#53-read-an-invitation) |
 | `POST /api/v1/tenants/{tenantId}/invitations/{invitationId}/cancel` | `MerchantOwner`; `MerchantAdmin` for staff invitations | [5.4](#54-cancel-an-invitation) |
 | `POST /api/v1/merchant-invitations/accept` | Any merchant-portal user holding the token, whose verified email is the invited address | [5.5](#55-accept-an-invitation) |
-| `GET /health`, `/health/live`, `/health/ready` | Anonymous | [8](#8-health) |
+| `GET /health`, `/health/live`, `/health/ready`, `/health/outbox` | Anonymous | [8](#8-health) |
 
 An owner membership is created only together with its new tenant: by provisioning (3.1) for the subject it names, or by self-service onboarding (4.7) for the caller ([ADR-022](../decisions/ADR-022-self-service-tenant-onboarding.md)). No endpoint makes anyone an owner of an existing tenant. Invitations and role changes grant only `MerchantAdmin` and `MerchantStaff`.
 
@@ -439,6 +439,8 @@ Tenant & Merchant calls Identity's internal email verification endpoint as the s
 ## 8. Health
 
 `/health` and `/health/live` report liveness. `/health/ready` checks the database with a 5-second timeout and answers `503` (`Unhealthy`) without it. The body is the status word only.
+
+`/health/outbox` (Phase 3 S4) reports the integration event relay: `Degraded` (`200`) when the oldest unpublished event is older than `TenantMerchant:Outbox:StaleAfter`, or when the relay is backing off, halted or without its topic. It is never part of `/health/ready`, so a Kafka outage never takes the API out of rotation ([TENANT_MERCHANT_EVENT_RELAY.md](../operations/TENANT_MERCHANT_EVENT_RELAY.md#3-health)).
 
 ## 9. Errors
 

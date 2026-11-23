@@ -2,7 +2,7 @@
 
 The integration events published by the Tenant & Merchant service. The conventions (envelope, topics, versioning, consumer obligations) are in [README.md](README.md).
 
-- **Status:** **accepted** with [ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md) (Phase 3 S4, 2026-11-23). Nothing is published until S4 is implemented.
+- **Status:** **accepted** with [ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md) and **published** since Phase 3 S4 (2026-11-23). No consumer exists yet.
 - **Design:** [PHASE_3_S4_EVENT_FLOW.md](../architecture/PHASE_3_S4_EVENT_FLOW.md).
 
 ## Topic
@@ -19,7 +19,7 @@ The integration events published by the Tenant & Merchant service. The conventio
 
 | Event | Version | Emitted when | Status |
 |---|---|---|---|
-| [`TenantCreated`](#tenantcreated-v1) | 1 | A tenant's creation has committed, by trusted provisioning or by self-service onboarding | Accepted; not yet published |
+| [`TenantCreated`](#tenantcreated-v1) | 1 | A tenant's creation has committed, by trusted provisioning or by self-service onboarding | Published (S4) |
 
 **Not published (deferred):**
 - **Membership events**, until the slice of their first consumer. See [Initial owner identity](#initial-owner-identity-intentionally-excluded).
@@ -183,4 +183,5 @@ The creation endpoints accept a display name of 1 to 200 characters *after trimm
 | 2026-11-23 | `TenantCreated` v1 proposed (ADR-023). It replaces the provisional name `TenantProvisioned`. |
 | 2026-11-23 | Before the first commit: the envelope gains `publishedVersions` (`[1]` for this event), and consumers select one version per fact through their declared preferred version ([README.md](README.md#version-selection)). |
 | 2026-11-23 | Accepted with ADR-023. Final clarification: `eventId` identifies the logical fact; `eventVersion` is the payload contract version; per-fact deduplication and replay ([README.md](README.md#consumer-processing)). |
+| 2026-11-23 | Published: Phase 3 S4 implements the outbox and the relay. The producer's messages are tested against this schema, the envelope schema and the golden sample. |
 | 2026-11-23 | Review: the committed-creation semantics, the transaction boundary, the exclusion of membership identity, consumer handling of unknown open-set values, a `displayName` pattern aligned with `MerchantDisplayName`, and the token rule for `status` and `origin`. |

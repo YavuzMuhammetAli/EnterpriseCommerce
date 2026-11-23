@@ -35,6 +35,19 @@ Infrastructure comes from the Compose profiles; there are no per-test containers
 | `EC_TEST_REDIS_SESSIONS` | BFF integration and browser tests (the dedicated `noeviction` session Redis; keys under one prefix per run, deleted afterwards) | `127.0.0.1:6380,password=<REDIS_SESSIONS_PASSWORD>` (`--profile bff`) |
 | `EC_TEST_REDIS_RESTART_CONTAINER` | The real Redis restart test (it runs in the serial collection, after the parallel tests) | `enterprisecommerce-redis-sessions-1` |
 | `EC_TEST_BROWSERS=true` | Playwright browser tests (they install the browsers on first run) | |
+| `EC_TEST_KAFKA` | TenantMerchant Kafka tests of the outbox relay (one topic per test, created with AdminClient and deleted afterwards) | `127.0.0.1:9094` (`--profile kafka`) |
+| `EC_TEST_KAFKA_RESTART_CONTAINER` | The real Kafka outage test (it stops and starts the broker; serial collection, after the parallel tests) | `enterprisecommerce-kafka-1` (`kafka` in CI) |
+
+Kafka behaviour is not mocked where it matters either. The TenantMerchant outbox relay's Kafka tests publish to a real broker:
+- end to end from both creation endpoints
+- per-tenant order and partition spread
+- dual-fact identity
+- redelivery after a simulated crash between acknowledgement and marking, with identical bytes
+- recovery by a new relay, and graceful shutdown
+- a missing topic
+- a real outage: the broker's container is stopped and started
+
+The relay's decision logic (backoff, the halted state, prefix marking) is also unit-tested against fakes of its store, producer and leadership. Its SQL Server behaviour (committed-only reads, leadership and takeover after a killed session) runs against the real database.
 
 Redis behaviour is never mocked: persistence, `noeviction`, restarts, outages (a TCP forwarder cuts the real connection) and cross-instance refresh concurrency all run against the real session Redis. Fault injection is limited to the BFF's back channel to Identity (lost responses, refused connections, `503`).
 
@@ -110,6 +123,17 @@ Known issues stay visible: a run with such a failure is reported as failed, and 
 | Fallback | If the crash returns with the new page: an explicit skip of this test for WebKit on Linux only, naming TS-2 and #43067. Chromium, Firefox and Windows WebKit keep running it. |
 | Removal criteria | When a Playwright release fixes #43067 (the issue closed with the fix shipped, and the assertion removed or replaced in `wkPage.ts`), upgrade in its own reviewed change. Then run the same-page variant three times in the official Linux image of that release. With no crash, return the silent step to the same page and close TS-2. |
 
+### TS-3: a host that fails to start can surface `ObjectDisposedException` in `WebApplicationFactory` (worked around for the relay settings)
+
+| | |
+|---|---|
+| Tests | `OutboxOperationsTests.InvalidRelaySettings_StopTheHostFromStarting`, removed on 2026-11-23. The same pattern is used by `SelfServiceOnboardingTests` for an invalid `MaxTenantsPerSubject`; no failure of it has been observed. |
+| Symptom | The test starts a `WebApplicationFactory` host with invalid settings and expects the startup validation's message. Instead, `factory.CreateClient()` threw `System.ObjectDisposedException: Cannot access a disposed object`, without the validation message. |
+| Occurrences | Windows, full-solution runs with every suite in parallel (browser tests on), 2026-11-23 (Phase 3 S4):<br>- first run: the two outbox cases<br>- second run, after the relay's constructor stopped reading its settings: the Kafka case<br>Every isolated run passed, and so did two runs of the TenantMerchant integration suite under load from two other suites. |
+| Assessment | A race in the test host's teardown when the application fails during start, under heavy load. The validation itself is deterministic. The root cause inside `WebApplicationFactory` is **not demonstrated**. |
+| Workaround (in place) | The relay settings are tested without a web host. `OutboxStartupValidationTests` builds the real Infrastructure registration and runs the `IStartupValidator` that the host runs before it starts. |
+| Next step | If the onboarding test fails the same way, move it to the same approach. An upstream report needs a minimal reproduction. |
+
 ## CI-1: test steps could not fail on a test failure (fixed 2026-11-23)
 
 **Defect.** Both CI test steps piped their output into `tee` (`dotnet test ... 2>&1 | tee test-output.log`) and had no `shell:` key. GitHub runs such a step as `bash -e {0}`, **without `pipefail`**. Only an explicit `shell: bash` runs `bash --noprofile --norc -eo pipefail {0}`. The step's exit status was therefore `tee`'s, and a failing test could not fail the step. The workflow comment claimed the opposite.
@@ -138,4 +162,4 @@ Known issues stay visible: a run with such a failure is reported as failed, and 
 
 ## Planned
 
-MongoDB and Kafka integration tests arrive with the first features that use them. Code coverage reporting is also planned.
+MongoDB integration tests arrive with the first feature that uses MongoDB. Code coverage reporting is also planned.

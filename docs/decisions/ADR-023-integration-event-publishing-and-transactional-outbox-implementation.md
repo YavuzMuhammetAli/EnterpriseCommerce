@@ -1,6 +1,6 @@
 # ADR-023: Integration Event Publishing and the Transactional Outbox Implementation
 
-- **Status:** Accepted (2026-11-23, by the project owner, after the design review and its final clarification of fact identity, version handling and replay; the preferred version per consumer and `publishedVersions` were added on the same day, before the ADR's first commit). Implementation: Phase 3 S4 steps 1 to 6; consumer rules (section 7) with the first consumer.
+- **Status:** Accepted (2026-11-23, by the project owner, after the design review and its final clarification of fact identity, version handling and replay; the preferred version per consumer and `publishedVersions` were added on the same day, before the ADR's first commit). Implementation: Phase 3 S4 steps 1 to 6, **done 2026-11-23** ([evidence](../architecture/PHASE_3_S4_EVENT_FLOW.md#10-test-evidence), [operations](../operations/TENANT_MERCHANT_EVENT_RELAY.md)); consumer rules (section 7) with the first consumer.
 - **Date:** 2026-11-23
 - **Phase:** 3 (Tenant & Merchant), slice S4, the first event-flow phase
 - **Resolves:** the items that [ADR-005](ADR-005-kafka-for-asynchronous-communication.md) and [ADR-012](ADR-012-transactional-outbox-and-asynchronous-commands.md) section 5 defer to "the phase that introduces the first event flow":

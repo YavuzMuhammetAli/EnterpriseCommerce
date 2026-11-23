@@ -11,7 +11,7 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
 | # | Service | Planned project prefix | Data store | Status |
 |---|---|---|---|---|
 | 1 | Identity | `EnterpriseCommerce.Identity` | SQL Server | Implemented in Phase 2.3 (slices S1 to S7) and tested locally. Not production-verified, and production gates are open ([IDENTITY_OPERATIONS.md section 7](../security/IDENTITY_OPERATIONS.md#7-verification-level-and-remaining-production-gates)). |
-| 2 | Tenant & Merchant | `EnterpriseCommerce.TenantMerchant` ([ADR-020](../decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md)) | SQL Server | Phase 3 slices S1 (foundation and tenant provisioning), S2 (membership management) and S3 (self-service onboarding) implemented and tested locally. S4 (first integration event and outbox) designed and accepted ([ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md)), step 1 of 6 done (the Kafka client package and the messaging architecture rules). Not production-verified ([PHASE_3_TENANT_MERCHANT.md](PHASE_3_TENANT_MERCHANT.md)). |
+| 2 | Tenant & Merchant | `EnterpriseCommerce.TenantMerchant` ([ADR-020](../decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md)) | SQL Server | Phase 3 slices S1 (foundation and tenant provisioning), S2 (membership management) and S3 (self-service onboarding) implemented and tested locally. S4 (the first integration event, `TenantCreated`, through a transactional outbox and a Kafka relay, [ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md)) implemented and tested locally and in CI. Not production-verified ([PHASE_3_TENANT_MERCHANT.md](PHASE_3_TENANT_MERCHANT.md)). |
 | 3 | Catalog | `EnterpriseCommerce.Catalog` | MongoDB | Planned |
 | 4 | Inventory | `EnterpriseCommerce.Inventory` | SQL Server | Planned |
 | 5 | Cart | `EnterpriseCommerce.Cart` | SQL Server + Redis (acceleration only) | Planned |
@@ -111,8 +111,11 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
 - **Implemented in Phase 3 S3** ([PHASE_3_S3_SELF_SERVICE_ONBOARDING.md](PHASE_3_S3_SELF_SERVICE_ONBOARDING.md), [ADR-022](../decisions/ADR-022-self-service-tenant-onboarding.md)):
   - **Self-service onboarding:** `POST /api/v1/tenants` creates an active tenant, its merchant profile and the caller's `MerchantOwner` membership in one transaction. An owner is created only together with its new tenant, by provisioning or by this endpoint.
   - **Per-user limit and idempotency:** one tenant per user by default (configurable, 1 to 10), and keys scoped per user. Both hold under concurrency through a per-user application lock.
+- **Implemented in Phase 3 S4** ([PHASE_3_S4_EVENT_FLOW.md](PHASE_3_S4_EVENT_FLOW.md), [ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md)):
+  - **The first integration event:** `TenantCreated` v1 on `tenant-merchant.events`, written by both creation paths in the creation's own transaction (transactional outbox).
+  - **The outbox relay:** one leader per service publishes committed rows to Kafka in commit order, at least once, with backoff, a halted state and `/health/outbox` ([TENANT_MERCHANT_EVENT_RELAY.md](../operations/TENANT_MERCHANT_EVENT_RELAY.md)).
 - **Not implemented yet:**
-  - integration events and the outbox: none in S1 to S3 (ADR-012)
+  - consumers of its events, and membership events (deferred to the slice of their first consumer, ADR-023)
   - invitation email delivery (Notification), and the merchant-portal front end
   - merchant applications and review (with Admin)
   - tenant suspension and closure

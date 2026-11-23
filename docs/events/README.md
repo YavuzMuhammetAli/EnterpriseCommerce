@@ -3,7 +3,8 @@
 The integration event contracts of EnterpriseCommerce and the conventions every contract follows.
 
 - **Status:** the conventions below are **accepted** in [ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md) (Phase 3 S4, 2026-11-23) and binding for every producer and consumer.
-- **No event is published yet.** Kafka runs locally in KRaft mode with automatic topic creation disabled.
+- **Published:** `TenantCreated` v1, by Tenant & Merchant since Phase 3 S4 ([PHASE_3_S4_EVENT_FLOW.md](../architecture/PHASE_3_S4_EVENT_FLOW.md)). **No consumer exists yet**: the consumer rules below are accepted and bind the first consumer's slice.
+- Kafka runs locally in KRaft mode with automatic topic creation disabled; topics come from [deploy/docker/kafka/topics.txt](../../deploy/docker/kafka/topics.txt).
 
 The accepted rules these conventions implement ([ADR-005](../decisions/ADR-005-kafka-for-asynchronous-communication.md), [ADR-012](../decisions/ADR-012-transactional-outbox-and-asynchronous-commands.md), [ADR-013](../decisions/ADR-013-saga-based-workflow-coordination.md), [ADR-014](../decisions/ADR-014-logical-tenant-isolation.md)):
 
@@ -17,7 +18,7 @@ The accepted rules these conventions implement ([ADR-005](../decisions/ADR-005-k
 
 | Producer | Contract | Topic | Events |
 |---|---|---|---|
-| Tenant & Merchant | [TENANT_MERCHANT_EVENTS.md](TENANT_MERCHANT_EVENTS.md) | `tenant-merchant.events` | `TenantCreated` v1 (accepted; not yet published) |
+| Tenant & Merchant | [TENANT_MERCHANT_EVENTS.md](TENANT_MERCHANT_EVENTS.md) | `tenant-merchant.events` | `TenantCreated` v1 (published since S4) |
 
 Schemas and golden samples live in [schemas/](schemas/):
 
@@ -133,10 +134,10 @@ The two are versioned independently:
    - The fact is therefore applied at most once, and from the same version whatever the arrival order.
 4. Once the documented consumers have migrated, `vN` is retired with a changelog entry. Publication stops, and new facts carry `publishedVersions: [N+1]`. The `vN` files stay as history.
 
-**CI checks** (implemented with the first producer):
-- the generated schema of each contract type matches the committed schema
+**CI checks** (implemented with the first producer, Phase 3 S4, in `TenantMerchant.UnitTests`):
+- the generated schema of each contract type matches the committed schema (structure: properties, types, required)
 - every golden sample still deserializes into the current contract without data loss
-- the producer's real output has the shape of the sample
+- the producer's real output has the shape of the sample, and validates against the envelope and payload schemas (Corvus.Json.Validator, test-only)
 
 ## Delivery and consumer obligations
 

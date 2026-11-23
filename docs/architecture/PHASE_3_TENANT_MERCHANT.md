@@ -6,7 +6,7 @@ The design and the implementation progress of the Tenant & Merchant service. It 
   - **Slice S1** (service foundation and tenant provisioning) is implemented and tested locally.
   - **Slice S2** (merchant membership management) is implemented and tested locally. Its design is in [PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md](PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md).
   - **Slice S3** (self-service merchant onboarding) is implemented and tested locally. Its design is in [PHASE_3_S3_SELF_SERVICE_ONBOARDING.md](PHASE_3_S3_SELF_SERVICE_ONBOARDING.md), its decisions in [ADR-022](../decisions/ADR-022-self-service-tenant-onboarding.md).
-  - **Slice S4** (the first integration event flow and the transactional outbox) is designed and its decisions are **accepted** ([ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md), 2026-11-23). Step 1 of 6 is done: the Confluent.Kafka package and the messaging architecture rules. No outbox, relay or consumer code exists yet. Design: [PHASE_3_S4_EVENT_FLOW.md](PHASE_3_S4_EVENT_FLOW.md).
+  - **Slice S4** (the first integration event flow and the transactional outbox) is **complete** ([ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md), accepted and implemented 2026-11-23): both creation paths write `TenantCreated` v1 through the transactional outbox, and the relay publishes it to Kafka. No consumer exists yet. Design and evidence: [PHASE_3_S4_EVENT_FLOW.md](PHASE_3_S4_EVENT_FLOW.md); operations: [TENANT_MERCHANT_EVENT_RELAY.md](../operations/TENANT_MERCHANT_EVENT_RELAY.md).
   - Later slices are not started.
 - **Verification levels used below:**
   - **Implemented:** in the code.
@@ -134,9 +134,9 @@ One SQL Server database per service (ADR-003, ADR-011), schema `dbo`, created by
 
 ## 7. Integration events
 
-**S1 publishes no integration event and contains no outbox code** (owner decision, section 9). Nor do S2 and S3. The reason is ADR-012: no outbox code before its design is approved, and the Kafka client, topic and schema conventions are still open.
+S1 to S3 published no integration event and contained no outbox code (owner decision, section 9; ADR-012: no outbox code before its design was approved).
 
-The first event was provisionally called `TenantProvisioned`. **S4 designs it as `TenantCreated` v1 on `tenant-merchant.events`**, emitted by both creation paths with an `origin` ([ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md), accepted; contract: [TENANT_MERCHANT_EVENTS.md](../events/TENANT_MERCHANT_EVENTS.md)). Membership events are deferred to the slice of their first consumer. Until they exist:
+The first event was provisionally called `TenantProvisioned`. **S4 implements it as `TenantCreated` v1 on `tenant-merchant.events`**, emitted by both creation paths with an `origin`, written in the creation's own transaction and published by the outbox relay ([ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md); contract: [TENANT_MERCHANT_EVENTS.md](../events/TENANT_MERCHANT_EVENTS.md); design and evidence: [PHASE_3_S4_EVENT_FLOW.md](PHASE_3_S4_EVENT_FLOW.md)). Membership events are deferred to the slice of their first consumer. Until they exist:
 
 - Other services cannot build local membership read models (ADR-014 rule 3).
 - The membership data shared with other services, an open design item of PROJECT_DECISIONS section 7, stays undecided.
@@ -219,12 +219,27 @@ Design, decisions and evidence: [PHASE_3_S3_SELF_SERVICE_ONBOARDING.md](PHASE_3_
 - An earlier full run had one failure: the browser test `AfterAPasswordChange_TheBffReauthorizesSilently` (Chromium) timed out after 30 seconds waiting for network idle under the parallel load. The browser suite then passed 18 of 18 in three isolated runs, and the whole suite passed in the run above. S3 changes no BFF or Identity code.
 - **CI:** the S3 commits were pushed, and GitHub Actions succeeded on `f67804f` (2026-11-21).
 
+### S4: the first integration event flow and the transactional outbox
+
+Design, decisions and evidence: [PHASE_3_S4_EVENT_FLOW.md](PHASE_3_S4_EVENT_FLOW.md) and [ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md). Operations: [TENANT_MERCHANT_EVENT_RELAY.md](../operations/TENANT_MERCHANT_EVENT_RELAY.md).
+
+| Item | Implemented | Tested locally and in CI |
+|---|---|---|
+| `TenantCreated` domain event on both creation paths; the outbox row in the creation's transaction (five rows or none) | yes | unit, SQL Server (rollback on the audit and outbox tables, replays, refusals, 8-way races) |
+| Envelope and payload exactly as the committed schemas; no subject, client, key, hash or actor | yes | unit (schema validation, exporter snapshot, golden sample, display-name differential) |
+| Migration `IntegrationEventOutbox`, with a guarded rollback | yes | SQL Server 2022 and LocalDB |
+| Relay: one leader, committed rows only, sequential publication, prefix marking, backoff, halted state, cleanup, graceful shutdown | yes | unit, SQL Server, Kafka |
+| At-least-once redelivery with the same `eventId` and bytes; per-tenant order; outage and drain | yes | Kafka (real broker, its container stopped and started) |
+| `/health/outbox` outside readiness; meters; startup validation of the Kafka and outbox settings | yes | unit, SQL Server |
+| Topics from a committed manifest (`kafka-init`); the CI Kafka container | yes | Compose, CI |
+| Consumers, inbox, membership events | no (deferred, ADR-023 section 7) | |
+
 ### Later slices (not started)
 
 - Merchant applications and review (with Admin).
 - Tenant suspension and closure (with Admin).
 - Subscriptions and usage.
-- The event flow (section 7): **S4, designed and accepted (ADR-023)**, step 1 of 6 done ([PHASE_3_S4_EVENT_FLOW.md](PHASE_3_S4_EVENT_FLOW.md)).
+- Membership events and the first consumer of `TenantCreated` (ADR-023 section 7, with the consumer acceptance tests C1 to C6).
 
 ## 9. Decisions made in S1
 
@@ -281,5 +296,5 @@ Later decisions: S2 in [ADR-021](../decisions/ADR-021-merchant-invitations-and-m
 - Deployed Gateway routes and host names. Admin's client registration and its allow-listing.
 - An HTTPS metadata address on the internal network. Forwarded headers and host filtering, if the service is reached through the Gateway with public host names.
 - A separate migration step for deployed environments.
-- The integration event and outbox (section 7).
+- The production gates of the outbox relay ([TENANT_MERCHANT_EVENT_RELAY.md section 7](../operations/TENANT_MERCHANT_EVENT_RELAY.md#7-verification-level-and-production-gates)).
 - Load or soak testing of the concurrency behaviour beyond the local 8-way tests.

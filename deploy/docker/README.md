@@ -100,7 +100,9 @@ docker compose exec redis-sessions redis-cli config get maxmemory-policy   # noe
 ## Kafka notes
 
 - KRaft mode. One node acts as both broker and controller. There is no ZooKeeper.
-- `auto.create.topics.enable=false`: topics are created explicitly once event contracts exist (see [docs/events](../../docs/events/README.md)).
+- `auto.create.topics.enable=false`: topics are created explicitly, never by an application ([docs/events](../../docs/events/README.md)).
+- The topics are declared in [kafka/topics.txt](kafka/topics.txt). The one-shot `kafka-init` service creates them once the broker is healthy (idempotent, `--if-not-exists`). `up -d --wait` does not wait for a one-shot container to finish, so confirm with `docker compose --profile kafka wait kafka-init` (exit code 0).
+- Tenant & Merchant publishes to `tenant-merchant.events` with `TenantMerchant__Kafka__BootstrapServers=localhost:9094` ([TENANT_MERCHANT_EVENT_RELAY.md](../../docs/operations/TENANT_MERCHANT_EVENT_RELAY.md)).
 - Replication factor is 1, which is suitable for local development only.
 
 ## Not included yet
