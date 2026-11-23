@@ -1,3 +1,4 @@
+using EnterpriseCommerce.BuildingBlocks.Authentication;
 namespace EnterpriseCommerce.TenantMerchant.Api.Security;
 
 /// <summary>

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Resource-server access token validation shared by the services (ADR-017 section 4, ADR-025 section 3).
+    Technical code only: no policies, no business rules, no service configuration binding.
+    Referenced only by Api projects (architecture test).
+  -->
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+  </ItemGroup>
+
+</Project>

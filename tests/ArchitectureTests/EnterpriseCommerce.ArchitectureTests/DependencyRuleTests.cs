@@ -134,6 +134,23 @@ public sealed class DependencyRuleTests
         Assert.Empty(violations);
     }
 
+    /// <summary>
+    /// The token-validation block brings in ASP.NET Core and is a host concern (ADR-025 section 3): only the Api layer
+    /// of a service may reference it, never Domain, Application or Infrastructure.
+    /// </summary>
+    [Fact]
+    public void AuthenticationBuildingBlock_IsReferencedOnlyByApiProjects()
+    {
+        const string block = $"{SourceProject.RootNamespace}.BuildingBlocks.Authentication";
+
+        var violations = Repository.SourceProjects
+            .Where(project => project.ProjectReferences.Contains(block))
+            .Where(project => project.Kind != ProjectKind.ServiceLayer || project.Layer != "Api")
+            .Select(project => project.Name);
+
+        Assert.Empty(violations);
+    }
+
     private static SourceProject Get(string name) =>
         Repository.SourceProjects.Single(project => project.Name == name);
 

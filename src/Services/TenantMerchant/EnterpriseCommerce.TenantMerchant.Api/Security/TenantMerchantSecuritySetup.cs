@@ -1,6 +1,6 @@
+using EnterpriseCommerce.BuildingBlocks.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.IdentityModel.Tokens;
 
 namespace EnterpriseCommerce.TenantMerchant.Api.Security;
 
@@ -9,9 +9,9 @@ namespace EnterpriseCommerce.TenantMerchant.Api.Security;
 /// </summary>
 /// <remarks>
 /// <para>
-/// One JWT bearer scheme validates every access token locally: signature against Identity's published keys, exact
-/// issuer, the service audience or an allowed front-end audience, RS256 only, <c>typ: at+jwt</c>, and 30 seconds of
-/// clock skew. A token that fails any of these, or carries another service's audience, answers <c>401</c>.
+/// One JWT bearer scheme validates every access token locally (<see cref="ResourceServerAuthentication"/>): the service
+/// audience or an allowed front-end audience is required. A token that fails validation, or carries another service's
+/// audience, answers <c>401</c>.
 /// </para>
 /// <para>
 /// Two policies then separate the callers. A service token is never accepted where a user token is required, nor the
@@ -43,29 +43,11 @@ internal static class TenantMerchantSecuritySetup
         var allowedClients = provisioning.AllowedClientIds.ToHashSet(StringComparer.Ordinal);
         var userAudiences = authentication.EffectiveUserAudiences;
 
-        builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
-        {
-            options.Authority = authentication.Issuer;
-            if (authentication.MetadataAddress is { Length: > 0 } metadataAddress)
-            {
-                options.MetadataAddress = metadataAddress;
-            }
-
-            options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
-            options.MapInboundClaims = false;
-
-            var parameters = options.TokenValidationParameters;
-            parameters.ValidIssuer = authentication.Issuer;
-            parameters.ValidAudiences = [authentication.ServiceAudience, .. userAudiences];
-            parameters.ValidAlgorithms = [SecurityAlgorithms.RsaSha256];
-            parameters.ValidTypes = ["at+jwt"];
-            parameters.ClockSkew = TimeSpan.FromSeconds(30);
-            parameters.NameClaimType = CallerClaims.Subject;
-
-            // Merchant roles come from Tenant & Merchant data only, never from a token (ADR-017 section 2). A claim type
-            // no token carries keeps IsInRole false even for a forged "role" claim.
-            parameters.RoleClaimType = CallerClaims.NoRoleClaimType;
-        });
+        builder.Services.AddResourceServerJwtBearer(new ResourceServerTokenSettings(
+            authentication.Issuer!,
+            authentication.MetadataAddress,
+            [authentication.ServiceAudience, .. userAudiences],
+            RequireHttpsMetadata: !builder.Environment.IsDevelopment()));
 
         builder.Services.AddAuthorizationBuilder()
             .SetFallbackPolicy(new AuthorizationPolicyBuilder(JwtBearerDefaults.AuthenticationScheme).RequireAuthenticatedUser().Build())

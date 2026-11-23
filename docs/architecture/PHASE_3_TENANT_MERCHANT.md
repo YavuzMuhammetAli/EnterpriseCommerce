@@ -286,6 +286,8 @@ Later decisions: S2 in [ADR-021](../decisions/ADR-021-merchant-invitations-and-m
 
   Extracting it into BuildingBlocks is a candidate. It needs a decision, and it would touch Identity.
 
+  **Partly resolved in Phase 4 (ADR-025 section 3):** the JWT bearer setup and the caller claim helpers moved to `EnterpriseCommerce.BuildingBlocks.Authentication`, used by Tenant & Merchant and Catalog. Problem details, health conventions and store error classification remain per service.
+
 **Residual risks:**
 
 - The owner subject is not verified against Identity (section 4).

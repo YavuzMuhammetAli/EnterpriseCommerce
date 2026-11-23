@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\BuildingBlocks\EnterpriseCommerce.BuildingBlocks.Authentication\EnterpriseCommerce.BuildingBlocks.Authentication.csproj" />
+  </ItemGroup>
+
+</Project>

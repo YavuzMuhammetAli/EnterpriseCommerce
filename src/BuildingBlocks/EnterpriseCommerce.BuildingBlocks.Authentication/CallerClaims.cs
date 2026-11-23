@@ -1,13 +1,13 @@
 using System.Security.Claims;
 
-namespace EnterpriseCommerce.TenantMerchant.Api.Security;
+namespace EnterpriseCommerce.BuildingBlocks.Authentication;
 
 /// <summary>
 /// Reads the caller from a validated access token (IDENTITY_API_CONTRACT.md section 3). Claims are inbound-unmapped, so
 /// they keep their JWT names. Only <c>sub</c>, <c>client_id</c>, <c>aud</c>, <c>scope</c> and <c>ec_ptype</c> are used;
 /// tokens carry no role or tenant claims, and none would be honoured.
 /// </summary>
-internal static class CallerClaims
+public static class CallerClaims
 {
     public const string Subject = "sub";
     public const string ClientId = "client_id";
@@ -18,7 +18,7 @@ internal static class CallerClaims
     public const string UserPrincipal = "user";
 
     /// <summary>The role claim type of validated principals: a type no token carries, so no token ever yields a role.</summary>
-    public const string NoRoleClaimType = "urn:enterprisecommerce:tenant-merchant:no-token-roles";
+    public const string NoRoleClaimType = "urn:enterprisecommerce:no-token-roles";
 
     /// <summary>Reserved for service clients (ADR-017 section 3).</summary>
     public const string ServiceClientPrefix = "svc-";

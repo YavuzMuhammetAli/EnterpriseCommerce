@@ -1,7 +1,7 @@
 using System.Security.Claims;
-using EnterpriseCommerce.TenantMerchant.Api.Security;
+using EnterpriseCommerce.BuildingBlocks.Authentication;
 
-namespace EnterpriseCommerce.TenantMerchant.UnitTests.Api;
+namespace EnterpriseCommerce.BuildingBlocks.Authentication.UnitTests;
 
 public sealed class CallerClaimsTests
 {
@@ -63,32 +63,6 @@ public sealed class CallerClaimsTests
 
         Assert.True(CallerClaims.HasAudience(principal, "tenant-merchant-api"));
         Assert.False(CallerClaims.HasAudience(principal, "ec-merchant"));
-    }
-
-    [Fact]
-    public void ProvisioningSettings_AcceptOnlyServiceClients()
-    {
-        Assert.Empty(new ProvisioningSettings { AllowedClientIds = ["svc-admin"] }.Validate());
-        Assert.NotEmpty(new ProvisioningSettings { AllowedClientIds = ["bff-admin"] }.Validate());
-        Assert.NotEmpty(new ProvisioningSettings { AllowedClientIds = ["svc-"] }.Validate());
-    }
-
-    [Fact]
-    public void AuthenticationSettings_RequireAnHttpsIssuerOutsideDevelopment()
-    {
-        Assert.NotEmpty(new TenantMerchantAuthenticationSettings().Validate(isDevelopment: true));
-        Assert.NotEmpty(new TenantMerchantAuthenticationSettings { Issuer = "http://identity.internal/" }.Validate(isDevelopment: false));
-        Assert.Empty(new TenantMerchantAuthenticationSettings { Issuer = "http://localhost:5101/" }.Validate(isDevelopment: true));
-        Assert.Empty(new TenantMerchantAuthenticationSettings { Issuer = "https://id.example/" }.Validate(isDevelopment: false));
-    }
-
-    [Fact]
-    public void AuthenticationSettings_KeepUserAndServiceAudiencesApart()
-    {
-        var settings = new TenantMerchantAuthenticationSettings { Issuer = "https://id.example/", UserAudiences = ["tenant-merchant-api"] };
-
-        Assert.NotEmpty(settings.Validate(isDevelopment: false));
-        Assert.Equal(["ec-merchant"], new TenantMerchantAuthenticationSettings().EffectiveUserAudiences);
     }
 
     private static ClaimsPrincipal Principal(params (string Type, string Value)[] claims) =>

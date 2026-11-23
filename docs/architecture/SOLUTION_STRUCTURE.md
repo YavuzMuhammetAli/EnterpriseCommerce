@@ -107,6 +107,12 @@ The Gateway must **not** contain business logic, aggregate data across services,
 
 Some duplication between services (for example, the small exception handler in each API) is accepted until a second real consumer justifies extraction.
 
+**Existing building blocks:**
+
+| Project | Concern | Used by | Rule |
+|---|---|---|---|
+| `EnterpriseCommerce.BuildingBlocks.Authentication` | Resource-server access token validation (ADR-017 section 4) and the caller claim helpers ([ADR-025](../decisions/ADR-025-merchant-authorization-through-tenant-merchant-membership-verification.md) section 3). No policies, no business rules, no configuration binding. | Tenant & Merchant Api, Catalog Api | Only `*.Api` projects may reference it (architecture test). Unit tests: `tests/BuildingBlocks/EnterpriseCommerce.BuildingBlocks.Authentication.UnitTests`. |
+
 ## Naming conventions
 
 | Item | Convention | Example |

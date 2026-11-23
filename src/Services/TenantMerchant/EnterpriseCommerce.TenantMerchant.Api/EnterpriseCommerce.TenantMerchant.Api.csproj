@@ -10,6 +10,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\EnterpriseCommerce.BuildingBlocks.Authentication\EnterpriseCommerce.BuildingBlocks.Authentication.csproj" />
     <ProjectReference Include="..\EnterpriseCommerce.TenantMerchant.Application\EnterpriseCommerce.TenantMerchant.Application.csproj" />
     <ProjectReference Include="..\EnterpriseCommerce.TenantMerchant.Infrastructure\EnterpriseCommerce.TenantMerchant.Infrastructure.csproj" />
   </ItemGroup>

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using EnterpriseCommerce.BuildingBlocks.Authentication;
 using EnterpriseCommerce.TenantMerchant.Api.Hosting;
 using EnterpriseCommerce.TenantMerchant.Api.Security;
 using EnterpriseCommerce.TenantMerchant.Application.Authorization;

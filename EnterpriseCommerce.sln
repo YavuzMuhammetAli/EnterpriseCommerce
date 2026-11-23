@@ -67,6 +67,14 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnterpriseCommerce.TenantMe
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnterpriseCommerce.TenantMerchant.IntegrationTests", "tests\TenantMerchant\EnterpriseCommerce.TenantMerchant.IntegrationTests\EnterpriseCommerce.TenantMerchant.IntegrationTests.csproj", "{7718AB6C-37EB-4917-8E54-57C8FD79C4DD}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "BuildingBlocks", "BuildingBlocks", "{90298CBA-BD6F-3A0A-69D5-97CAD7B05E7E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnterpriseCommerce.BuildingBlocks.Authentication", "src\BuildingBlocks\EnterpriseCommerce.BuildingBlocks.Authentication\EnterpriseCommerce.BuildingBlocks.Authentication.csproj", "{10B79F9C-C30B-420E-8B2B-39752D59A471}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "BuildingBlocks", "BuildingBlocks", "{AD3136F1-6676-2AF3-8A96-F3C6585F1CB9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnterpriseCommerce.BuildingBlocks.Authentication.UnitTests", "tests\BuildingBlocks\EnterpriseCommerce.BuildingBlocks.Authentication.UnitTests\EnterpriseCommerce.BuildingBlocks.Authentication.UnitTests.csproj", "{A622BBB4-3FA6-42FA-A2C6-EA2EAC544712}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -317,6 +325,30 @@ Global
 		{7718AB6C-37EB-4917-8E54-57C8FD79C4DD}.Release|x64.Build.0 = Release|Any CPU
 		{7718AB6C-37EB-4917-8E54-57C8FD79C4DD}.Release|x86.ActiveCfg = Release|Any CPU
 		{7718AB6C-37EB-4917-8E54-57C8FD79C4DD}.Release|x86.Build.0 = Release|Any CPU
+		{10B79F9C-C30B-420E-8B2B-39752D59A471}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{10B79F9C-C30B-420E-8B2B-39752D59A471}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{10B79F9C-C30B-420E-8B2B-39752D59A471}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{10B79F9C-C30B-420E-8B2B-39752D59A471}.Debug|x64.Build.0 = Debug|Any CPU
+		{10B79F9C-C30B-420E-8B2B-39752D59A471}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{10B79F9C-C30B-420E-8B2B-39752D59A471}.Debug|x86.Build.0 = Debug|Any CPU
+		{10B79F9C-C30B-420E-8B2B-39752D59A471}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{10B79F9C-C30B-420E-8B2B-39752D59A471}.Release|Any CPU.Build.0 = Release|Any CPU
+		{10B79F9C-C30B-420E-8B2B-39752D59A471}.Release|x64.ActiveCfg = Release|Any CPU
+		{10B79F9C-C30B-420E-8B2B-39752D59A471}.Release|x64.Build.0 = Release|Any CPU
+		{10B79F9C-C30B-420E-8B2B-39752D59A471}.Release|x86.ActiveCfg = Release|Any CPU
+		{10B79F9C-C30B-420E-8B2B-39752D59A471}.Release|x86.Build.0 = Release|Any CPU
+		{A622BBB4-3FA6-42FA-A2C6-EA2EAC544712}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A622BBB4-3FA6-42FA-A2C6-EA2EAC544712}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A622BBB4-3FA6-42FA-A2C6-EA2EAC544712}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{A622BBB4-3FA6-42FA-A2C6-EA2EAC544712}.Debug|x64.Build.0 = Debug|Any CPU
+		{A622BBB4-3FA6-42FA-A2C6-EA2EAC544712}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{A622BBB4-3FA6-42FA-A2C6-EA2EAC544712}.Debug|x86.Build.0 = Debug|Any CPU
+		{A622BBB4-3FA6-42FA-A2C6-EA2EAC544712}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A622BBB4-3FA6-42FA-A2C6-EA2EAC544712}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A622BBB4-3FA6-42FA-A2C6-EA2EAC544712}.Release|x64.ActiveCfg = Release|Any CPU
+		{A622BBB4-3FA6-42FA-A2C6-EA2EAC544712}.Release|x64.Build.0 = Release|Any CPU
+		{A622BBB4-3FA6-42FA-A2C6-EA2EAC544712}.Release|x86.ActiveCfg = Release|Any CPU
+		{A622BBB4-3FA6-42FA-A2C6-EA2EAC544712}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -352,5 +384,9 @@ Global
 		{FB004C6C-8757-ADBB-2AC2-8DE0B59F1EEA} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{7AA35BB5-94D2-4E40-B7BA-06D3AC905572} = {FB004C6C-8757-ADBB-2AC2-8DE0B59F1EEA}
 		{7718AB6C-37EB-4917-8E54-57C8FD79C4DD} = {FB004C6C-8757-ADBB-2AC2-8DE0B59F1EEA}
+		{90298CBA-BD6F-3A0A-69D5-97CAD7B05E7E} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{10B79F9C-C30B-420E-8B2B-39752D59A471} = {90298CBA-BD6F-3A0A-69D5-97CAD7B05E7E}
+		{AD3136F1-6676-2AF3-8A96-F3C6585F1CB9} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{A622BBB4-3FA6-42FA-A2C6-EA2EAC544712} = {AD3136F1-6676-2AF3-8A96-F3C6585F1CB9}
 	EndGlobalSection
 EndGlobal
