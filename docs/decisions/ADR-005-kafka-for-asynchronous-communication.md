@@ -1,6 +1,6 @@
 # ADR-005: Kafka for Asynchronous Communication
 
-- **Status:** Accepted. Amended by [ADR-012](ADR-012-transactional-outbox-and-asynchronous-commands.md): the transactional outbox is the accepted reliable publishing direction, and Kafka also carries asynchronous commands.
+- **Status:** Accepted. Amended by [ADR-012](ADR-012-transactional-outbox-and-asynchronous-commands.md): the transactional outbox is the accepted reliable publishing direction, and Kafka also carries asynchronous commands. Its deferred items (the client library and reliable publishing) are resolved by [ADR-023](ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md) (2026-11-23).
 - **Date:** 2026-11-17
 
 ## Context

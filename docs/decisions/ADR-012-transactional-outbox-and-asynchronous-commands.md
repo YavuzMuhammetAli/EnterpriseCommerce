@@ -1,6 +1,6 @@
 # ADR-012: Transactional Outbox and Asynchronous Commands
 
-- **Status:** Accepted (architectural direction; implementation deferred)
+- **Status:** Accepted (architectural direction). Its deferred items (section 5) are resolved by [ADR-023](ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md) (2026-11-23), which details the implementation.
 - **Date:** 2026-11-17
 - **Amends:** [ADR-005](ADR-005-kafka-for-asynchronous-communication.md), which left reliable publishing undecided and described Kafka for integration events only
 

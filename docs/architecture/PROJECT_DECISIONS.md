@@ -10,7 +10,7 @@ How this document relates to the others:
 
 **Change policy:** a decision in this document changes only through a new ADR that supersedes or amends the old one. This document is then updated in the same change. If this document and an ADR disagree, stop and resolve the inconsistency. Never guess.
 
-Last consolidated: 2026-11-17 (Phase 1 final audit). Updated 2026-11-17 for Phase 2.1 (Identity provider selection, [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)). Updated 2026-11-18 for Phase 2.2 (browser client architecture, token and session strategy, account security tokens: [ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md), [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md), [ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)). Updated 2026-11-20 for Phase 2.3 slice S6 (signing and encryption key rollover and retirement, [ADR-019](../decisions/ADR-019-signing-and-encryption-key-rollover-and-retirement.md)). Updated 2026-11-21 for Phase 3 slice S1 (Tenant & Merchant naming and tenant-merchant cardinality, [ADR-020](../decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md)).
+Last consolidated: 2026-11-17 (Phase 1 final audit). Updated 2026-11-17 for Phase 2.1 (Identity provider selection, [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md)). Updated 2026-11-18 for Phase 2.2 (browser client architecture, token and session strategy, account security tokens: [ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md), [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md), [ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)). Updated 2026-11-20 for Phase 2.3 slice S6 (signing and encryption key rollover and retirement, [ADR-019](../decisions/ADR-019-signing-and-encryption-key-rollover-and-retirement.md)). Updated 2026-11-21 for Phase 3 slice S1 (Tenant & Merchant naming and tenant-merchant cardinality, [ADR-020](../decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md)), slice S2 (merchant invitations and membership administration, [ADR-021](../decisions/ADR-021-merchant-invitations-and-membership-administration.md)) and slice S3 (self-service tenant onboarding, [ADR-022](../decisions/ADR-022-self-service-tenant-onboarding.md)). Updated 2026-11-23 for Phase 3 slice S4: the integration event publishing and outbox implementation design ([ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md), accepted) resolves two section 13 rows, the Kafka client library and the outbox implementation details.
 
 ---
 
@@ -45,9 +45,9 @@ The architecture prioritizes **maintainability, scalability, security, separatio
 | Relational database | SQL Server | In use (Identity and Tenant & Merchant databases, Phase 2.3 and Phase 3 S1; local container) |
 | Document database | MongoDB | Local container available |
 | Cache | Redis | Local container available. A separate, dedicated `noeviction` Redis is in use as the BFF session store (Phase 2.3 S7, ADR-016), not as a cache. |
-| Messaging | Apache Kafka (KRaft) | Local container available |
+| Messaging | Apache Kafka (KRaft), client library Confluent.Kafka in Infrastructure only, JSON with committed JSON Schema (no Schema Registry), transactional outbox ([ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md)) | Local container available. ADR-023 accepted; its implementation (Phase 3 S4) has not started. |
 | API Gateway | YARP | In use |
-| Identity provider | ASP.NET Core Identity (user store) with OpenIddict 7.9.0 or later (OAuth 2.0 / OpenID Connect server), [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md), [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md) | Accepted; implemented in Phase 2.3 (in progress) and tested locally; not production-verified |
+| Identity provider | ASP.NET Core Identity (user store) with OpenIddict 7.9.0 or later (OAuth 2.0 / OpenID Connect server), [ADR-015](../decisions/ADR-015-identity-provider-aspnet-core-identity-and-openiddict.md), [ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md) | Accepted; implemented in Phase 2.3 (slices S1 to S7, complete) and tested locally; not production-verified |
 | Browser clients | Backend-for-frontend for every front end: one ASP.NET Core codebase deployed once per front end, behind the Gateway, [ADR-016](../decisions/ADR-016-browser-client-architecture-backend-for-frontend.md) | Accepted; implemented in Phase 2.3 S7 (`src/Bff`) and tested locally; the real Safari gate is open and it is not production-verified |
 | Containers | Docker | In use |
 | Local orchestration | Docker Compose (profiles) | In use |
@@ -57,7 +57,7 @@ The architecture prioritizes **maintainability, scalability, security, separatio
 | Dashboards | Grafana | Planned (observability phase) |
 | Log aggregation | Loki | Planned (observability phase) |
 | Testing | xUnit (v3) | In use |
-| CI/CD | GitHub Actions | In use: runs on every push and pull request to `main` (build and test with SQL Server 2022 and the session Redis, Playwright browser tests, Docker Compose validation). All six runs from 2026-11-17 to 2026-11-20 succeeded. Commits that are not pushed are not CI-verified. |
+| CI/CD | GitHub Actions | In use: runs on every push and pull request to `main` (build and test with SQL Server 2022 and the session Redis, Playwright browser tests, Docker Compose validation). The runs up to the Phase 3 S3 commit `f67804f` (2026-11-21) succeeded. Commits that are not pushed are not CI-verified. |
 | Source control | Git | In use |
 
 Rules:
@@ -77,11 +77,11 @@ Accepted principles:
 | Domain-Driven Design where it adds real value | [ADR-002](../decisions/ADR-002-clean-architecture-per-service.md) |
 | Clean Architecture within each business service | [ADR-002](../decisions/ADR-002-clean-architecture-per-service.md) |
 | Selective CQRS | [ADR-009](../decisions/ADR-009-selective-cqrs.md) |
-| Transactional Outbox (direction; implementation deferred) | [ADR-012](../decisions/ADR-012-transactional-outbox-and-asynchronous-commands.md) |
+| Transactional Outbox (direction, and its implementation design) | [ADR-012](../decisions/ADR-012-transactional-outbox-and-asynchronous-commands.md), [ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md) |
 | Sagas: orchestration or choreography where appropriate | [ADR-013](../decisions/ADR-013-saga-based-workflow-coordination.md) |
 | Database per service | [ADR-003](../decisions/ADR-003-database-per-service.md) |
 | API Gateway using YARP | [ADR-007](../decisions/ADR-007-yarp-api-gateway.md) |
-| Event-driven communication through Kafka | [ADR-005](../decisions/ADR-005-kafka-for-asynchronous-communication.md), [ADR-012](../decisions/ADR-012-transactional-outbox-and-asynchronous-commands.md) |
+| Event-driven communication through Kafka | [ADR-005](../decisions/ADR-005-kafka-for-asynchronous-communication.md), [ADR-012](../decisions/ADR-012-transactional-outbox-and-asynchronous-commands.md), [ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md) |
 | REST for synchronous API interactions | this document |
 | Strong service ownership and independent deployment boundaries | [ADR-001](../decisions/ADR-001-microservices-architecture.md), [ADR-003](../decisions/ADR-003-database-per-service.md) |
 
@@ -208,16 +208,37 @@ Rules:
 
 ## 9. Messaging and integration
 
-Governing ADRs: [ADR-005](../decisions/ADR-005-kafka-for-asynchronous-communication.md), [ADR-012](../decisions/ADR-012-transactional-outbox-and-asynchronous-commands.md).
+Governing ADRs: [ADR-005](../decisions/ADR-005-kafka-for-asynchronous-communication.md), [ADR-012](../decisions/ADR-012-transactional-outbox-and-asynchronous-commands.md), [ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md). Conventions and contracts: [docs/events](../events/README.md).
 
 - **Apache Kafka in KRaft mode** (no ZooKeeper) is the messaging platform.
 - **REST** is used for synchronous interactions. **Kafka** is used for asynchronous integration events and commands.
 - **Domain events** stay internal to their owning service. **Integration events** are the cross-service contracts.
 - Event schemas are **versioned**. Consumers are **idempotent**.
 - Retry, backoff, dead-letter handling and correlation identifiers are required considerations for every flow.
-- **Transactional Outbox** is the accepted direction. **No outbox implementation is written before its detailed design phase.**
-- The Kafka client library is **not selected** (open decision).
-- Sensitive information is never published in integration events.
+- **Transactional Outbox** is the accepted direction (ADR-012), and its implementation design is accepted (ADR-023). Outbox code follows ADR-023 only.
+- **Client library (ADR-023):** Confluent.Kafka, referenced only by Infrastructure projects. No messaging framework and no Schema Registry.
+- **Topics (ADR-023):**
+  - One topic per producing service, `<service>.events`. Commands go to `<recipient>.commands`.
+  - The key is the tenant ID, so the order is per tenant, in commit order.
+  - Topics are created explicitly and never by an application.
+  - Consumer groups are named `<consumer-service>.<purpose>`, with dead-letter topics `<group>.dlt`.
+- **Messages (ADR-023):**
+  - UTF-8 JSON with committed JSON Schema files, and a self-contained envelope.
+  - `eventId` is the identity of the logical fact and `eventVersion` the version of the payload contract.
+  - `publishedVersions` lists the versions in which the fact is published.
+  - Only optional additions within a version. A breaking change dual-publishes a new version with the same `eventId`.
+- **Outbox (ADR-023):**
+  - Outbox rows are written in the business transaction, mapped from domain events at `SaveChanges`.
+  - One leader relay per service publishes sequentially after the commit.
+  - Delivery is at least once and never exactly once. A row that cannot be published halts the relay; it is never skipped.
+- **Consumers (ADR-023):**
+  - A processed-event record per (consumer, `eventId`), written with the effect, so a logical fact is applied at most once per consumer.
+  - Each consumer declares one preferred version per event type, and applies a fact only from its selected version: the preferred version if it is published for that fact, otherwise the highest other supported one. The result never depends on arrival order.
+  - Unsupported and not-selected versions are acknowledged without a record and stay replayable.
+  - A preference change is followed by a gap replay or a rebuild.
+  - Unknown open-set values fail closed. Dead-letter topics are only for schema-invalid messages.
+- **First event:** `TenantCreated` v1 on `tenant-merchant.events` ([TENANT_MERCHANT_EVENTS.md](../events/TENANT_MERCHANT_EVENTS.md)). Membership events are deferred to the slice of their first consumer.
+- Sensitive information is never published in integration events. Identity subject IDs are not published unless an accepted contract needs them.
 
 ## 10. Security
 
@@ -302,9 +323,7 @@ These are **open**. They must not be decided silently. Each one is decided throu
 | Concrete signing key store and Data Protection key store outside local development (the direction is in ADR-017 and ADR-019): a KMS or HSM provider, or an explicitly accepted certificate-file key-management procedure, including the rotation of the Data Protection key-encryption certificate | Deployment phase, before any production-like deployment |
 | Retention periods for expired account security tokens and terminal security email delivery records (finding I35; they are not deleted until then) | Before the first production-like deployment |
 | Per-service user access token audiences ([ADR-017](../decisions/ADR-017-token-session-and-protocol-strategy.md) section 3) | When a concrete need appears |
-| Opaque-reference security email handoff (E3, [ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)) | After the outbox design is approved |
-| Kafka client library | First event-flow phase |
-| Outbox implementation details | First event-flow phase |
+| Opaque-reference security email handoff (E3, [ADR-018](../decisions/ADR-018-account-security-tokens-and-security-email-delivery.md)) | The outbox design it waited for is accepted (ADR-023). Decided when Identity's messaging work is scheduled; not part of Phase 3 S4. |
 | Mediator library selection (if any) | When the first service needs it ([ADR-009](../decisions/ADR-009-selective-cqrs.md)) |
 | Detailed per-service database schemas | Each service's design phase |
 | SQL Server 2022 versus SQL Server 2025 | Before the first production-like deployment |
@@ -322,3 +341,8 @@ These are **open**. They must not be decided silently. Each one is decided throu
 - Tenant and merchant naming (`TenantMerchant`) and the tenant-merchant cardinality, one merchant per tenant ([ADR-020](../decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md), Phase 3 S1).
 - Merchant invitations, the invitation email match (D14), per-tenant serialization of membership changes, and the membership audit trail ([ADR-021](../decisions/ADR-021-merchant-invitations-and-membership-administration.md), Phase 3 S2).
 - Self-service tenant onboarding: immediate activation, the per-user limit, per-user idempotency, and the owner rule for new tenants ([ADR-022](../decisions/ADR-022-self-service-tenant-onboarding.md), Phase 3 S3).
+- Kafka client library and outbox implementation details, together with the other items ADR-012 section 5 deferred to the first event flow ([ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md), Phase 3 S4):
+  - topic naming and partitioning
+  - the schema format
+  - the envelope
+  - consumer deduplication and replay

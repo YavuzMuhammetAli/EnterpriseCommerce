@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.enterprisecommerce.local/events/envelope.v1.schema.json",
+  "title": "Integration event envelope, version 1",
+  "description": "The self-contained body of every integration event (ADR-023 section 4). It validates the envelope only: 'payload' is validated separately by the schema of (producer, eventType, eventVersion), at schemas/<producer>/<eventType>.v<eventVersion>.schema.json. The envelope is versioned independently of eventVersion and changes only additively; a breaking envelope change requires a new topic.",
+  "type": "object",
+  "required": [
+    "eventId",
+    "eventType",
+    "eventVersion",
+    "publishedVersions",
+    "producer",
+    "aggregateId",
+    "tenantId",
+    "occurredAtUtc",
+    "correlationId",
+    "causationId",
+    "payload"
+  ],
+  "properties": {
+    "eventId": {
+      "description": "The identity of the logical business fact (GUID version 7), not of an individual serialized message, and the consumers' deduplication key. Every message stating the same fact carries it: redeliveries and the versions of a dual publication. A message is identified by (eventId, eventVersion).",
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "eventType": {
+      "description": "Past-tense PascalCase event name, unique within the producer.",
+      "type": "string",
+      "pattern": "^[A-Z][A-Za-z0-9]{1,127}$"
+    },
+    "eventVersion": {
+      "description": "The version of the payload contract of (producer, eventType): its major version. It versions neither the envelope nor the aggregate's state.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "publishedVersions": {
+      "description": "The versions in which the producer publishes this fact, identical in every message of the fact: [1] for a single version, [1, 2] during a dual publication. It must contain eventVersion (a message where it does not is malformed). Consumers select one version per fact from it and their own declaration, independent of arrival order.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      }
+    },
+    "producer": {
+      "description": "The producing service.",
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "aggregateId": {
+      "description": "The aggregate the fact is about.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "tenantId": {
+      "description": "The tenant the message belongs to; null only for messages that are not tenant-scoped.",
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "occurredAtUtc": {
+      "description": "Business time of the fact, ISO-8601 in UTC with a trailing Z.",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "correlationId": {
+      "description": "The flow's correlation identifier.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,64}$"
+    },
+    "causationId": {
+      "description": "The eventId of the causing message, or the correlation ID of the HTTP request that caused a root message.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,64}$"
+    },
+    "payload": {
+      "description": "The event-specific data, validated by the schema of (producer, eventType, eventVersion).",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true
+}

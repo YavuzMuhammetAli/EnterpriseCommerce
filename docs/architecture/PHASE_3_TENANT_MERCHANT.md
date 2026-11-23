@@ -6,6 +6,7 @@ The design and the implementation progress of the Tenant & Merchant service. It 
   - **Slice S1** (service foundation and tenant provisioning) is implemented and tested locally.
   - **Slice S2** (merchant membership management) is implemented and tested locally. Its design is in [PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md](PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md).
   - **Slice S3** (self-service merchant onboarding) is implemented and tested locally. Its design is in [PHASE_3_S3_SELF_SERVICE_ONBOARDING.md](PHASE_3_S3_SELF_SERVICE_ONBOARDING.md), its decisions in [ADR-022](../decisions/ADR-022-self-service-tenant-onboarding.md).
+  - **Slice S4** (the first integration event flow and the transactional outbox) is designed and its decisions are **accepted** ([ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md), 2026-11-23). The implementation has not started; no S4 code exists. Design: [PHASE_3_S4_EVENT_FLOW.md](PHASE_3_S4_EVENT_FLOW.md).
   - Later slices are not started.
 - **Verification levels used below:**
   - **Implemented:** in the code.
@@ -135,7 +136,7 @@ One SQL Server database per service (ADR-003, ADR-011), schema `dbo`, created by
 
 **S1 publishes no integration event and contains no outbox code** (owner decision, section 9). Nor do S2 and S3. The reason is ADR-012: no outbox code before its design is approved, and the Kafka client, topic and schema conventions are still open.
 
-The first event, provisionally `TenantProvisioned` on a tenant topic, is designed in the first event-flow phase together with the outbox. Until then:
+The first event was provisionally called `TenantProvisioned`. **S4 designs it as `TenantCreated` v1 on `tenant-merchant.events`**, emitted by both creation paths with an `origin` ([ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md), accepted; contract: [TENANT_MERCHANT_EVENTS.md](../events/TENANT_MERCHANT_EVENTS.md)). Membership events are deferred to the slice of their first consumer. Until they exist:
 
 - Other services cannot build local membership read models (ADR-014 rule 3).
 - The membership data shared with other services, an open design item of PROJECT_DECISIONS section 7, stays undecided.
@@ -216,14 +217,14 @@ Design, decisions and evidence: [PHASE_3_S3_SELF_SERVICE_ONBOARDING.md](PHASE_3_
 - The TenantMerchant integration suite also passed against LocalDB.
 - `dotnet test --solution EnterpriseCommerce.sln -c Release`: **1094 tests, 1094 passed, 0 failed, 0 skipped**.
 - An earlier full run had one failure: the browser test `AfterAPasswordChange_TheBffReauthorizesSilently` (Chromium) timed out after 30 seconds waiting for network idle under the parallel load. The browser suite then passed 18 of 18 in three isolated runs, and the whole suite passed in the run above. S3 changes no BFF or Identity code.
-- **CI** has not run on these commits; they are not pushed.
+- **CI:** the S3 commits were pushed, and GitHub Actions succeeded on `f67804f` (2026-11-21).
 
 ### Later slices (not started)
 
 - Merchant applications and review (with Admin).
 - Tenant suspension and closure (with Admin).
 - Subscriptions and usage.
-- The event flow (section 7).
+- The event flow (section 7): **S4, designed and accepted (ADR-023)**, implementation not started ([PHASE_3_S4_EVENT_FLOW.md](PHASE_3_S4_EVENT_FLOW.md)).
 
 ## 9. Decisions made in S1
 

@@ -31,7 +31,7 @@ A multi-tenant, multi-vendor e-commerce marketplace built with .NET 10 microserv
 | [CLAUDE.md](CLAUDE.md) | Operational rules for AI-assisted development sessions (reading order, rules, verification) |
 | [SERVICE_CATALOG.md](docs/architecture/SERVICE_CATALOG.md) | The ten business services and their responsibilities |
 | [SOLUTION_STRUCTURE.md](docs/architecture/SOLUTION_STRUCTURE.md) | Repository layout, layer rules and naming |
-| [Architecture Decision Records](docs/decisions/README.md) | Historical record of each decision (ADR-001 to ADR-020) |
+| [Architecture Decision Records](docs/decisions/README.md) | Historical record of each decision (ADR-001 to ADR-023) |
 | [PHASE_1_FINAL_AUDIT.md](docs/architecture/PHASE_1_FINAL_AUDIT.md) | Phase 1 audit results and findings |
 | [PHASE_2_IDENTITY_DESIGN_BRIEF.md](docs/architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md) | Identity design scope and Phase 2.3 implementation progress |
 | [PHASE_3_TENANT_MERCHANT.md](docs/architecture/PHASE_3_TENANT_MERCHANT.md) | Tenant & Merchant design and implementation progress |
@@ -39,6 +39,8 @@ A multi-tenant, multi-vendor e-commerce marketplace built with .NET 10 microserv
 | [PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md](docs/architecture/PHASE_3_S2_MEMBERSHIP_MANAGEMENT.md) | Phase 3 S2: invitations, membership administration, the last-owner guarantee, audit |
 | [PHASE_3_S3_SELF_SERVICE_ONBOARDING.md](docs/architecture/PHASE_3_S3_SELF_SERVICE_ONBOARDING.md) | Phase 3 S3: self-service merchant onboarding, the per-user limit, per-user idempotency |
 | [TENANT_MERCHANT_API_CONTRACT.md](docs/api/TENANT_MERCHANT_API_CONTRACT.md) | Tenant & Merchant API contract (Phase 3 S1 to S3) |
+| [PHASE_3_S4_EVENT_FLOW.md](docs/architecture/PHASE_3_S4_EVENT_FLOW.md) | Phase 3 S4 (designed, ADR-023 accepted, implementation not started): the first integration event, the transactional outbox and the relay |
+| [Integration events](docs/events/README.md) | Event conventions (envelope, topics, versioning) and contracts, starting with [TENANT_MERCHANT_EVENTS.md](docs/events/TENANT_MERCHANT_EVENTS.md) |
 
 ## Technology stack
 
