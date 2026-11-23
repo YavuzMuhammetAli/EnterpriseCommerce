@@ -4,6 +4,12 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <!-- Signs real RS256 at+jwt test tokens, validated by the service's own JWT bearer configuration. -->
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
+    <!-- Validates the stored and published integration events against docs/events/schemas. -->
+    <PackageReference Include="Corvus.Json.Validator" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\EnterpriseCommerce.TenantMerchant.UnitTests\Infrastructure\EventSchemas.cs" Link="Infrastructure\EventSchemas.cs" />
   </ItemGroup>
 
   <ItemGroup>

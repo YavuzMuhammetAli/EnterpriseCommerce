@@ -1,3 +1,4 @@
+using EnterpriseCommerce.TenantMerchant.Application.Common;
 using EnterpriseCommerce.TenantMerchant.Application.Provisioning;
 using EnterpriseCommerce.TenantMerchant.Application.Tenants;
 using EnterpriseCommerce.TenantMerchant.Domain.Audit;
@@ -38,7 +39,10 @@ internal sealed class InMemoryTenantStore : ITenantProvisioningStore, ITenantRea
     /// <summary>Runs inside <see cref="SlugExistsAsync"/>, to simulate a commit between the key and slug lookups.</summary>
     public Action? BeforeSlugCheck { get; set; }
 
-    public Task<TenantInsertOutcome> AddAsync(Tenant tenant, Membership owner, MembershipAuditRecord audit, CancellationToken cancellationToken)
+    /// <summary>The message metadata of every insert, in order.</summary>
+    public List<MessageMetadata?> Metadata { get; } = [];
+
+    public Task<TenantInsertOutcome> AddAsync(Tenant tenant, Membership owner, MembershipAuditRecord audit, MessageMetadata? metadata, CancellationToken cancellationToken)
     {
         BeforeInsert?.Invoke();
         if (Tenants.Any(t => t.Slug == tenant.Slug
@@ -50,6 +54,7 @@ internal sealed class InMemoryTenantStore : ITenantProvisioningStore, ITenantRea
         Tenants.Add(tenant);
         Memberships.Add(owner);
         AuditRecords.Add(audit);
+        Metadata.Add(metadata);
         Inserts++;
         return Task.FromResult(TenantInsertOutcome.Inserted);
     }

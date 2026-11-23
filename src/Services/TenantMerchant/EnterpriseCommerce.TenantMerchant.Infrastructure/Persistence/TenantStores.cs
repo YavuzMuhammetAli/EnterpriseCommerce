@@ -1,3 +1,4 @@
+using EnterpriseCommerce.TenantMerchant.Application.Common;
 using EnterpriseCommerce.TenantMerchant.Application.Provisioning;
 using EnterpriseCommerce.TenantMerchant.Application.Tenants;
 using EnterpriseCommerce.TenantMerchant.Domain.Audit;
@@ -24,7 +25,7 @@ internal sealed class TenantProvisioningStore(TenantMerchantDbContext context) :
     public Task<bool> SlugExistsAsync(string slug, CancellationToken cancellationToken) =>
         SqlServerErrors.GuardAsync("check tenant slug", () => context.Tenants.AnyAsync(t => t.Slug == slug, cancellationToken));
 
-    public async Task<TenantInsertOutcome> AddAsync(Tenant tenant, Membership owner, MembershipAuditRecord audit, CancellationToken cancellationToken)
+    public async Task<TenantInsertOutcome> AddAsync(Tenant tenant, Membership owner, MembershipAuditRecord audit, MessageMetadata? metadata, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(tenant);
         ArgumentNullException.ThrowIfNull(owner);
@@ -33,10 +34,11 @@ internal sealed class TenantProvisioningStore(TenantMerchantDbContext context) :
         context.Tenants.Add(tenant);
         context.Memberships.Add(owner);
         context.MembershipAuditRecords.Add(audit);
+        context.UseMessageMetadata(metadata);
         try
         {
-            // One SaveChanges is one transaction: the tenant, its merchant profile, the owner membership and its audit
-            // record commit together or not at all.
+            // One SaveChanges is one transaction: the tenant, its merchant profile, the owner membership, its audit
+            // record and the TenantCreated outbox row commit together or not at all.
             return await SqlServerErrors.GuardAsync("insert tenant", async () =>
             {
                 try

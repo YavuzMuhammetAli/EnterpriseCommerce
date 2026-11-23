@@ -181,6 +181,20 @@ public sealed class TenantMerchantApiFixture : IAsyncLifetime
         Database.ScalarAsync<int>(
             $"SELECT COUNT(*) FROM MembershipAuditRecords WHERE TenantId = '{tenantId}'" + (action is null ? string.Empty : $" AND Action = N'{action}'"));
 
+    /// <summary>
+    /// The outbox invariant of ADR-023 section 5: every committed tenant has exactly one <c>TenantCreated</c> row, and no
+    /// such row exists without its tenant (a rolled-back creation leaves none).
+    /// </summary>
+    public async Task AssertOneTenantCreatedPerTenantAsync()
+    {
+        Assert.Equal(0, await Database.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM Tenants t"
+            + " WHERE (SELECT COUNT(*) FROM OutboxMessages o WHERE o.EventType = 'TenantCreated' AND o.MessageKey = LOWER(CONVERT(varchar(36), t.Id))) <> 1"));
+        Assert.Equal(0, await Database.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM OutboxMessages o"
+            + " WHERE o.EventType = 'TenantCreated' AND NOT EXISTS (SELECT 1 FROM Tenants t WHERE LOWER(CONVERT(varchar(36), t.Id)) = o.MessageKey)"));
+    }
+
     /// <summary>The number of active owners of a tenant.</summary>
     public Task<int> ActiveOwnersAsync(Guid tenantId) =>
         Database.ScalarAsync<int>($"SELECT COUNT(*) FROM Memberships WHERE TenantId = '{tenantId}' AND Role = N'MerchantOwner' AND Status = N'Active'");

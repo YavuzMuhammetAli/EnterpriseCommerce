@@ -1,9 +1,12 @@
+using EnterpriseCommerce.TenantMerchant.Application.Common;
 using EnterpriseCommerce.TenantMerchant.Domain.Audit;
+using EnterpriseCommerce.TenantMerchant.Domain.Common;
 using EnterpriseCommerce.TenantMerchant.Domain.Invitations;
 using EnterpriseCommerce.TenantMerchant.Domain.Memberships;
 using EnterpriseCommerce.TenantMerchant.Domain.Tenants;
 using EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Persistence;
 
@@ -23,9 +26,18 @@ namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Persistence;
 /// leaves a tenant without an active owner, and <see cref="AuditAppendOnlyTrigger"/> refuses every update and delete
 /// of an audit record. The application never relies on them; they stop a path that bypasses its rules.
 /// </para>
+/// <para>
+/// Saving maps the tracked aggregates' domain events to integration events and adds them as <see cref="OutboxMessages"/>
+/// rows before the base save, so they commit in the same transaction as the change or not at all (ADR-023 section 5).
+/// </para>
 /// </remarks>
-internal sealed class TenantMerchantDbContext(DbContextOptions<TenantMerchantDbContext> options) : DbContext(options)
+internal sealed class TenantMerchantDbContext(
+    DbContextOptions<TenantMerchantDbContext> options,
+    IOptions<OutboxOptions>? outboxOptions = null) : DbContext(options)
 {
+    private readonly string _outboxTopic = outboxOptions?.Value.Topic ?? OutboxOptions.DefaultTopic;
+    private MessageMetadata? _messageMetadata;
+
     public const string TenantSlugIndex = "UX_Tenants_Slug";
     public const string ProvisioningKeyIndex = "UX_Tenants_ProvisionedByClientId_ProvisioningKey";
     public const string SelfServiceKeyIndex = "UX_Tenants_SelfServiceSubjectId_ProvisioningKey";
@@ -52,6 +64,53 @@ internal sealed class TenantMerchantDbContext(DbContextOptions<TenantMerchantDbC
 
     /// <summary>The transactional outbox (ADR-023 section 5). Written only by <see cref="SaveChangesAsync(bool, CancellationToken)"/>, read only by the relay.</summary>
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+
+    /// <summary>
+    /// The correlation and causation IDs of the integration events this context's next saves write. Set by the write
+    /// store or session that stages the aggregate; a save with public domain events and no metadata fails closed.
+    /// </summary>
+    public void UseMessageMetadata(MessageMetadata? metadata) => _messageMetadata = metadata;
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        AddOutboxMessages();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        AddOutboxMessages();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    /// <summary>
+    /// Collects the pending domain events of the tracked aggregates, maps them through the one explicit mapper, adds one
+    /// outbox row per published version and forgets the events. If the save then fails, the rows were never written; a
+    /// retry in the same context writes them once, because the events are already mapped.
+    /// </summary>
+    private void AddOutboxMessages()
+    {
+        var aggregates = ChangeTracker.Entries<IHasDomainEvents>()
+            .Select(entry => entry.Entity)
+            .Where(aggregate => aggregate.DomainEvents.Count > 0)
+            .ToList();
+        if (aggregates.Count == 0)
+        {
+            return;
+        }
+
+        var metadata = _messageMetadata
+            ?? throw new InvalidOperationException("Integration events need message metadata (correlation and causation IDs); nothing was saved.");
+        foreach (var aggregate in aggregates)
+        {
+            foreach (var domainEvent in aggregate.DomainEvents)
+            {
+                OutboxMessages.AddRange(TenantMerchantIntegrationEvents.ToOutboxMessages(domainEvent, metadata, _outboxTopic));
+            }
+
+            aggregate.ClearDomainEvents();
+        }
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

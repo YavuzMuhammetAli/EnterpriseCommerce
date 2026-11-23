@@ -1,3 +1,4 @@
+using EnterpriseCommerce.TenantMerchant.Application.Common;
 using EnterpriseCommerce.TenantMerchant.Application.Provisioning;
 using EnterpriseCommerce.TenantMerchant.Domain.Memberships;
 using EnterpriseCommerce.TenantMerchant.Domain.Tenants;
@@ -173,6 +174,23 @@ public sealed class ProvisionTenantHandlerTests
 
         Assert.NotEqual(first, second);
         Assert.Equal(first, ProvisioningRequestHash.Compute(Slug("abc"), Name("def"), Subject("ghi"), Actor("jkl")));
+    }
+
+    [Fact]
+    public async Task ACreatedTenant_PassesTheRequestsCorrelationAsRootMessageMetadata()
+    {
+        await _handler.HandleAsync(Command() with { CorrelationId = "corr-7" }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(new MessageMetadata("corr-7", "corr-7"), Assert.Single(_store.Metadata));
+    }
+
+    [Fact]
+    public async Task WithoutACorrelationId_NoMetadataIsPassed_SoTheSaveFailsClosed()
+    {
+        // The endpoints always supply one; the store refuses to write events without it (TenantMerchantDbContext).
+        await _handler.HandleAsync(Command(), TestContext.Current.CancellationToken);
+
+        Assert.Null(Assert.Single(_store.Metadata));
     }
 
     private static ProvisionTenantCommand Command(

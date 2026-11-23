@@ -17,6 +17,7 @@ namespace EnterpriseCommerce.TenantMerchant.IntegrationTests.Persistence;
 public sealed class PersistenceTests(SqlServerTestDatabase database) : IClassFixture<SqlServerTestDatabase>
 {
     private static readonly DateTimeOffset Now = new(2026, 11, 21, 12, 0, 0, TimeSpan.Zero);
+    private static readonly MessageMetadata Metadata = MessageMetadata.ForRequest("persistence-test")!;
 
     [Fact]
     public async Task AddAsync_CommitsTheTenantProfileAndOwnerTogether()
@@ -26,7 +27,7 @@ public sealed class PersistenceTests(SqlServerTestDatabase database) : IClassFix
 
         await using (var context = database.CreateContext())
         {
-            Assert.Equal(TenantInsertOutcome.Inserted, await new TenantProvisioningStore(context).AddAsync(tenant, owner, AuditOf(owner), TestContext.Current.CancellationToken));
+            Assert.Equal(TenantInsertOutcome.Inserted, await new TenantProvisioningStore(context).AddAsync(tenant, owner, AuditOf(owner), Metadata, TestContext.Current.CancellationToken));
         }
 
         await using var verify = database.CreateContext();
@@ -37,6 +38,40 @@ public sealed class PersistenceTests(SqlServerTestDatabase database) : IClassFix
         var membership = await verify.Memberships.SingleAsync(m => m.TenantId == tenant.Id, TestContext.Current.CancellationToken);
         Assert.Equal(MerchantRole.MerchantOwner, membership.Role);
         Assert.Equal(1, await database.ScalarAsync<int>($"SELECT COUNT(*) FROM MerchantProfiles WHERE TenantId = '{tenant.Id}'"));
+    }
+
+    [Fact]
+    public async Task AddAsync_WritesTheTenantCreatedRow_InTheSameSave()
+    {
+        database.RequireAvailable();
+        var (tenant, owner) = NewTenant("with-event");
+
+        await using (var context = database.CreateContext())
+        {
+            Assert.Equal(TenantInsertOutcome.Inserted, await new TenantProvisioningStore(context).AddAsync(tenant, owner, AuditOf(owner), Metadata, TestContext.Current.CancellationToken));
+        }
+
+        var row = Assert.Single(await OutboxRows.TenantCreatedAsync(database, tenant.Id));
+        Assert.Contains("\"correlationId\":\"persistence-test\"", row.Envelope, StringComparison.Ordinal);
+        Assert.Empty(tenant.DomainEvents);
+    }
+
+    [Fact]
+    public async Task AddAsync_WithoutMessageMetadata_FailsClosed_AndWritesNothing()
+    {
+        // ADR-023 section 5: saving an aggregate with public domain events and no metadata fails closed.
+        database.RequireAvailable();
+        var (tenant, owner) = NewTenant("no-metadata");
+
+        await using (var context = database.CreateContext())
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => new TenantProvisioningStore(context).AddAsync(tenant, owner, AuditOf(owner), metadata: null, TestContext.Current.CancellationToken));
+        }
+
+        Assert.Equal(0, await database.ScalarAsync<int>($"SELECT COUNT(*) FROM Tenants WHERE Id = '{tenant.Id}'"));
+        Assert.Equal(0, await database.ScalarAsync<int>($"SELECT COUNT(*) FROM Memberships WHERE TenantId = '{tenant.Id}'"));
+        Assert.Empty(await OutboxRows.TenantCreatedAsync(database, tenant.Id));
     }
 
     [Fact]
@@ -53,7 +88,7 @@ public sealed class PersistenceTests(SqlServerTestDatabase database) : IClassFix
             await using (var context = database.CreateContext())
             {
                 var failure = await Assert.ThrowsAsync<DataStoreUnavailableException>(
-                    () => new TenantProvisioningStore(context).AddAsync(tenant, owner, AuditOf(owner), TestContext.Current.CancellationToken));
+                    () => new TenantProvisioningStore(context).AddAsync(tenant, owner, AuditOf(owner), Metadata, TestContext.Current.CancellationToken));
                 Assert.Contains("CK_Test_RejectSubject", failure.InnerException!.ToString(), StringComparison.Ordinal);
                 Assert.Equal(547, Assert.IsType<SqlException>(failure.InnerException.InnerException).Number);
             }
@@ -77,8 +112,8 @@ public sealed class PersistenceTests(SqlServerTestDatabase database) : IClassFix
 
         await using var context = database.CreateContext();
         var store = new TenantProvisioningStore(context);
-        Assert.Equal(TenantInsertOutcome.Inserted, await store.AddAsync(first, firstOwner, AuditOf(firstOwner), TestContext.Current.CancellationToken));
-        Assert.Equal(TenantInsertOutcome.UniqueConflict, await store.AddAsync(second, secondOwner, AuditOf(secondOwner), TestContext.Current.CancellationToken));
+        Assert.Equal(TenantInsertOutcome.Inserted, await store.AddAsync(first, firstOwner, AuditOf(firstOwner), Metadata, TestContext.Current.CancellationToken));
+        Assert.Equal(TenantInsertOutcome.UniqueConflict, await store.AddAsync(second, secondOwner, AuditOf(secondOwner), Metadata, TestContext.Current.CancellationToken));
 
         Assert.Equal(0, await database.ScalarAsync<int>($"SELECT COUNT(*) FROM Memberships WHERE TenantId = '{second.Id}'"));
         Assert.Equal(0, await database.ScalarAsync<int>($"SELECT COUNT(*) FROM MerchantProfiles WHERE TenantId = '{second.Id}'"));
@@ -94,11 +129,11 @@ public sealed class PersistenceTests(SqlServerTestDatabase database) : IClassFix
 
         await using var context = database.CreateContext();
         var store = new TenantProvisioningStore(context);
-        Assert.Equal(TenantInsertOutcome.Inserted, await store.AddAsync(first, firstOwner, AuditOf(firstOwner), TestContext.Current.CancellationToken));
-        Assert.Equal(TenantInsertOutcome.UniqueConflict, await store.AddAsync(second, secondOwner, AuditOf(secondOwner), TestContext.Current.CancellationToken));
+        Assert.Equal(TenantInsertOutcome.Inserted, await store.AddAsync(first, firstOwner, AuditOf(firstOwner), Metadata, TestContext.Current.CancellationToken));
+        Assert.Equal(TenantInsertOutcome.UniqueConflict, await store.AddAsync(second, secondOwner, AuditOf(secondOwner), Metadata, TestContext.Current.CancellationToken));
 
         // Keys are unique per client only.
-        Assert.Equal(TenantInsertOutcome.Inserted, await store.AddAsync(otherClient, otherOwner, AuditOf(otherOwner), TestContext.Current.CancellationToken));
+        Assert.Equal(TenantInsertOutcome.Inserted, await store.AddAsync(otherClient, otherOwner, AuditOf(otherOwner), Metadata, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -169,7 +204,7 @@ public sealed class PersistenceTests(SqlServerTestDatabase database) : IClassFix
     {
         var (tenant, owner) = NewTenant(slug);
         await using var context = database.CreateContext();
-        Assert.Equal(TenantInsertOutcome.Inserted, await new TenantProvisioningStore(context).AddAsync(tenant, owner, AuditOf(owner), TestContext.Current.CancellationToken));
+        Assert.Equal(TenantInsertOutcome.Inserted, await new TenantProvisioningStore(context).AddAsync(tenant, owner, AuditOf(owner), Metadata, TestContext.Current.CancellationToken));
         return (tenant, owner);
     }
 

@@ -1,3 +1,4 @@
+using EnterpriseCommerce.TenantMerchant.Application.Common;
 using EnterpriseCommerce.TenantMerchant.Application.Tenants;
 using EnterpriseCommerce.TenantMerchant.Domain.Audit;
 using EnterpriseCommerce.TenantMerchant.Domain.Memberships;
@@ -28,8 +29,9 @@ public interface ITenantProvisioningStore
     Task<bool> SlugExistsAsync(string slug, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Inserts the tenant, its merchant profile, the owner membership and its audit record in <b>one</b> transaction:
-    /// either all of them commit, or none does.
+    /// Inserts the tenant, its merchant profile, the owner membership, its audit record and the tenant's integration
+    /// event (<c>TenantCreated</c>, ADR-023) in <b>one</b> transaction: either all of them commit, or none does. The
+    /// event carries <paramref name="metadata"/>; without it the insert fails and nothing is written.
     /// </summary>
-    Task<TenantInsertOutcome> AddAsync(Tenant tenant, Membership owner, MembershipAuditRecord audit, CancellationToken cancellationToken);
+    Task<TenantInsertOutcome> AddAsync(Tenant tenant, Membership owner, MembershipAuditRecord audit, MessageMetadata? metadata, CancellationToken cancellationToken);
 }

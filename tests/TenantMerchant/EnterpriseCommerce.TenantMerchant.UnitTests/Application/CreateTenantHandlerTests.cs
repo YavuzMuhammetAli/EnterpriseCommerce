@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
+using EnterpriseCommerce.TenantMerchant.Application.Common;
 using EnterpriseCommerce.TenantMerchant.Application.Onboarding;
 using EnterpriseCommerce.TenantMerchant.Application.Provisioning;
 using EnterpriseCommerce.TenantMerchant.Domain.Audit;
@@ -53,6 +54,15 @@ public sealed class CreateTenantHandlerTests
 
         Assert.Equal(tenant.Id, result.Tenant!.Id);
         Assert.Equal(owner.Id, result.Membership!.Id);
+    }
+
+    [Fact]
+    public async Task ACreatedTenant_StagesTheRequestsCorrelationAsRootMessageMetadata()
+    {
+        // ADR-023 section 4: the TenantCreated message is a root message, so its causation ID is the correlation ID.
+        await Handler().HandleAsync(Command(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(new MessageMetadata("corr-1", "corr-1"), Assert.Single(_gate.Metadata));
     }
 
     [Fact]

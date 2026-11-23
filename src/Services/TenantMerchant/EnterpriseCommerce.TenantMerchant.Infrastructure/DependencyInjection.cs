@@ -4,6 +4,7 @@ using EnterpriseCommerce.TenantMerchant.Application.Onboarding;
 using EnterpriseCommerce.TenantMerchant.Application.Provisioning;
 using EnterpriseCommerce.TenantMerchant.Application.Tenants;
 using EnterpriseCommerce.TenantMerchant.Infrastructure.Identity;
+using EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
 using EnterpriseCommerce.TenantMerchant.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -32,6 +33,12 @@ public static class DependencyInjection
             .Validate(
                 options => !string.IsNullOrWhiteSpace(options.ConnectionString),
                 $"ConnectionStrings:{TenantMerchantDatabaseOptions.ConnectionStringName} is required.")
+            .ValidateOnStart();
+
+        // The outbox settings: the topic of every new row, and the relay (ADR-023 section 5).
+        services.AddOptions<OutboxOptions>()
+            .Bind(configuration.GetSection(OutboxOptions.SectionName))
+            .Validate(options => !options.Validate().Any(), $"{OutboxOptions.SectionName} is invalid: see PHASE_3_S4_EVENT_FLOW.md section 5 for the allowed values.")
             .ValidateOnStart();
 
         services.AddDbContext<TenantMerchantDbContext>((provider, options) =>

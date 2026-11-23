@@ -44,6 +44,10 @@ public interface ITenantOnboardingSession
     /// <summary>Whether any tenant, of any origin, has the slug.</summary>
     Task<bool> SlugExistsAsync(string slug, CancellationToken cancellationToken);
 
-    /// <summary>Stages a new self-service tenant of the locked subject, with its owner membership and audit record.</summary>
-    void Add(Tenant tenant, Membership owner, MembershipAuditRecord audit);
+    /// <summary>
+    /// Stages a new self-service tenant of the locked subject, with its owner membership and audit record. The commit
+    /// also writes the tenant's integration event (<c>TenantCreated</c>, ADR-023) with <paramref name="metadata"/>;
+    /// without it the commit fails and nothing is written.
+    /// </summary>
+    void Add(Tenant tenant, Membership owner, MembershipAuditRecord audit, MessageMetadata? metadata);
 }

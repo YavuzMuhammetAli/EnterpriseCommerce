@@ -213,7 +213,7 @@ internal sealed class TenantOnboardingSession(TenantMerchantDbContext context, s
     public Task<bool> SlugExistsAsync(string slug, CancellationToken cancellationToken) =>
         context.Tenants.AnyAsync(t => t.Slug == slug, cancellationToken);
 
-    public void Add(Tenant tenant, Membership owner, MembershipAuditRecord audit)
+    public void Add(Tenant tenant, Membership owner, MembershipAuditRecord audit, MessageMetadata? metadata)
     {
         ArgumentNullException.ThrowIfNull(tenant);
         ArgumentNullException.ThrowIfNull(owner);
@@ -233,5 +233,8 @@ internal sealed class TenantOnboardingSession(TenantMerchantDbContext context, s
         context.Tenants.Add(tenant);
         context.Memberships.Add(owner);
         context.MembershipAuditRecords.Add(audit);
+
+        // The commit writes the TenantCreated outbox row in this transaction as well (ADR-023 section 5).
+        context.UseMessageMetadata(metadata);
     }
 }

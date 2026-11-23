@@ -168,6 +168,7 @@ public sealed class ProvisioningApiTests(TenantMerchantApiFixture fixture) : ICl
         Assert.Equal(1, await fixture.Database.ScalarAsync<int>("SELECT COUNT(*) FROM Tenants WHERE Slug = 'contended'"));
         Assert.Equal(1, await fixture.Database.ScalarAsync<int>(
             "SELECT COUNT(*) FROM Memberships m JOIN Tenants t ON t.Id = m.TenantId WHERE t.Slug = 'contended'"));
+        await fixture.AssertOneTenantCreatedPerTenantAsync();
     }
 
     [Fact]
@@ -189,6 +190,7 @@ public sealed class ProvisioningApiTests(TenantMerchantApiFixture fixture) : ICl
         Assert.Equal(callers - 1, results.Count(result => result.StatusCode == HttpStatusCode.OK));
         Assert.Single(results.Select(result => result.Id).Distinct());
         Assert.Equal(1, await fixture.Database.ScalarAsync<int>("SELECT COUNT(*) FROM Tenants WHERE Slug = 'retried'"));
+        await fixture.AssertOneTenantCreatedPerTenantAsync();
     }
 
     [Fact]
@@ -209,6 +211,7 @@ public sealed class ProvisioningApiTests(TenantMerchantApiFixture fixture) : ICl
             var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
             Assert.DoesNotContain("CK_Test_RejectApiSubject", body, StringComparison.Ordinal);
             Assert.DoesNotContain("SqlException", body, StringComparison.Ordinal);
+            await fixture.AssertOneTenantCreatedPerTenantAsync();
         }
         finally
         {

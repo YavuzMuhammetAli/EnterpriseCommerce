@@ -354,6 +354,7 @@ public sealed class SelfServiceOnboardingTests(TenantMerchantApiFixture fixture)
             Assert.Equal(0, await fixture.Database.ScalarAsync<int>("SELECT COUNT(*) FROM Tenants WHERE Slug = 'audit-failing'"));
             Assert.Equal(0, await fixture.Database.ScalarAsync<int>($"SELECT COUNT(*) FROM Memberships WHERE SubjectId = N'{subject}'"));
             Assert.Equal(0, await fixture.Database.ScalarAsync<int>("SELECT COUNT(*) FROM MerchantProfiles WHERE DisplayName = N'audit-failing store'"));
+            await fixture.AssertOneTenantCreatedPerTenantAsync();
         }
         finally
         {
@@ -362,6 +363,7 @@ public sealed class SelfServiceOnboardingTests(TenantMerchantApiFixture fixture)
 
         using var retried = await CreateAsync(fixture.CreateClient(fixture.UserToken(subject)), "audit-failing", key: key);
         Assert.Equal(HttpStatusCode.Created, retried.StatusCode);
+        await fixture.AssertOneTenantCreatedPerTenantAsync();
     }
 
     [Fact]

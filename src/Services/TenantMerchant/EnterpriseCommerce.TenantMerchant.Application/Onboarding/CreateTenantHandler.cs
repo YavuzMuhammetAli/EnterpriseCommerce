@@ -158,7 +158,7 @@ public sealed partial class CreateTenantHandler(
         var now = timeProvider.GetUtcNow();
         var tenant = Tenant.CreateBySelfService(slug, displayName, new SelfServiceRecord(command.ClientId, command.IdempotencyKey, requestHash, subject), now);
         var owner = Membership.CreateOwner(tenant.Id, subject, now);
-        session.Add(tenant, owner, MembershipAuditRecord.SelfServiceOwnerCreated(owner, command.CorrelationId, now));
+        session.Add(tenant, owner, MembershipAuditRecord.SelfServiceOwnerCreated(owner, command.CorrelationId, now), MessageMetadata.ForRequest(command.CorrelationId));
 
         return WriteDecision.Commit(new CreateTenantResult(
             CreateTenantOutcome.Created,

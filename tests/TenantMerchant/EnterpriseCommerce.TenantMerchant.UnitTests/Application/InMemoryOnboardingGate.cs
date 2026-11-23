@@ -20,6 +20,9 @@ internal sealed class InMemoryOnboardingGate : ITenantOnboardingGate
 
     public List<MembershipAuditRecord> AuditRecords { get; } = [];
 
+    /// <summary>The message metadata of every commit, in order.</summary>
+    public List<MessageMetadata?> Metadata { get; } = [];
+
     /// <summary>Runs before the staged tenant is committed, once, to simulate a concurrent winner.</summary>
     public Action? BeforeCommit { get; set; }
 
@@ -54,12 +57,13 @@ internal sealed class InMemoryOnboardingGate : ITenantOnboardingGate
         Tenants.Add(staged.Tenant);
         Memberships.Add(staged.Owner);
         AuditRecords.Add(staged.Audit);
+        Metadata.Add(staged.Metadata);
         return decision.Result;
     }
 
     private sealed class Session(InMemoryOnboardingGate gate, string subjectId) : ITenantOnboardingSession
     {
-        public (Tenant Tenant, Membership Owner, MembershipAuditRecord Audit)? Staged { get; private set; }
+        public (Tenant Tenant, Membership Owner, MembershipAuditRecord Audit, MessageMetadata? Metadata)? Staged { get; private set; }
 
         public Task<SelfServiceTenant?> FindByKeyAsync(string idempotencyKey, CancellationToken cancellationToken)
         {
@@ -83,6 +87,6 @@ internal sealed class InMemoryOnboardingGate : ITenantOnboardingGate
         public Task<bool> SlugExistsAsync(string slug, CancellationToken cancellationToken) =>
             Task.FromResult(gate.Tenants.Any(t => t.Slug == slug));
 
-        public void Add(Tenant tenant, Membership owner, MembershipAuditRecord audit) => Staged = (tenant, owner, audit);
+        public void Add(Tenant tenant, Membership owner, MembershipAuditRecord audit, MessageMetadata? metadata) => Staged = (tenant, owner, audit, metadata);
     }
 }

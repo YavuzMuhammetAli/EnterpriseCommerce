@@ -31,6 +31,7 @@ public sealed class OnboardingConcurrencyTests(TenantMerchantApiFixture fixture)
         var tenantId = Assert.Single(results.Select(r => r.TenantId).Distinct())!.Value;
         Assert.Equal(1, await fixture.Database.ScalarAsync<int>("SELECT COUNT(*) FROM Tenants WHERE Slug = 'raced-retry'"));
         Assert.Equal(1, await fixture.AuditCountAsync(tenantId));
+        await fixture.AssertOneTenantCreatedPerTenantAsync();
     }
 
     [Fact]
@@ -45,6 +46,7 @@ public sealed class OnboardingConcurrencyTests(TenantMerchantApiFixture fixture)
         Assert.Equal(Callers - 1, results.Count(r => r.Status == HttpStatusCode.Conflict && r.Code == "tenant-limit-reached"));
         Assert.Equal(1, await fixture.Database.ScalarAsync<int>($"SELECT COUNT(*) FROM Tenants WHERE SelfServiceSubjectId = N'{subject}'"));
         Assert.Equal(1, await fixture.Database.ScalarAsync<int>($"SELECT COUNT(*) FROM Memberships WHERE SubjectId = N'{subject}'"));
+        await fixture.AssertOneTenantCreatedPerTenantAsync();
     }
 
     [Fact]
@@ -59,6 +61,7 @@ public sealed class OnboardingConcurrencyTests(TenantMerchantApiFixture fixture)
         Assert.Equal(1, await fixture.Database.ScalarAsync<int>("SELECT COUNT(*) FROM Tenants WHERE Slug = 'raced-slug'"));
         Assert.Equal(1, await fixture.Database.ScalarAsync<int>(
             "SELECT COUNT(*) FROM Memberships m JOIN Tenants t ON t.Id = m.TenantId WHERE t.Slug = 'raced-slug'"));
+        await fixture.AssertOneTenantCreatedPerTenantAsync();
     }
 
     [Fact]
@@ -69,6 +72,7 @@ public sealed class OnboardingConcurrencyTests(TenantMerchantApiFixture fixture)
         var results = await RaceAsync(index => (SelfServiceOnboardingTests.NewSubject(), $"raced-users-{index}", Guid.NewGuid().ToString("D")));
 
         Assert.All(results, r => Assert.Equal(HttpStatusCode.Created, r.Status));
+        await fixture.AssertOneTenantCreatedPerTenantAsync();
     }
 
     [Fact]
@@ -113,6 +117,7 @@ public sealed class OnboardingConcurrencyTests(TenantMerchantApiFixture fixture)
 
         var retried = await Send(blocked, "held-lock", key);
         Assert.Equal(HttpStatusCode.Created, retried.Status);
+        await fixture.AssertOneTenantCreatedPerTenantAsync();
     }
 
     private async Task<Result[]> RaceAsync(Func<int, (string Subject, string Slug, string Key)> request)

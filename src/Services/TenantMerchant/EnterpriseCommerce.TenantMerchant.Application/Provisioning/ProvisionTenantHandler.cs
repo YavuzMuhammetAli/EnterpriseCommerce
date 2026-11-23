@@ -108,7 +108,7 @@ public sealed partial class ProvisionTenantHandler(
 
         var audit = MembershipAuditRecord.OwnerProvisioned(ownerMembership, AuditActor.Service(command.ClientId), command.CorrelationId, now);
 
-        if (await store.AddAsync(tenant, ownerMembership, audit, cancellationToken) == TenantInsertOutcome.Inserted)
+        if (await store.AddAsync(tenant, ownerMembership, audit, MessageMetadata.ForRequest(command.CorrelationId), cancellationToken) == TenantInsertOutcome.Inserted)
         {
             LogTenantProvisioned(logger, tenant.Id, command.ClientId, actor.Value, ownerMembership.Id);
             return new ProvisionTenantResult(
