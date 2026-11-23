@@ -37,6 +37,7 @@ Infrastructure comes from the Compose profiles; there are no per-test containers
 | `EC_TEST_BROWSERS=true` | Playwright browser tests (they install the browsers on first run) | |
 | `EC_TEST_KAFKA` | TenantMerchant Kafka tests of the outbox relay (one topic per test, created with AdminClient and deleted afterwards) | `127.0.0.1:9094` (`--profile kafka`) |
 | `EC_TEST_KAFKA_RESTART_CONTAINER` | The real Kafka outage test (it stops and starts the broker; serial collection, after the parallel tests) | `enterprisecommerce-kafka-1` (`kafka` in CI) |
+| `EC_TEST_MONGODB` | Catalog integration tests (one throwaway database per test fixture, `ec_catalog_test_<guid>`, dropped afterwards) | `mongodb://localdev:<MONGO_ROOT_PASSWORD>@127.0.0.1:27018/?authSource=admin` (`MONGO_PORT=27018 docker compose --profile mongodb up -d --wait`) |
 
 Kafka behaviour is not mocked where it matters either. The TenantMerchant outbox relay's Kafka tests publish to a real broker:
 - end to end from both creation endpoints
@@ -162,4 +163,4 @@ Known issues stay visible: a run with such a failure is reported as failed, and 
 
 ## Planned
 
-MongoDB integration tests arrive with the first feature that uses MongoDB. Code coverage reporting is also planned.
+Code coverage reporting is planned. (MongoDB integration tests arrived with Catalog in Phase 4: `EC_TEST_MONGODB`.)

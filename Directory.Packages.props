@@ -69,6 +69,15 @@
     <PackageVersion Include="Confluent.Kafka" Version="2.16.0" />
   </ItemGroup>
 
+  <!--
+    Document store (ADR-004, ADR-011, ADR-024 section 1): the official MongoDB .NET driver (Apache-2.0), the client of
+    the approved MongoDB store, not a new technology. Referenced only by Catalog.Infrastructure (DataStoreBoundaryTests);
+    no ODM or mapping framework. Its dependencies are checked by NuGetAudit with the rest of the solution.
+  -->
+  <ItemGroup>
+    <PackageVersion Include="MongoDB.Driver" Version="3.14.1" />
+  </ItemGroup>
+
   <!-- Testing -->
   <ItemGroup>
     <!--

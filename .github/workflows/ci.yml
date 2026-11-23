@@ -40,6 +40,21 @@ jobs:
           --health-timeout 5s
           --health-retries 12
           --health-start-period 30s
+      # Catalog's MongoDB-backed tests (ADR-024). Same pinned image as the mongodb Compose service: a standalone node
+      # with root authentication. The credentials are throwaway values for this ephemeral CI container only.
+      mongodb:
+        image: mongo:8.0.38
+        env:
+          MONGO_INITDB_ROOT_USERNAME: "ci"
+          MONGO_INITDB_ROOT_PASSWORD: "CiOnly_Ephemeral_Mongo"
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+          --health-start-period 20s
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -113,6 +128,8 @@ jobs:
           # The outbox relay's Kafka tests; the outage test stops and starts this container in the serial collection.
           EC_TEST_KAFKA: "127.0.0.1:9094"
           EC_TEST_KAFKA_RESTART_CONTAINER: "kafka"
+          # Catalog's MongoDB tests; each test fixture creates and drops its own database.
+          EC_TEST_MONGODB: "mongodb://ci:CiOnly_Ephemeral_Mongo@127.0.0.1:27017/?authSource=admin"
           # Infrastructure tests must run in CI: a missing server fails the build instead of skipping.
           EC_REQUIRE_INFRA_TESTS: "true"
         # An explicit `shell: bash` runs `bash --noprofile --norc -eo pipefail {0}`, so a test failure fails this step

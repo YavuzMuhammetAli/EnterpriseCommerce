@@ -143,7 +143,7 @@ Draft | Published --archive--> Archived --restore--> Draft
 
 - **Writes.** Every write is one single-document operation.
 - **Optimistic concurrency.** A replacement filters on `_id`, the tenant (where it applies) and the expected `version`, and increments it.
-- **Duplicate keys.** A duplicate key is translated by the rejecting index (`keyPattern`), never by the error message, which is never logged.
+- **Duplicate keys.** A duplicate key is translated by the name of the rejecting unique index. The driver does not expose the server's `keyPattern`, so the name is read from the server message and accepted only if it is one of the five known unique index names. The message itself contains stored values and is never logged or returned.
 - **References.** Category and brand references are validated in the Application layer before the write. The residual race and its bounds are in ADR-024 section 11.
 
 **Failures:**
@@ -271,10 +271,16 @@ The trigger is the first consumer: Cart, Order or Inventory.
 | 3 | Tenant & Merchant membership verification endpoint | done |
 | 4 | Catalog service foundation and architecture rules | done |
 | 5 | Domain model | done |
-| 6 | MongoDB persistence, indexes, readiness, CI MongoDB | planned |
+| 6 | MongoDB persistence, indexes, readiness, CI MongoDB | done |
 | 7 | Merchant authorization through Tenant & Merchant | planned |
 | 8 | Merchant product and brand APIs | planned |
 | 9 | Platform category taxonomy | planned |
 | 10 | Public discovery | planned |
 | 11 | Gateway route | planned |
 | 12 | Documentation, operations and evidence | planned |
+
+## 11. Implementation decisions and deviations
+
+| # | Topic | Decision | Relation to the ADRs |
+|---|---|---|---|
+| D1 | How a duplicate key is identified | The MongoDB driver (3.14.1) does not expose the server's `keyPattern` for a write error. The store therefore reads the **index name** from the server message (`index: <name> dup key`) and accepts only one of the five known unique index names. An unknown name is an error, never a guess. The message contains stored values and is never logged or returned. | ADR-024 section 11 says duplicates are translated "by the index that rejected the write, never by the error message". The intent holds: the outcome is decided by the rejecting index, and no message content is used or exposed. The index name is taken from the message text because the driver offers no other source. |

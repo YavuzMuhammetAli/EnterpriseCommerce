@@ -10,10 +10,14 @@ namespace EnterpriseCommerce.Catalog.IntegrationTests.Infrastructure;
 
 /// <summary>
 /// The real Catalog host with <see cref="TestTokenIssuer"/> as the token issuer and
-/// <see cref="TestTokenIssuer.TaxonomyClient"/> as the only allow-listed taxonomy client.
+/// <see cref="TestTokenIssuer.TaxonomyClient"/> as the only allow-listed taxonomy client. Without a derived fixture,
+/// the host points at an unreachable MongoDB: it starts and stays live, but is never ready.
 /// </summary>
 public class CatalogApiFixture : IAsyncLifetime
 {
+    /// <summary>A MongoDB address nothing listens on, with a short server selection timeout.</summary>
+    public const string UnreachableMongo = "mongodb://127.0.0.1:9/?serverSelectionTimeoutMS=300&connectTimeoutMS=300";
+
     private WebApplicationFactory<Program>? _factory;
 
     public TestTokenIssuer Tokens { get; } = new();
@@ -31,6 +35,8 @@ public class CatalogApiFixture : IAsyncLifetime
             builder.UseEnvironment("Development");
             builder.UseSetting("Catalog:Authentication:Issuer", TestTokenIssuer.Issuer);
             builder.UseSetting("Catalog:Taxonomy:AllowedClientIds:0", TestTokenIssuer.TaxonomyClient);
+            builder.UseSetting("ConnectionStrings:CatalogDatabase", UnreachableMongo);
+            builder.UseSetting("Catalog:Database:ServerSelectionTimeout", "00:00:00.300");
             ConfigureHost(builder);
             configure?.Invoke(builder);
             builder.ConfigureTestServices(services =>

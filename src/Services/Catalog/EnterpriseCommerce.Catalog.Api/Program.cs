@@ -4,6 +4,8 @@ using EnterpriseCommerce.Catalog.Api.Hosting;
 using EnterpriseCommerce.Catalog.Api.Security;
 using EnterpriseCommerce.Catalog.Application;
 using EnterpriseCommerce.Catalog.Infrastructure;
+using EnterpriseCommerce.Catalog.Infrastructure.Persistence;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Serilog;
 using Serilog.Events;
 
@@ -35,7 +37,12 @@ builder.Services.AddProblemDetails(options =>
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 builder.Services.AddOpenApi();
-builder.Services.AddHealthChecks();
+builder.Services.AddHealthChecks()
+    .AddCheck<CatalogStoreHealthCheck>(
+        "catalog-database",
+        failureStatus: HealthStatus.Unhealthy,
+        tags: [CatalogInfrastructureHealth.ReadyTag],
+        timeout: CatalogInfrastructureHealth.CheckTimeout);
 
 builder.Services
     .AddCatalogApplication()

@@ -5,6 +5,8 @@
     <!-- Signs real RS256 at+jwt test tokens, validated by the service's own JWT bearer configuration, and checks the
          svc-catalog client assertions received by the stub token endpoint. -->
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
+    <!-- Test databases: dropping them, and inspecting raw documents and indexes. Test-only. -->
+    <PackageReference Include="MongoDB.Driver" />
   </ItemGroup>
 
   <ItemGroup>
