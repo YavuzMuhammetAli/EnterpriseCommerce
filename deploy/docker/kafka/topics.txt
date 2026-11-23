@@ -1,0 +1,6 @@
+# Kafka topics of EnterpriseCommerce, created explicitly (ADR-005, ADR-023 section 2): no application creates a topic.
+# Read by create-topics.sh (the kafka-init service of the kafka profile). Local and CI values; production partitions,
+# replication and retention are set in the deployment phase.
+#
+# name                    partitions  replication  configs
+tenant-merchant.events    3           1            cleanup.policy=delete,retention.ms=604800000

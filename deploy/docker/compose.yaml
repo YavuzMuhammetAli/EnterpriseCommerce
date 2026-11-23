@@ -181,6 +181,23 @@ services:
     restart: unless-stopped
     logging: *default-logging
 
+  # One-shot: creates the topics of kafka/topics.txt once the broker is healthy, then exits with 0. Idempotent.
+  kafka-init:
+    image: apache/kafka:4.4.0
+    profiles: ["kafka", "all"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/topics/create-topics.sh", "/topics/topics.txt"]
+    environment:
+      KAFKA_BOOTSTRAP: "kafka:9092"
+      KAFKA_HEAP_OPTS: "-Xmx128m"
+    volumes:
+      - ./kafka:/topics:ro
+    mem_limit: 256m
+    restart: "no"
+    logging: *default-logging
+
 volumes:
   sqlserver-data:
   mongodb-data:
