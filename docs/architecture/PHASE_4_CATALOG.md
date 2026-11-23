@@ -270,7 +270,7 @@ The trigger is the first consumer: Cart, Order or Inventory.
 | 2 | `BuildingBlocks.Authentication`, Tenant & Merchant moved to it | done |
 | 3 | Tenant & Merchant membership verification endpoint | done |
 | 4 | Catalog service foundation and architecture rules | done |
-| 5 | Domain model | planned |
+| 5 | Domain model | done |
 | 6 | MongoDB persistence, indexes, readiness, CI MongoDB | planned |
 | 7 | Merchant authorization through Tenant & Merchant | planned |
 | 8 | Merchant product and brand APIs | planned |
