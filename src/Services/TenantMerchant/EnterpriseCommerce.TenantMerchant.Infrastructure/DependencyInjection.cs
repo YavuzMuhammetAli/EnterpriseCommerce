@@ -16,8 +16,8 @@ using Microsoft.Extensions.Options;
 namespace EnterpriseCommerce.TenantMerchant.Infrastructure;
 
 /// <summary>
-/// Registers the Infrastructure-layer implementations: the service's own SQL Server persistence, and the Identity
-/// verification client.
+/// Registers the Infrastructure-layer implementations: the service's own SQL Server persistence, the Identity
+/// verification client, and the outbox relay.
 /// </summary>
 public static class DependencyInjection
 {
@@ -64,7 +64,34 @@ public static class DependencyInjection
         services.AddSingleton(provider => provider.GetRequiredService<IOptions<OnboardingSettings>>().Value);
 
         AddIdentityVerification(services, configuration);
+        AddOutboxRelay(services, configuration);
         return services;
+    }
+
+    /// <summary>
+    /// The relay that publishes committed outbox rows to Kafka (ADR-023 sections 5 and 6). Outside Development the
+    /// service refuses to start without a broker, or with a connection that is not mutual TLS. In Development without
+    /// a broker the relay is disabled with a warning, and committed events stay pending.
+    /// </summary>
+    private static void AddOutboxRelay(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<KafkaOptions>()
+            .Bind(configuration.GetSection(KafkaOptions.SectionName))
+            .Validate<IHostEnvironment>(
+                (options, environment) => !options.Validate(environment.IsDevelopment()).Any(),
+                $"{KafkaOptions.SectionName} is invalid (ADR-023 section 6): BootstrapServers is required outside Development, with SecurityProtocol Ssl and a client certificate and key; MessageTimeout 1 second to 5 minutes; every named file must exist.")
+            .ValidateOnStart();
+
+        services.AddSingleton(_ =>
+        {
+            var state = new OutboxRelayState();
+            OutboxMetrics.Observe(state);
+            return state;
+        });
+        services.AddSingleton<IOutboxStore, SqlOutboxStore>();
+        services.AddSingleton<IOutboxPublisher, KafkaOutboxPublisher>();
+        services.AddSingleton<IOutboxLeadership, SqlOutboxLeadership>();
+        services.AddHostedService<OutboxRelay>();
     }
 
     private static void AddIdentityVerification(IServiceCollection services, IConfiguration configuration)
