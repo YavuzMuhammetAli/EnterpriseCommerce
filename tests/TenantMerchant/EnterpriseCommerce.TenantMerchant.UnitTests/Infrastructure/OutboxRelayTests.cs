@@ -314,6 +314,17 @@ public sealed class OutboxRelayTests
         Assert.Empty(_publisher.Published);
     }
 
+    [Fact]
+    public void ConstructingTheRelay_ReadsNoSettings_SoInvalidOnesAreReportedByStartupValidation()
+    {
+        // The host resolves hosted services before its startup validation: a throwing constructor would replace the
+        // validation's clear message with an exception thrown while the host is being started (and torn down).
+        var exception = Record.Exception(() => new OutboxRelay(
+            _store, _publisher, _leadership, _state, new ThrowingOptions<OutboxOptions>(), new ThrowingOptions<KafkaOptions>(), _time, NullLogger<OutboxRelay>.Instance));
+
+        Assert.Null(exception);
+    }
+
     private OutboxRelay Relay(double jitter = 1, KafkaOptions? kafka = null) => new(
         _store,
         _publisher,
@@ -324,4 +335,10 @@ public sealed class OutboxRelayTests
         _time,
         NullLogger<OutboxRelay>.Instance,
         () => jitter);
+
+    private sealed class ThrowingOptions<T> : IOptions<T>
+        where T : class
+    {
+        public T Value => throw new OptionsValidationException(typeof(T).Name, typeof(T), ["invalid"]);
+    }
 }

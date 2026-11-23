@@ -42,8 +42,13 @@ internal sealed partial class OutboxRelay(
     /// <summary>Published rows deleted per statement by the cleanup.</summary>
     private const int CleanupBatchSize = 1000;
 
-    private readonly OutboxOptions _settings = outboxOptions.Value;
     private readonly Func<double> _jitter = jitter ?? Random.Shared.NextDouble;
+
+    /// <summary>
+    /// Read on use, never in the constructor: the host resolves hosted services before it runs the startup validation,
+    /// so invalid settings must be reported by that validation, not thrown while the service is being constructed.
+    /// </summary>
+    private OutboxOptions Settings => outboxOptions.Value;
 
     private bool _isLeader;
     private bool _topicReady;
@@ -107,7 +112,7 @@ internal sealed partial class OutboxRelay(
         {
             // The database, or anything unexpected: back off and try again; leadership is re-checked next cycle.
             _consecutiveCycleFailures++;
-            var backoff = OutboxBackoff.For(_consecutiveCycleFailures, _settings.MaxBackoff, _jitter());
+            var backoff = OutboxBackoff.For(_consecutiveCycleFailures, Settings.MaxBackoff, _jitter());
             LogCycleFailed(logger, exception.GetType().Name, _consecutiveCycleFailures, backoff.TotalSeconds);
             state.Update(status => status with { BackingOffUntil = timeProvider.GetUtcNow() + backoff });
             return backoff;
@@ -124,7 +129,7 @@ internal sealed partial class OutboxRelay(
         {
             // A standby: it publishes nothing, and retries the lock every five poll intervals.
             await RefreshBacklogAsync(stoppingToken);
-            return _settings.PollInterval * 5;
+            return Settings.PollInterval * 5;
         }
 
         if (!_topicReady && await CheckTopicAsync(stoppingToken) is { } topicBackoff)
@@ -134,11 +139,11 @@ internal sealed partial class OutboxRelay(
 
         await CleanUpIfDueAsync(stoppingToken);
 
-        var batch = await store.ReadPendingAsync(_settings.BatchSize, stoppingToken);
+        var batch = await store.ReadPendingAsync(Settings.BatchSize, stoppingToken);
         if (batch.Count == 0)
         {
             state.Update(status => status with { BackingOffUntil = null, IsHalted = false, LastFailure = null, Backlog = new OutboxBacklog(0, null) });
-            return _settings.PollInterval;
+            return Settings.PollInterval;
         }
 
         // A head row that failed before, in this process or before a restart, waits out its backoff first.
@@ -164,7 +169,7 @@ internal sealed partial class OutboxRelay(
         _retryGate = null;
         state.Update(status => status with { BackingOffUntil = null, IsHalted = false, LastFailure = null });
         await RefreshBacklogAsync(stoppingToken);
-        return batch.Count == _settings.BatchSize && !stoppingToken.IsCancellationRequested ? TimeSpan.Zero : _settings.PollInterval;
+        return batch.Count == Settings.BatchSize && !stoppingToken.IsCancellationRequested ? TimeSpan.Zero : Settings.PollInterval;
     }
 
     private async Task<bool> EnsureLeadershipAsync(CancellationToken stoppingToken)
@@ -204,7 +209,7 @@ internal sealed partial class OutboxRelay(
 
     private async Task<TimeSpan?> CheckTopicAsync(CancellationToken stoppingToken)
     {
-        var topic = await publisher.CheckTopicAsync(_settings.Topic, stoppingToken);
+        var topic = await publisher.CheckTopicAsync(Settings.Topic, stoppingToken);
         state.Update(status => status with { Topic = topic });
         if (topic == TopicStatus.Exists)
         {
@@ -214,8 +219,8 @@ internal sealed partial class OutboxRelay(
 
         // Never created and never skipped: the relay waits for an operator, or for the broker (ADR-023 section 2).
         _consecutiveCycleFailures++;
-        var backoff = OutboxBackoff.For(_consecutiveCycleFailures, _settings.MaxBackoff, _jitter());
-        LogTopicUnavailable(logger, _settings.Topic, topic.ToString(), backoff.TotalSeconds);
+        var backoff = OutboxBackoff.For(_consecutiveCycleFailures, Settings.MaxBackoff, _jitter());
+        LogTopicUnavailable(logger, Settings.Topic, topic.ToString(), backoff.TotalSeconds);
         state.Update(status => status with { BackingOffUntil = timeProvider.GetUtcNow() + backoff });
         await RefreshBacklogAsync(stoppingToken);
         return backoff;
@@ -275,10 +280,10 @@ internal sealed partial class OutboxRelay(
             _topicReady = false;
         }
 
-        var backoff = OutboxBackoff.For(attempts, _settings.MaxBackoff, _jitter());
+        var backoff = OutboxBackoff.For(attempts, Settings.MaxBackoff, _jitter());
         _retryGate = new RetryGate(message.Sequence, attempts, now + backoff);
 
-        var halted = result.IsPermanent || attempts >= _settings.HaltAfterAttempts;
+        var halted = result.IsPermanent || attempts >= Settings.HaltAfterAttempts;
         var wasHalted = state.Current.IsHalted;
         state.Update(status => status with { BackingOffUntil = now + backoff, IsHalted = halted, LastFailure = result.Category });
 
@@ -311,7 +316,7 @@ internal sealed partial class OutboxRelay(
         // After a restart the gate is rebuilt from the row: the stored attempts and time keep the backoff.
         if (_retryGate is not { } gate || gate.Sequence != head.Sequence || gate.Attempts != head.Attempts)
         {
-            gate = new RetryGate(head.Sequence, head.Attempts, lastAttempt + OutboxBackoff.For(head.Attempts, _settings.MaxBackoff, _jitter()));
+            gate = new RetryGate(head.Sequence, head.Attempts, lastAttempt + OutboxBackoff.For(head.Attempts, Settings.MaxBackoff, _jitter()));
             _retryGate = gate;
         }
 
@@ -321,7 +326,7 @@ internal sealed partial class OutboxRelay(
             return null;
         }
 
-        state.Update(status => status with { BackingOffUntil = gate.DueAt, IsHalted = status.IsHalted || head.Attempts >= _settings.HaltAfterAttempts });
+        state.Update(status => status with { BackingOffUntil = gate.DueAt, IsHalted = status.IsHalted || head.Attempts >= Settings.HaltAfterAttempts });
         return wait;
     }
 
@@ -333,8 +338,8 @@ internal sealed partial class OutboxRelay(
             return;
         }
 
-        _nextCleanupAt = now + _settings.CleanupInterval;
-        var cutoff = now - _settings.PublishedRetention;
+        _nextCleanupAt = now + Settings.CleanupInterval;
+        var cutoff = now - Settings.PublishedRetention;
         var deleted = 0;
         int removed;
         do
@@ -346,7 +351,7 @@ internal sealed partial class OutboxRelay(
 
         if (deleted > 0)
         {
-            LogCleanedUp(logger, deleted, _settings.PublishedRetention.TotalDays);
+            LogCleanedUp(logger, deleted, Settings.PublishedRetention.TotalDays);
         }
     }
 
