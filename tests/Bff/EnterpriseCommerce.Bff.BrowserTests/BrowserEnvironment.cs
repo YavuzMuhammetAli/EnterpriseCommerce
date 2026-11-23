@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using EnterpriseCommerce.Bff.IntegrationTests.Infrastructure;
 using Microsoft.AspNetCore.Builder;
@@ -15,6 +16,8 @@ public sealed class BrowserEnvironment : BffTestEnvironment
 {
     public const string Variable = "EC_TEST_BROWSERS";
 
+    private readonly ConcurrentDictionary<IPlaywright, Task> _drivers = new();
+
     private WebApplication? _attacker;
 
     protected override bool UseKestrel => true;
@@ -26,8 +29,6 @@ public sealed class BrowserEnvironment : BffTestEnvironment
     public BffHost ShortIdleHost { get; private set; } = null!;
 
     public Uri AttackerOrigin { get; private set; } = null!;
-
-    public IPlaywright Playwright { get; private set; } = null!;
 
     public override async ValueTask InitializeAsync()
     {
@@ -49,7 +50,6 @@ public sealed class BrowserEnvironment : BffTestEnvironment
         // Idempotent; CI installs the browsers and their system dependencies in a separate step first.
         var exitCode = Microsoft.Playwright.Program.Main(["install", "chromium", "firefox", "webkit"]);
         Assert.Equal(0, exitCode);
-        Playwright = await Microsoft.Playwright.Playwright.CreateAsync();
     }
 
     public void RequireBrowsers()
@@ -62,12 +62,52 @@ public sealed class BrowserEnvironment : BffTestEnvironment
         RequireAvailable();
     }
 
+    /// <summary>
+    /// A browser context in its own Playwright driver and browser, both released when the context closes.
+    /// </summary>
+    /// <remarks>
+    /// One driver per test, never shared: a crash of the driver process ends only the test that caused it. With one
+    /// shared driver, the WebKit crash of microsoft/playwright#43067 failed every later test of every engine.
+    /// The release runs off the driver's message loop, because the context's Close event is raised on it; the fixture
+    /// awaits every release and disposes any driver whose context never closed (<see cref="DisposeAsync"/>).
+    /// </remarks>
     public async Task<IBrowserContext> NewContextAsync(string engine)
     {
-        var browser = await Playwright[engine].LaunchAsync(new BrowserTypeLaunchOptions { Headless = true });
+        var driver = await Microsoft.Playwright.Playwright.CreateAsync();
+        _drivers[driver] = Task.CompletedTask;
+        try
+        {
+            var browser = await driver[engine].LaunchAsync(new BrowserTypeLaunchOptions { Headless = true });
 
-        // The local development certificate is not trusted on every machine; certificate errors only are ignored.
-        return await browser.NewContextAsync(new BrowserNewContextOptions { IgnoreHTTPSErrors = true });
+            // The local development certificate is not trusted on every machine; certificate errors only are ignored.
+            var context = await browser.NewContextAsync(new BrowserNewContextOptions { IgnoreHTTPSErrors = true });
+            context.Close += (_, _) => _drivers[driver] = Task.Run(() => ReleaseAsync(driver, browser));
+            return context;
+        }
+        catch
+        {
+            await ReleaseAsync(driver, browser: null);
+            throw;
+        }
+    }
+
+    private static async Task ReleaseAsync(IPlaywright driver, IBrowser? browser)
+    {
+        try
+        {
+            if (browser is not null)
+            {
+                await browser.CloseAsync();
+            }
+        }
+        catch (PlaywrightException)
+        {
+            // The driver or the browser is already gone (for example after a driver crash): nothing left to close.
+        }
+        finally
+        {
+            driver.Dispose();
+        }
     }
 
     /// <summary>Signs in through the BFF with Identity's login page and waits for the landing page.</summary>
@@ -104,7 +144,14 @@ public sealed class BrowserEnvironment : BffTestEnvironment
 
     public override async ValueTask DisposeAsync()
     {
-        Playwright?.Dispose();
+        // Safety net: wait for the releases started when contexts closed, then dispose every driver again. Disposing a
+        // driver twice is harmless, and a driver whose context never closed (a test that failed before it could) ends here.
+        await Task.WhenAll(_drivers.Values);
+        foreach (var driver in _drivers.Keys)
+        {
+            driver.Dispose();
+        }
+
         if (_attacker is not null)
         {
             await _attacker.DisposeAsync();
