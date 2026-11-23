@@ -1,5 +1,6 @@
 using EnterpriseCommerce.Catalog.Application.Authorization;
 using EnterpriseCommerce.Catalog.Application.Brands;
+using EnterpriseCommerce.Catalog.Application.Categories;
 using EnterpriseCommerce.Catalog.Application.Products;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -21,6 +22,7 @@ public static class DependencyInjection
         services.AddScoped<ProductLifecycleHandler>();
         services.AddScoped<MerchantProductQueryHandler>();
         services.AddScoped<BrandHandlers>();
+        services.AddScoped<CategoryHandlers>();
         return services;
     }
 }

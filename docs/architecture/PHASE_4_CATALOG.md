@@ -274,7 +274,7 @@ The trigger is the first consumer: Cart, Order or Inventory.
 | 6 | MongoDB persistence, indexes, readiness, CI MongoDB | done |
 | 7 | Merchant authorization through Tenant & Merchant | done |
 | 8 | Merchant product and brand APIs | done |
-| 9 | Platform category taxonomy | planned |
+| 9 | Platform category taxonomy | done |
 | 10 | Public discovery | planned |
 | 11 | Gateway route | planned |
 | 12 | Documentation, operations and evidence | planned |
