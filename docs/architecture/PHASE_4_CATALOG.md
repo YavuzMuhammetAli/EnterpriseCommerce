@@ -276,7 +276,7 @@ The trigger is the first consumer: Cart, Order or Inventory.
 | 8 | Merchant product and brand APIs | done |
 | 9 | Platform category taxonomy | done |
 | 10 | Public discovery | done |
-| 11 | Gateway route | planned |
+| 11 | Gateway route | done |
 | 12 | Documentation, operations and evidence | planned |
 
 ## 11. Implementation decisions and deviations

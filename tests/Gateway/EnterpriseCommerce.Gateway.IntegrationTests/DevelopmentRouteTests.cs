@@ -17,6 +17,7 @@ public sealed class DevelopmentRouteTests : IDisposable
 
         // The Development cluster points at a local service that is not running in tests; send it nowhere instead.
         builder.UseSetting("ReverseProxy:Clusters:tenant-merchant:Destinations:primary:Address", "http://127.0.0.1:1/");
+        builder.UseSetting("ReverseProxy:Clusters:catalog:Destinations:primary:Address", "http://127.0.0.1:1/");
     });
 
     [Fact]
@@ -47,6 +48,42 @@ public sealed class DevelopmentRouteTests : IDisposable
         Assert.Equal("/api/v1/merchant-invitations/{**catch-all}", route.Path);
         Assert.Equal(["localhost:7000"], route.Hosts);
         Assert.Equal(2, Routes().Count(candidate => candidate.Name.StartsWith("tenant-merchant", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void TheCatalogRoute_ExposesOnlyTheCatalogApi()
+    {
+        // ADR-024: public discovery and the merchant API share /api/v1/catalog; the taxonomy API is internal only.
+        var route = Assert.Single(Routes(), candidate => candidate.Name.StartsWith("catalog", StringComparison.Ordinal));
+
+        Assert.Equal("catalog-api", route.Name);
+        Assert.Equal("/api/v1/catalog/{**catch-all}", route.Path);
+        Assert.Equal(["localhost:7000"], route.Hosts);
+    }
+
+    [Theory]
+    [InlineData("/internal/v1/catalog/categories")]
+    [InlineData("/internal/v1/catalog/categories/0196f0a0-0000-7000-8000-000000000001/retire")]
+    public async Task InternalCatalogPaths_AreRefusedOnTheCatalogRouteHost(string path)
+    {
+        using var client = _gateway.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("http://localhost:7000") });
+
+        using var response = await client.PostAsync(path, content: null, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("/api/v1/catalog/products")]
+    [InlineData("/api/v1/catalog/tenants/0196f0a0-0000-7000-8000-000000000001/products")]
+    public async Task TheCatalogApi_IsForwardedOnTheCatalogRouteHost(string path)
+    {
+        using var client = _gateway.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("http://localhost:7000") });
+
+        using var response = await client.GetAsync(path, TestContext.Current.CancellationToken);
+
+        // Forwarded to the (unreachable) Catalog destination.
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
     }
 
     [Theory]
