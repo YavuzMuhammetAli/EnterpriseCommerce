@@ -12,7 +12,7 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
 |---|---|---|---|---|
 | 1 | Identity | `EnterpriseCommerce.Identity` | SQL Server | Implemented in Phase 2.3 (slices S1 to S7) and tested locally. Not production-verified, and production gates are open ([IDENTITY_OPERATIONS.md section 7](../security/IDENTITY_OPERATIONS.md#7-verification-level-and-remaining-production-gates)). |
 | 2 | Tenant & Merchant | `EnterpriseCommerce.TenantMerchant` ([ADR-020](../decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md)) | SQL Server | Phase 3 slices S1 (foundation and tenant provisioning), S2 (membership management) and S3 (self-service onboarding) implemented and tested locally. S4 (the first integration event, `TenantCreated`, through a transactional outbox and a Kafka relay, [ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md)) implemented and tested locally and in CI. Not production-verified ([PHASE_3_TENANT_MERCHANT.md](PHASE_3_TENANT_MERCHANT.md)). |
-| 3 | Catalog | `EnterpriseCommerce.Catalog` | MongoDB | Phase 4 in progress: design accepted ([ADR-024](../decisions/ADR-024-catalog-service-design.md), [ADR-025](../decisions/ADR-025-merchant-authorization-through-tenant-merchant-membership-verification.md), [PHASE_4_CATALOG.md](PHASE_4_CATALOG.md)) |
+| 3 | Catalog | `EnterpriseCommerce.Catalog` | MongoDB | Implemented in Phase 4 ([ADR-024](../decisions/ADR-024-catalog-service-design.md), [ADR-025](../decisions/ADR-025-merchant-authorization-through-tenant-merchant-membership-verification.md), [PHASE_4_CATALOG.md](PHASE_4_CATALOG.md)) and tested locally against MongoDB 8.0. Not production-verified. No integration events yet. |
 | 4 | Inventory | `EnterpriseCommerce.Inventory` | SQL Server | Planned |
 | 5 | Cart | `EnterpriseCommerce.Cart` | SQL Server + Redis (acceleration only) | Planned |
 | 6 | Order | `EnterpriseCommerce.Order` | SQL Server | Planned |
@@ -114,6 +114,7 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
 - **Implemented in Phase 3 S4** ([PHASE_3_S4_EVENT_FLOW.md](PHASE_3_S4_EVENT_FLOW.md), [ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md)):
   - **The first integration event:** `TenantCreated` v1 on `tenant-merchant.events`, written by both creation paths in the creation's own transaction (transactional outbox).
   - **The outbox relay:** one leader per service publishes committed rows to Kafka in commit order, at least once, with backoff, a halted state and `/health/outbox` ([TENANT_MERCHANT_EVENT_RELAY.md](../operations/TENANT_MERCHANT_EVENT_RELAY.md)).
+- **Implemented in Phase 4, for Catalog** ([ADR-025](../decisions/ADR-025-merchant-authorization-through-tenant-merchant-membership-verification.md)): the internal membership verification `POST /internal/v1/tenants/{tenantId}/membership-verifications` ([TENANT_MERCHANT_API_CONTRACT.md section 3.3](../api/TENANT_MERCHANT_API_CONTRACT.md#33-verify-a-membership-internal)). It answers an allow-listed service client (scope `svc.tenant-merchant.membership-verification`, separate allow-list) whether a subject is an active member of an active tenant, and its role. Its JWT bearer setup now comes from `EnterpriseCommerce.BuildingBlocks.Authentication`.
 - **Not implemented yet:**
   - consumers of its events, and membership events (deferred to the slice of their first consumer, ADR-023)
   - invitation email delivery (Notification), and the merchant-portal front end
@@ -136,7 +137,30 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
 - Data store: MongoDB.
 - Does not own stock levels (Inventory) or order-time snapshots (Order).
 - Categories are a **platform taxonomy** written by allow-listed service clients; brands are **tenant-scoped** ([ADR-024](../decisions/ADR-024-catalog-service-design.md)).
-- Merchant requests are authorized per request by Tenant & Merchant's membership verification ([ADR-025](../decisions/ADR-025-merchant-authorization-through-tenant-merchant-membership-verification.md)). Design and progress: [PHASE_4_CATALOG.md](PHASE_4_CATALOG.md).
+- Merchant requests are authorized per request by Tenant & Merchant's membership verification ([ADR-025](../decisions/ADR-025-merchant-authorization-through-tenant-merchant-membership-verification.md)). Design and evidence: [PHASE_4_CATALOG.md](PHASE_4_CATALOG.md). API: [CATALOG_API_CONTRACT.md](../api/CATALOG_API_CONTRACT.md). Operations: [CATALOG_OPERATIONS.md](../operations/CATALOG_OPERATIONS.md).
+- **Implemented in Phase 4:**
+  - **Persistence:** its own MongoDB database. Products, categories and brands are single-document aggregates with optimistic concurrency. Fifteen named indexes are created at startup; unique indexes back slug, SKU and idempotency-key uniqueness. Writes are refused until the indexes exist.
+  - **Merchant API** (`/api/v1/catalog/tenants/{tenantId}/...`):
+    - products with variants, attributes, media references and the lifecycle commands
+    - tenant brands
+    - `If-Match` on full replacements
+    - idempotent product creation
+  - **Taxonomy API** (`/internal/v1/catalog/categories`): allow-listed service clients only (scope `svc.catalog.taxonomy`, empty allow-list by default).
+  - **Public discovery** (`/api/v1/catalog/products`, `/api/v1/catalog/categories`): anonymous, published products and active categories only. Text, category (with descendants), brand, tenant and attribute filters, two sorts, bounded paging.
+  - **Host:**
+    - local JWT validation through `BuildingBlocks.Authentication`
+    - fail-closed policies
+    - `X-Correlation-ID` and problem details
+    - a 256 KiB body limit
+    - liveness independent of MongoDB, and readiness on MongoDB and the indexes
+    - bounded-tag meters
+- **Not implemented yet:**
+  - integration events (no MongoDB outbox without a replica set; ADR-024 section 13)
+  - an image upload pipeline
+  - moving categories
+  - discounts and price lists
+  - anonymous browsing through the storefront BFF
+  - visibility of tenant status (a suspended tenant's published products stay visible until tenant status reaches Catalog)
 
 ## 4. Inventory
 
@@ -228,6 +252,7 @@ It routes Identity and each backend-for-frontend by host name, and it is the onl
   - each BFF by host name (`storefront`, `merchant` and `admin.localhost:7000`), with `X-Forwarded` set
   - a `/identity` path-prefix route to Identity, for development diagnostics only (ADR-017 section 10)
   - the Tenant & Merchant member API: `/api/v1/tenants/**` on host `localhost:7000` (Phase 3 S1)
+  - the Catalog API: `/api/v1/catalog/**` on host `localhost:7000` (Phase 4)
 - **Internal paths are never forwarded.** A path whose first segment is `internal` answers `404` on every host, by every route and in every environment.
   - The check is case-insensitive, after percent-decoding and resolving empty and dot segments.
   - It runs on the incoming path, and again on the outgoing path of every proxied request after the route's transforms, so a prefix-removing or rewriting route cannot produce an internal destination (IDENTITY_API_CONTRACT.md section 2.12; finding P3-1, resolved).

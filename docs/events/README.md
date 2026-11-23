@@ -19,6 +19,7 @@ The accepted rules these conventions implement ([ADR-005](../decisions/ADR-005-k
 | Producer | Contract | Topic | Events |
 |---|---|---|---|
 | Tenant & Merchant | [TENANT_MERCHANT_EVENTS.md](TENANT_MERCHANT_EVENTS.md) | `tenant-merchant.events` | `TenantCreated` v1 (published since S4) |
+| Catalog | none yet | none (`catalog.events` when introduced) | **No events in Phase 4.** The standalone MongoDB has no multi-document transactions for a transactional outbox, and no consumer exists. Prerequisites: a replica set in Compose and CI, a MongoDB outbox design under ADR-023, and the first consumer ([ADR-024](../decisions/ADR-024-catalog-service-design.md) section 13). |
 
 Schemas and golden samples live in [schemas/](schemas/):
 

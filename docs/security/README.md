@@ -69,6 +69,15 @@ The threat matrix, residual risks and required security tests are in [PHASE_2_2_
 - MFA for platform administrators (Phase 2.2 decision D17, deferred).
 - Notification must implement the internal security email endpoint ([IDENTITY_API_CONTRACT.md section 4a](../api/IDENTITY_API_CONTRACT.md#4a-outbound-security-email-handover-to-notification-internal)). Identity refuses to start outside Development until it is configured.
 
+**Catalog (Phase 4, [ADR-025](../decisions/ADR-025-merchant-authorization-through-tenant-merchant-membership-verification.md)):**
+
+- **Merchant requests** are authorized on every request by Tenant & Merchant's internal membership verification. Verdicts are never cached. No verdict means `503`, and nothing is read or written.
+- **Hiding other tenants.** A non-member sees `404`, exactly as for an unknown tenant. Every query and write is also scoped to the route tenant.
+- **Shared token validation.** Resource-server token validation is shared through `EnterpriseCommerce.BuildingBlocks.Authentication`, with the exact issuer, RS256, `at+jwt`, no inbound claim mapping, and a role claim type that no token carries.
+- **Taxonomy writes** are internal only, for allow-listed `svc-` clients (empty by default).
+- **Media URLs** must be https with a public DNS host name. They are never fetched by the service, so they give no server-side request forgery surface.
+- **Request bodies** refuse unknown members (no over-posting) and are limited to 256 KiB. Search and sort parameters come from closed sets; no client expression reaches MongoDB.
+
 Open topics for dedicated design steps:
 
 - signing key and Data Protection key storage outside local development (deployment phase; the direction is in ADR-017)

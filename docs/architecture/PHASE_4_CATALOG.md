@@ -7,7 +7,9 @@ The Catalog microservice (`EnterpriseCommerce.Catalog`). It owns product content
   - [ADR-025](../decisions/ADR-025-merchant-authorization-through-tenant-merchant-membership-verification.md): merchant authorization through Tenant & Merchant, and shared token validation
 - **Contract:** [CATALOG_API_CONTRACT.md](../api/CATALOG_API_CONTRACT.md).
 - **Operations:** [CATALOG_OPERATIONS.md](../operations/CATALOG_OPERATIONS.md).
-- **Status:** in progress. The design is accepted (2026-11-23). The implementation follows the milestones in [section 10](#10-milestones-and-progress).
+- **Status:** **complete** (2026-11-24). Every milestone of [section 10](#10-milestones-and-progress) is done, and the evidence is in [section 12](#12-test-evidence).
+  - **Verification level.** Tested locally only, against MongoDB 8.0, SQL Server 2022, LocalDB, Kafka and Redis. It is not production-verified, and the commits are not yet CI-verified: GitHub Actions runs only after the owner pushes.
+  - **Open items.** Production gates: [section 16](#16-production-gates-open). Deferred capabilities: [section 15](#15-deferred-capabilities).
 
 ## 1. Inputs and scope
 
@@ -277,10 +279,110 @@ The trigger is the first consumer: Cart, Order or Inventory.
 | 9 | Platform category taxonomy | done |
 | 10 | Public discovery | done |
 | 11 | Gateway route | done |
-| 12 | Documentation, operations and evidence | planned |
+| 12 | Documentation, operations and evidence | done |
 
 ## 11. Implementation decisions and deviations
 
 | # | Topic | Decision | Relation to the ADRs |
 |---|---|---|---|
 | D1 | How a duplicate key is identified | The MongoDB driver (3.14.1) does not expose the server's `keyPattern` for a write error. The store therefore reads the **index name** from the server message (`index: <name> dup key`) and accepts only one of the five known unique index names. An unknown name is an error, never a guess. The message contains stored values and is never logged or returned. | ADR-024 section 11 says duplicates are translated "by the index that rejected the write, never by the error message". The intent holds: the outcome is decided by the rejecting index, and no message content is used or exposed. The index name is taken from the message text because the driver offers no other source. |
+| D2 | Variant management | Variants are managed through the product `PUT` (the complete variant list, with stable IDs), not through separate variant endpoints. One write replaces the whole product consistently, and the publication rules see the whole list. | Within ADR-024 section 3 |
+| D3 | Sorting | Only `newest` and `oldest`: by publication time publicly, by update time for merchants. Name and price sorts were left out: they need extra indexes, and a price sort would need a policy for multi-currency catalogs. | Within ADR-024 section 9 |
+| D4 | Brand and category creation | No `Idempotency-Key`. A retried creation meets the slug's unique index and answers `409 slug-taken`; the client then reads the existing resource. Product creation, which has no natural unique key before the slug is settled, is idempotent per key. | Within ADR-024 section 14 |
+| D5 | The public read side | The public queries are separate (filters, indexes, published-only) and project documents through the same mapping as the commands, then into the public view. There is no separate read model or collection. | ADR-024 section 12 (selective CQRS) |
+| D6 | Anonymous storefront browsing | The storefront BFF forwards `/api/**` only with a session (BFF_API_CONTRACT.md), so anonymous discovery through it needs a BFF design (an anonymous pass-through without a token). It is deferred. Public discovery is served on the Gateway API host. | ADR-016 unchanged |
+| D7 | Test project placement and containers | The session brief named `tests/Services/Catalog/` and a Compose service for Catalog. The repository convention is `tests/{Service}/` (SOLUTION_STRUCTURE), and Compose runs infrastructure only, with no application containers or Dockerfiles yet (deploy/docker/README). Catalog follows the repository, and uses the existing `mongodb` profile. | Repository conventions |
+| D8 | An unknown body member | It answers `400` with the generic RFC 9110 problem type, as in Tenant & Merchant (the JSON reader refuses the body before validation runs). Field validation errors use `validation-failed`. | Platform convention |
+
+## 12. Test evidence
+
+**Full solution** (2026-11-23/24, Release, `EC_REQUIRE_INFRA_TESTS=true`, environment in section 13):
+
+| Module | Tests | Notes |
+|---|---|---|
+| Catalog.UnitTests | 121 | domain rules, the authorizer and its meters, paging, search text, settings |
+| Catalog.IntegrationTests | 121 | MongoDB persistence and indexes, the Tenant & Merchant client, the merchant, taxonomy and public APIs, security, unavailability, the 413 test on Kestrel |
+| ArchitectureTests | 169 | includes the new MongoDB boundary and BuildingBlocks rules |
+| Gateway.IntegrationTests | 85 | includes the Catalog route and the internal-path cases through it |
+| TenantMerchant.UnitTests | 447 | |
+| TenantMerchant.IntegrationTests | 218 | includes the 18 membership verification tests and the Kafka tests |
+| Identity.UnitTests | 169 | unchanged |
+| Identity.IntegrationTests | 166 | unchanged |
+| Bff.UnitTests | 103 | unchanged |
+| Bff.IntegrationTests | 63 | unchanged, includes the merchant flow through the real Gateway |
+| Bff.BrowserTests | 18 | Chromium, Firefox and WebKit through Playwright |
+| BuildingBlocks.Authentication.UnitTests | 11 | the caller claim tests, moved from Tenant & Merchant |
+| **Total** | **1,691** | **1,691 passed, 0 failed, 0 skipped** |
+
+**How it was run:**
+
+- **The first full run (all modules in parallel, SQL Server on LocalDB)** had 20 failures in Identity, BFF and Tenant & Merchant integration tests: SQL login and command timeouts at LocalDB under the load of every module creating databases at once, plus one outbox health check reading `Degraded` under the same load. No Catalog test failed.
+- **The rerun** used one module at a time (`--max-parallel-test-modules 1`), with no other change, and **passed completely**. No test, timeout or assertion was changed.
+- **CI** uses a SQL Server container, not LocalDB.
+
+**SQL Server 2022 (Compose, as CLAUDE.md requires):** Tenant & Merchant integration 218/218, BFF integration 63/63 and Identity integration 166/166 passed against the Compose SQL Server 2022.
+
+**Other checks:**
+
+- `dotnet build -c Release`: 0 warnings, 0 errors. NuGet audit is clean with MongoDB.Driver 3.14.1.
+- The CI secret-scan expression over every test log: clean. Tracked files contain no private key and no local `.env` value.
+- Every relative Markdown link and anchor resolves (a local check).
+- `git diff --check`: clean. `docker compose config --quiet`: valid for every profile.
+- **Manual smoke test** (real processes, Gateway on `https://localhost:7000`):
+  - liveness and readiness `Healthy`, with 11 product indexes created
+  - public product and category lists answer `200` through the Gateway
+  - `/internal/v1/catalog/categories` answers `404` at the Gateway
+  - a merchant route without a token answers `401`
+  - while MongoDB was stopped: liveness `Healthy`, readiness `503`, the public list `503`, then readiness `Healthy` again after the restart
+- **A defect found by the verification and fixed:** Catalog test databases of API fixtures were not dropped (commit `e8c5b7d`). After the fix, a run leaves no database behind.
+
+## 13. Verification environment
+
+- **Machine:** Windows 11, Docker Desktop on WSL2 (about 3.8 GB VM), .NET SDK 10.0.404.
+- **Infrastructure:**
+  - Compose MongoDB `mongo:8.0.38` on port 27018 (a local `mongod` holds 27017)
+  - the session Redis (`bff` profile) and Kafka (`kafka` profile)
+  - SQL Server through LocalDB, and Compose SQL Server 2022 for the Tenant & Merchant and Identity suites
+- `EC_REQUIRE_INFRA_TESTS=true`, so no infrastructure test could skip.
+
+## 14. Known limitations
+
+- **Search is basic.**
+  - Whole words only, with no stemming, prefix or fuzzy matching. Several words match with OR.
+  - Text queries sort in memory after the text match.
+  - There is no relevance ranking, and no performance claim is made.
+- **`totalCount` costs one count per page.** Public paging stops at page 100.
+- **Reference race.** A category or brand retired between a reference check and the write can still be assigned (ADR-024 section 11). Public views hide retired references, and the next update or publication revalidates.
+- **Tenant status is invisible to Catalog.** A suspended tenant's published products stay publicly visible until tenant status reaches Catalog. Merchant writes are refused, because Tenant & Merchant's verdict requires an active tenant (ADR-025, Consequences).
+- **Availability coupling.** Merchant management is unavailable while Tenant & Merchant or Identity's token endpoint is. Public discovery is not affected.
+- **No category creation without a service client.** Until Admin exists, categories are created only by an allow-listed test or development client.
+- **Single-node MongoDB.** No retryable writes and no transactions. Product creation retries are safe through the idempotency key.
+
+## 15. Deferred capabilities
+
+| Capability | Why deferred | Prerequisite |
+|---|---|---|
+| Catalog integration events (for example product published or price changed) | No consumer, and no transactional outbox on a standalone MongoDB (ADR-024 section 13) | A single-node replica set in Compose and CI, a MongoDB outbox design under ADR-023, the first consumer (Cart, Order or Inventory), and `catalog.events` in the topic manifest |
+| Image upload and object storage | No approved media store, and no paid cloud dependency (ADR-024 section 8) | A storage decision (an ADR), content scanning, and image processing |
+| Moving categories | A subtree ancestry update needs multi-document atomicity | A replica set, or a designed migration process |
+| Discounts, price lists, tax and multi-currency pricing | Not in the MVP | The checkout design (Order) |
+| Anonymous browsing through the storefront BFF | Needs a BFF anonymous pass-through design (D6) | A BFF design change |
+| Internal product reads for Cart and Order (snapshots) | No consumer yet | The Cart and Order phases |
+| A local membership projection | Membership events do not exist | Membership events, a consumer and an inbox (ADR-014 rule 3, ADR-023 section 7) |
+| Advanced search (Elasticsearch, OpenSearch) | Post-MVP (PROJECT_DECISIONS section 11) | An architecture review and an ADR |
+
+## 16. Production gates (open)
+
+- **MongoDB:**
+  - a dedicated least-privilege `catalog` user
+  - TLS
+  - a replica set
+  - backup and restore procedures
+  - index builds planned for large collections
+- **Keys and configuration:**
+  - the `svc-catalog` private key in a managed key store
+  - the deployed Identity client registration and Tenant & Merchant allow-list entry
+- **Routing:** deployed Gateway routes and host names, and TLS between the Gateway and Catalog.
+- **Operations:** a metrics exporter and alerting (the observability phase).
+- **Performance:** load and performance measurement of discovery queries on realistic data volumes.
+- **CI:** a green GitHub Actions run of the Phase 4 commits, which only the owner's push can produce. Local evidence is not CI evidence.

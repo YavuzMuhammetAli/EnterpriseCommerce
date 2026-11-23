@@ -193,7 +193,7 @@ docker compose --profile all ps
 docker compose --profile all down                    # stop (add -v to delete data volumes)
 ```
 
-No service starts without a profile. Images, ports, memory limits and connection details are in [deploy/docker/README.md](deploy/docker/README.md). The services don't use this infrastructure yet.
+No service starts without a profile. Images, ports, memory limits and connection details are in [deploy/docker/README.md](deploy/docker/README.md). Identity and Tenant & Merchant use SQL Server, Tenant & Merchant also Kafka, the BFF the session Redis, and Catalog MongoDB.
 
 ## Run tests
 
@@ -232,25 +232,36 @@ The suite contains unit tests (exception handling), integration tests (the real 
 
 **Implemented (Phase 3 S3, Tenant & Merchant):** self-service merchant onboarding ([ADR-022](docs/decisions/ADR-022-self-service-tenant-onboarding.md)). A signed-in merchant-portal user creates a tenant and becomes its owner, within a per-user limit (one by default). Idempotency keys are scoped per user, and both rules hold under concurrent requests.
 
-Naming and model: [ADR-020](docs/decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md). No integration event yet.
+**Implemented (Phase 3 S4, Tenant & Merchant):** the first integration event, `TenantCreated` v1, written through a transactional outbox in both creation transactions and published to Kafka by a leader relay ([ADR-023](docs/decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md)). No consumer exists yet.
+
+Naming and model: [ADR-020](docs/decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md).
+
+**Implemented (Phase 4, Catalog):** the Catalog service on its own MongoDB database ([PHASE_4_CATALOG.md](docs/architecture/PHASE_4_CATALOG.md), [ADR-024](docs/decisions/ADR-024-catalog-service-design.md), [ADR-025](docs/decisions/ADR-025-merchant-authorization-through-tenant-merchant-membership-verification.md)).
+
+- **Products** are single-document aggregates with variants (SKUs unique per tenant, list prices), attributes and media references. They follow a Draft, Published and Archived lifecycle with publication requirements.
+- **Categories** are a platform taxonomy written by allow-listed service clients. **Brands** are tenant-scoped.
+- **Merchant APIs** are authorized on every request by Tenant & Merchant's new internal membership verification.
+- **Public discovery** returns published products only, with text, category, brand, tenant and attribute filters and bounded pagination.
+- **No Catalog integration events yet:** the standalone MongoDB has no transactions for an outbox (ADR-024 section 13).
+- Tested locally against MongoDB 8.0; not production-verified.
 
 **Not implemented yet:**
 
 - Invitation email delivery, merchant applications, subscriptions and usage (later Tenant & Merchant slices and Notification)
-- Product catalog, inventory operations, cart, checkout, orders, payments, fulfillment, notifications and admin features
-- MongoDB persistence
-- Kafka topics and event flows, the outbox pattern and sagas
+- Inventory operations, cart, checkout, orders, payments, fulfillment, notifications and admin features
+- Catalog integration events, a product image upload pipeline, and anonymous storefront browsing through the storefront BFF
+- Event consumers and sagas
 - Redis usage in any business service (the BFF session store is implemented in Phase 2.3 S7)
 - Application containers and Dockerfiles
 - OpenTelemetry, Prometheus, Grafana and Loki (planned as the observability phase)
-- The other eight business services (only documented so far)
+- The other seven business services (only documented so far)
 
 ## Roadmap (indicative)
 
 1. **Phase 1:** repository and solution foundation *(complete, audited)*
 2. **Phase 2:** Identity design and implementation *(implemented and tested locally; production gates open, see [brief](docs/architecture/PHASE_2_IDENTITY_DESIGN_BRIEF.md))*
 3. Observability foundation: OpenTelemetry, Collector, Prometheus, Grafana, Loki *(not started; Tenant & Merchant was authorized first)*
-4. Tenant & Merchant *(Phase 3, in progress: S1 to S3 done)*, Catalog and Inventory
+4. Tenant & Merchant *(Phase 3: S1 to S4 done)*, Catalog *(Phase 4: implemented and tested locally)*, and Inventory *(not started)*
 5. Cart, Order and simulated Payment, for single-merchant checkout
 6. Fulfillment, Notification and Admin
 7. Multi-merchant checkout
