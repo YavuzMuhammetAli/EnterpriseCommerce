@@ -82,6 +82,19 @@ jobs:
           echo "::error::The session Redis did not start."
           exit 1
 
+      - name: Start the cache Redis (allkeys-lru; ADR-006, ADR-030)
+        # Cart's cache (Phase 6) uses the shared cache Redis of the redis Compose service: same pinned image, memory cap
+        # and eviction policy. A named container, so that Cart's restart test (EC_TEST_REDIS_CACHE_RESTART_CONTAINER)
+        # can stop and start it. Throwaway password for this runner only.
+        run: |
+          docker run -d --name redis-cache -p 6379:6379 redis:8.8.4-alpine             redis-server --requirepass CiOnly_Ephemeral_Cache --maxmemory 256mb --maxmemory-policy allkeys-lru
+          for i in $(seq 1 30); do
+            docker exec -e REDISCLI_AUTH=CiOnly_Ephemeral_Cache redis-cache redis-cli ping | grep -q PONG && exit 0
+            sleep 1
+          done
+          echo "::error::The cache Redis did not start."
+          exit 1
+
       - name: Start Kafka (KRaft, single node; ADR-023)
         # Same pinned image and settings as the kafka Compose service, as a named container so that the outage test
         # (EC_TEST_KAFKA_RESTART_CONTAINER) can stop and start it. Automatic topic creation is off: the tests create
@@ -125,6 +138,9 @@ jobs:
           EC_TEST_REDIS_SESSIONS: "127.0.0.1:6380,password=CiOnly_Ephemeral_Sessions"
           # The real restart test runs in the serial collection, after the parallel tests.
           EC_TEST_REDIS_RESTART_CONTAINER: "redis-sessions"
+          # Cart's cache tests (ADR-030); the restart test stops and starts this container in its serial collection.
+          EC_TEST_REDIS_CACHE: "127.0.0.1:6379,password=CiOnly_Ephemeral_Cache"
+          EC_TEST_REDIS_CACHE_RESTART_CONTAINER: "redis-cache"
           # The outbox relay's Kafka tests; the outage test stops and starts this container in the serial collection.
           EC_TEST_KAFKA: "127.0.0.1:9094"
           EC_TEST_KAFKA_RESTART_CONTAINER: "kafka"

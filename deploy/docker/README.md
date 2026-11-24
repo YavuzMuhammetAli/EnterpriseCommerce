@@ -81,6 +81,7 @@ One SQL Server instance hosts every SQL service's own database (ADR-011 rule 5),
 | Identity | `ConnectionStrings__IdentityDatabase` | `EnterpriseCommerce_Identity` |
 | Tenant & Merchant | `ConnectionStrings__TenantMerchantDatabase` | `EnterpriseCommerce_TenantMerchant` |
 | Inventory | `ConnectionStrings__InventoryDatabase` | `EnterpriseCommerce_Inventory` |
+| Cart | `ConnectionStrings__CartDatabase` | `EnterpriseCommerce_Cart` |
 
 Catalog is the MongoDB service (ADR-011). Its database is `catalog` by default (`Catalog__Database__DatabaseName`), and its connection string uses the MongoDB setting above (with `MONGO_PORT=27018` when a local `mongod` holds 27017):
 
@@ -90,7 +91,11 @@ Catalog is the MongoDB service (ADR-011). Its database is `catalog` by default (
 
 The Compose MongoDB is a standalone node: it has no multi-document transactions, which is why Catalog writes single documents only and publishes no events yet ([ADR-024](../../docs/decisions/ADR-024-catalog-service-design.md) section 13). Catalog creates its indexes itself at startup. Operations: [CATALOG_OPERATIONS.md](../../docs/operations/CATALOG_OPERATIONS.md).
 
-Append `;Database=<name>` to the SQL Server setting above. In Development, `Identity__Database__ApplyMigrationsAtStartup=true` `TenantMerchant__Database__ApplyMigrationsAtStartup=true` and `Inventory__Database__ApplyMigrationsAtStartup=true` apply the migrations at startup. Integration tests create and drop their own throwaway databases (`EC_TEST_SQLSERVER`, [docs/testing](../../docs/testing/README.md)).
+Append `;Database=<name>` to the SQL Server setting above. In Development, `Identity__Database__ApplyMigrationsAtStartup=true` `TenantMerchant__Database__ApplyMigrationsAtStartup=true`, `Inventory__Database__ApplyMigrationsAtStartup=true` and `Cart__Database__ApplyMigrationsAtStartup=true` apply the migrations at startup. Integration tests create and drop their own throwaway databases (`EC_TEST_SQLSERVER`, [docs/testing](../../docs/testing/README.md)).
+
+## Cart's cache (`redis` profile)
+
+Cart caches carts in the general `redis` service ([ADR-030](../../docs/decisions/ADR-030-cart-redis-cache-consistency.md)): `ConnectionStrings__CartCache=127.0.0.1:6379,password=<REDIS_PASSWORD>`. Its keys start with `ec:cart:` and every key has a TTL. SQL Server stays the durable store: Cart answers every request without Redis, so `allkeys-lru` eviction, a flush or a stopped container only cost latency. `Cart__Cache__Enabled=false` runs Cart without the cache. No second Redis is started for it. Operations: [CART_OPERATIONS.md](../../docs/operations/CART_OPERATIONS.md).
 
 ## BFF session Redis (`bff` profile)
 
