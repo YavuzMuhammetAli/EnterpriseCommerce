@@ -27,6 +27,10 @@
     <ProjectReference Include="..\..\..\src\Services\Catalog\EnterpriseCommerce.Catalog.Application\EnterpriseCommerce.Catalog.Application.csproj" />
     <ProjectReference Include="..\..\..\src\Services\Catalog\EnterpriseCommerce.Catalog.Domain\EnterpriseCommerce.Catalog.Domain.csproj" />
     <ProjectReference Include="..\..\..\src\Services\Catalog\EnterpriseCommerce.Catalog.Infrastructure\EnterpriseCommerce.Catalog.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\src\Services\Inventory\EnterpriseCommerce.Inventory.Api\EnterpriseCommerce.Inventory.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Services\Inventory\EnterpriseCommerce.Inventory.Application\EnterpriseCommerce.Inventory.Application.csproj" />
+    <ProjectReference Include="..\..\..\src\Services\Inventory\EnterpriseCommerce.Inventory.Domain\EnterpriseCommerce.Inventory.Domain.csproj" />
+    <ProjectReference Include="..\..\..\src\Services\Inventory\EnterpriseCommerce.Inventory.Infrastructure\EnterpriseCommerce.Inventory.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

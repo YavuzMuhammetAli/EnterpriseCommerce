@@ -35,6 +35,7 @@ public sealed class MessagingBoundaryTests
     private static readonly HashSet<string> PublisherProjects = new(StringComparer.Ordinal)
     {
         "EnterpriseCommerce.TenantMerchant.Infrastructure",
+        "EnterpriseCommerce.Inventory.Infrastructure",
     };
 
     /// <summary>

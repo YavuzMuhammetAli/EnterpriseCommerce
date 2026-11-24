@@ -55,6 +55,10 @@ public sealed class ServiceOwnershipTests
     [InlineData("EnterpriseCommerce.Catalog.Application")]
     [InlineData("EnterpriseCommerce.Catalog.Infrastructure")]
     [InlineData("EnterpriseCommerce.Catalog.Api")]
+    [InlineData("EnterpriseCommerce.Inventory.Domain")]
+    [InlineData("EnterpriseCommerce.Inventory.Application")]
+    [InlineData("EnterpriseCommerce.Inventory.Infrastructure")]
+    [InlineData("EnterpriseCommerce.Inventory.Api")]
     public void NonIdentityServices_HoldNoCredentials(string assemblyName)
     {
         const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;

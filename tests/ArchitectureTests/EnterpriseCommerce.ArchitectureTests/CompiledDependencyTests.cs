@@ -22,7 +22,7 @@ public sealed class CompiledDependencyTests
     ];
 
     /// <summary>The implemented services. A new service is added here together with its project references.</summary>
-    public static readonly IReadOnlyList<string> ImplementedServices = ["Identity", "TenantMerchant", "Catalog"];
+    public static readonly IReadOnlyList<string> ImplementedServices = ["Identity", "TenantMerchant", "Catalog", "Inventory"];
 
     public static TheoryData<string, string[]> LayerRules() => new()
     {
@@ -62,6 +62,18 @@ public sealed class CompiledDependencyTests
             "EnterpriseCommerce.Catalog.Infrastructure",
             ["EnterpriseCommerce.Catalog.Api"]
         },
+        {
+            "EnterpriseCommerce.Inventory.Domain",
+            ["EnterpriseCommerce.Inventory.Application", "EnterpriseCommerce.Inventory.Infrastructure", "EnterpriseCommerce.Inventory.Api"]
+        },
+        {
+            "EnterpriseCommerce.Inventory.Application",
+            ["EnterpriseCommerce.Inventory.Infrastructure", "EnterpriseCommerce.Inventory.Api"]
+        },
+        {
+            "EnterpriseCommerce.Inventory.Infrastructure",
+            ["EnterpriseCommerce.Inventory.Api"]
+        },
     };
 
     /// <summary>Every compiled layer of every implemented service.</summary>
@@ -86,6 +98,8 @@ public sealed class CompiledDependencyTests
     [InlineData("EnterpriseCommerce.TenantMerchant.Application")]
     [InlineData("EnterpriseCommerce.Catalog.Domain")]
     [InlineData("EnterpriseCommerce.Catalog.Application")]
+    [InlineData("EnterpriseCommerce.Inventory.Domain")]
+    [InlineData("EnterpriseCommerce.Inventory.Application")]
     public void InnerLayer_DoesNotReferenceInfrastructureAssemblies(string assemblyName)
     {
         var violations = ReferencedAssemblyNames(assemblyName)
@@ -98,6 +112,7 @@ public sealed class CompiledDependencyTests
     [InlineData("EnterpriseCommerce.Identity.Domain")]
     [InlineData("EnterpriseCommerce.TenantMerchant.Domain")]
     [InlineData("EnterpriseCommerce.Catalog.Domain")]
+    [InlineData("EnterpriseCommerce.Inventory.Domain")]
     public void Domain_ReferencesNoOtherEnterpriseCommerceAssembly(string assemblyName)
     {
         var violations = ReferencedAssemblyNames(assemblyName)

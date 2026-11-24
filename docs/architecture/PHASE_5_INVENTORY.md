@@ -32,8 +32,8 @@
 | # | Milestone | State |
 |---|---|---|
 | 1 | Design decisions (ADR-026 to ADR-028) | done |
-| 2 | `BuildingBlocks.Messaging`; Tenant & Merchant moves to it | planned |
-| 3 | Service scaffold and domain | planned |
+| 2 | `BuildingBlocks.Messaging`; Tenant & Merchant moves to it | done |
+| 3 | Service scaffold and domain | done |
 | 4 | SQL Server persistence, migration, outbox mapping and event contracts | planned |
 | 5 | Catalog variant verification endpoint | planned |
 | 6 | Merchant stock management with membership and Catalog verification | planned |

@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Inventory Domain layer: per-variant stock balances, the append-only movement ledger and the reservation lifecycle
+    (ADR-026). Must not reference other layers or any infrastructure technology (EF Core, SQL Server, MongoDB, Kafka,
+    Redis, ASP.NET Core). Enforced by EnterpriseCommerce.ArchitectureTests.
+  -->
+
+</Project>

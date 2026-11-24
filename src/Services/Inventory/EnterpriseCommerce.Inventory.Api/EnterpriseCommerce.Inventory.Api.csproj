@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- Composition root of the Inventory service (ADR-026). -->
+
+  <ItemGroup>
+    <!-- Local access token validation with the standard JWT bearer handler (ADR-017 section 4), through the building block. -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Serilog.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\EnterpriseCommerce.BuildingBlocks.Authentication\EnterpriseCommerce.BuildingBlocks.Authentication.csproj" />
+    <ProjectReference Include="..\EnterpriseCommerce.Inventory.Application\EnterpriseCommerce.Inventory.Application.csproj" />
+    <ProjectReference Include="..\EnterpriseCommerce.Inventory.Infrastructure\EnterpriseCommerce.Inventory.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EnterpriseCommerce.Inventory.IntegrationTests" />
+    <InternalsVisibleTo Include="EnterpriseCommerce.Inventory.UnitTests" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Services\Inventory\EnterpriseCommerce.Inventory.Api\EnterpriseCommerce.Inventory.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Services\Inventory\EnterpriseCommerce.Inventory.Application\EnterpriseCommerce.Inventory.Application.csproj" />
+    <ProjectReference Include="..\..\..\src\Services\Inventory\EnterpriseCommerce.Inventory.Domain\EnterpriseCommerce.Inventory.Domain.csproj" />
+    <ProjectReference Include="..\..\..\src\Services\Inventory\EnterpriseCommerce.Inventory.Infrastructure\EnterpriseCommerce.Inventory.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

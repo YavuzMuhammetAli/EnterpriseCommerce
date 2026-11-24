@@ -137,6 +137,7 @@ Some duplication between services (for example, the small exception handler in e
 | Identity API | `http://localhost:5101`, `https://localhost:7101` |
 | Tenant & Merchant API | `http://localhost:5102`, `https://localhost:7102` |
 | Catalog API | `http://localhost:5103`, `https://localhost:7103` |
+| Inventory API | `http://localhost:5104`, `https://localhost:7104` |
 | BFF storefront, merchant, admin | `https://localhost:7201`, `7202`, `7203` |
 
 Future services get the next free port in the `51xx` range (and `71xx` for HTTPS), recorded in this table.

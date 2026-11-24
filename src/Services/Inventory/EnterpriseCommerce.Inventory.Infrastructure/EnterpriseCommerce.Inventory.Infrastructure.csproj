@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Inventory Infrastructure: EF Core persistence in the service's own SQL Server database (ADR-011, ADR-026), the
+    transactional outbox and Kafka relay from EnterpriseCommerce.BuildingBlocks.Messaging with the service's own mapper
+    (ADR-028), the reservation expiry worker, and the HTTP clients of Tenant & Merchant's membership verification
+    (ADR-025) and Catalog's variant verification (ADR-027).
+  -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+    <!-- The private_key_jwt client assertion of the svc-inventory client (ADR-025 section 2, ADR-027 section 2). -->
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
+  </ItemGroup>
+
+  <!-- Design-time only (dotnet ef migrations). Never flows to consumers or the published output. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\EnterpriseCommerce.BuildingBlocks.Messaging\EnterpriseCommerce.BuildingBlocks.Messaging.csproj" />
+    <ProjectReference Include="..\EnterpriseCommerce.Inventory.Application\EnterpriseCommerce.Inventory.Application.csproj" />
+    <ProjectReference Include="..\EnterpriseCommerce.Inventory.Domain\EnterpriseCommerce.Inventory.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EnterpriseCommerce.Inventory.Api" />
+    <InternalsVisibleTo Include="EnterpriseCommerce.Inventory.IntegrationTests" />
+    <InternalsVisibleTo Include="EnterpriseCommerce.Inventory.UnitTests" />
+  </ItemGroup>
+
+</Project>
