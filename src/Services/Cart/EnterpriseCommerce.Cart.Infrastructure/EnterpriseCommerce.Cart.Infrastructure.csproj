@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Cart Infrastructure: EF Core persistence in the service's own SQL Server database (ADR-011, ADR-029), the Redis
+    cache with its ordered compare-and-set writes (ADR-030), the HTTP client of Catalog's public product read
+    (ADR-029 section 5), and the expired-cart cleanup worker.
+  -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+    <!-- The cache (ADR-030): its compare-and-set needs a Lua script, which IDistributedCache cannot express. -->
+    <PackageReference Include="StackExchange.Redis" />
+  </ItemGroup>
+
+  <!-- Design-time only (dotnet ef migrations). Never flows to consumers or the published output. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EnterpriseCommerce.Cart.Application\EnterpriseCommerce.Cart.Application.csproj" />
+    <ProjectReference Include="..\EnterpriseCommerce.Cart.Domain\EnterpriseCommerce.Cart.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EnterpriseCommerce.Cart.Api" />
+    <InternalsVisibleTo Include="EnterpriseCommerce.Cart.IntegrationTests" />
+    <InternalsVisibleTo Include="EnterpriseCommerce.Cart.UnitTests" />
+  </ItemGroup>
+
+</Project>

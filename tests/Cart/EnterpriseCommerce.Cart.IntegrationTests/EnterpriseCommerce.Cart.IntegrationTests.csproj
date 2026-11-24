@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <!-- Signs real RS256 at+jwt test tokens, validated by the service's own JWT bearer configuration. -->
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Services\Cart\EnterpriseCommerce.Cart.Api\EnterpriseCommerce.Cart.Api.csproj" />
+  </ItemGroup>
+
+</Project>

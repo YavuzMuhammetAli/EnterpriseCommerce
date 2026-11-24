@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- Composition root of the Cart service (ADR-029). -->
+
+  <ItemGroup>
+    <!-- Local access token validation with the standard JWT bearer handler (ADR-017 section 4), through the building block. -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Serilog.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\EnterpriseCommerce.BuildingBlocks.Authentication\EnterpriseCommerce.BuildingBlocks.Authentication.csproj" />
+    <ProjectReference Include="..\EnterpriseCommerce.Cart.Application\EnterpriseCommerce.Cart.Application.csproj" />
+    <ProjectReference Include="..\EnterpriseCommerce.Cart.Infrastructure\EnterpriseCommerce.Cart.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EnterpriseCommerce.Cart.IntegrationTests" />
+    <InternalsVisibleTo Include="EnterpriseCommerce.Cart.UnitTests" />
+  </ItemGroup>
+
+</Project>

@@ -22,7 +22,7 @@ public sealed class CompiledDependencyTests
     ];
 
     /// <summary>The implemented services. A new service is added here together with its project references.</summary>
-    public static readonly IReadOnlyList<string> ImplementedServices = ["Identity", "TenantMerchant", "Catalog", "Inventory"];
+    public static readonly IReadOnlyList<string> ImplementedServices = ["Identity", "TenantMerchant", "Catalog", "Inventory", "Cart"];
 
     public static TheoryData<string, string[]> LayerRules() => new()
     {
@@ -74,6 +74,18 @@ public sealed class CompiledDependencyTests
             "EnterpriseCommerce.Inventory.Infrastructure",
             ["EnterpriseCommerce.Inventory.Api"]
         },
+        {
+            "EnterpriseCommerce.Cart.Domain",
+            ["EnterpriseCommerce.Cart.Application", "EnterpriseCommerce.Cart.Infrastructure", "EnterpriseCommerce.Cart.Api"]
+        },
+        {
+            "EnterpriseCommerce.Cart.Application",
+            ["EnterpriseCommerce.Cart.Infrastructure", "EnterpriseCommerce.Cart.Api"]
+        },
+        {
+            "EnterpriseCommerce.Cart.Infrastructure",
+            ["EnterpriseCommerce.Cart.Api"]
+        },
     };
 
     /// <summary>Every compiled layer of every implemented service.</summary>
@@ -100,6 +112,8 @@ public sealed class CompiledDependencyTests
     [InlineData("EnterpriseCommerce.Catalog.Application")]
     [InlineData("EnterpriseCommerce.Inventory.Domain")]
     [InlineData("EnterpriseCommerce.Inventory.Application")]
+    [InlineData("EnterpriseCommerce.Cart.Domain")]
+    [InlineData("EnterpriseCommerce.Cart.Application")]
     public void InnerLayer_DoesNotReferenceInfrastructureAssemblies(string assemblyName)
     {
         var violations = ReferencedAssemblyNames(assemblyName)
@@ -113,6 +127,7 @@ public sealed class CompiledDependencyTests
     [InlineData("EnterpriseCommerce.TenantMerchant.Domain")]
     [InlineData("EnterpriseCommerce.Catalog.Domain")]
     [InlineData("EnterpriseCommerce.Inventory.Domain")]
+    [InlineData("EnterpriseCommerce.Cart.Domain")]
     public void Domain_ReferencesNoOtherEnterpriseCommerceAssembly(string assemblyName)
     {
         var violations = ReferencedAssemblyNames(assemblyName)

@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Cart Domain layer: the customer's cart, its lines and their product snapshots, the single-merchant and limit rules,
+    and expiry (ADR-029). Must not reference other layers or any infrastructure technology (EF Core, SQL Server,
+    MongoDB, Kafka, Redis, ASP.NET Core). Enforced by EnterpriseCommerce.ArchitectureTests.
+  -->
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EnterpriseCommerce.Cart.UnitTests" />
+  </ItemGroup>
+
+</Project>

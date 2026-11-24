@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Cart Application layer: the cart use cases and the ports to persistence, the cache and Catalog (ADR-029, ADR-030). -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EnterpriseCommerce.Cart.Domain\EnterpriseCommerce.Cart.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EnterpriseCommerce.Cart.UnitTests" />
+  </ItemGroup>
+
+</Project>
