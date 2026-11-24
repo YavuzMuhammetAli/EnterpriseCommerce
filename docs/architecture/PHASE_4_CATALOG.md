@@ -9,6 +9,7 @@ The Catalog microservice (`EnterpriseCommerce.Catalog`). It owns product content
 - **Operations:** [CATALOG_OPERATIONS.md](../operations/CATALOG_OPERATIONS.md).
 - **Status:** **complete** (2026-11-24). Every milestone of [section 10](#10-milestones-and-progress) is done, and the evidence is in [section 12](#12-test-evidence).
   - **Verification level.** Tested locally only, against MongoDB 8.0, SQL Server 2022, LocalDB, Kafka and Redis. It is not production-verified, and the commits are not yet CI-verified: GitHub Actions runs only after the owner pushes.
+  - **First CI run.** It failed one Catalog test on a signing-key lifetime defect, and one Firefox browser case timed out. The defect is fixed and the browser case did not reproduce: [section 17](#17-ci-findings-after-completion). A green CI run is still open.
   - **Open items.** Production gates: [section 16](#16-production-gates-open). Deferred capabilities: [section 15](#15-deferred-capabilities).
 
 ## 1. Inputs and scope
@@ -296,23 +297,23 @@ The trigger is the first consumer: Cart, Order or Inventory.
 
 ## 12. Test evidence
 
-**Full solution** (2026-11-23/24, Release, `EC_REQUIRE_INFRA_TESTS=true`, environment in section 13):
+**Full solution** (2026-11-23/24, Release, `EC_REQUIRE_INFRA_TESTS=true`, environment in section 13; the counts include the two regression tests of [section 17](#17-ci-findings-after-completion)):
 
 | Module | Tests | Notes |
 |---|---|---|
 | Catalog.UnitTests | 121 | domain rules, the authorizer and its meters, paging, search text, settings |
-| Catalog.IntegrationTests | 121 | MongoDB persistence and indexes, the Tenant & Merchant client, the merchant, taxonomy and public APIs, security, unavailability, the 413 test on Kestrel |
+| Catalog.IntegrationTests | 122 | MongoDB persistence and indexes, the Tenant & Merchant client, the merchant, taxonomy and public APIs, security, unavailability, the 413 test on Kestrel |
 | ArchitectureTests | 169 | includes the new MongoDB boundary and BuildingBlocks rules |
 | Gateway.IntegrationTests | 85 | includes the Catalog route and the internal-path cases through it |
 | TenantMerchant.UnitTests | 447 | |
-| TenantMerchant.IntegrationTests | 218 | includes the 18 membership verification tests and the Kafka tests |
+| TenantMerchant.IntegrationTests | 219 | includes the 18 membership verification tests and the Kafka tests |
 | Identity.UnitTests | 169 | unchanged |
 | Identity.IntegrationTests | 166 | unchanged |
 | Bff.UnitTests | 103 | unchanged |
 | Bff.IntegrationTests | 63 | unchanged, includes the merchant flow through the real Gateway |
 | Bff.BrowserTests | 18 | Chromium, Firefox and WebKit through Playwright |
 | BuildingBlocks.Authentication.UnitTests | 11 | the caller claim tests, moved from Tenant & Merchant |
-| **Total** | **1,691** | **1,691 passed, 0 failed, 0 skipped** |
+| **Total** | **1,693** | **1,693 passed, 0 failed, 0 skipped** |
 
 **How it was run:**
 
@@ -386,3 +387,73 @@ The trigger is the first consumer: Cart, Order or Inventory.
 - **Operations:** a metrics exporter and alerting (the observability phase).
 - **Performance:** load and performance measurement of discovery queries on realistic data volumes.
 - **CI:** a green GitHub Actions run of the Phase 4 commits, which only the owner's push can produce. Local evidence is not CI evidence.
+
+## 17. CI findings after completion
+
+The first GitHub Actions run of the Phase 4 commits (2026-11-24) failed in two places. This section records the root cause, the fix and the evidence.
+
+### F1: a disposed signing key shared through the process-wide signer cache (fixed)
+
+**Symptom.** `MembershipVerifierTests.AnActiveMember_IsVerifiedWithTheirRole_AndTheCorrelationIdTravels` failed. The svc-catalog client assertion could not be signed:
+
+- `MembershipUnavailableException` "No service token for Tenant & Merchant"
+- inner `ObjectDisposedException` on `RSAOpenSsl`
+- log event 4201
+
+The verification failed closed, as designed.
+
+**Root cause.**
+
+1. **Ownership.** `CatalogServiceTokenProvider` is a singleton per host. It loads its own `RSA` from the key file and disposes it with the host. That ownership is correct.
+2. **The shared cache.** The assertion was signed through `CryptoProviderFactory.Default`, a process-wide cache of signature providers in Microsoft.IdentityModel. The cache key is the key's `InternalId`, a thumbprint of the **public** key. Two `RsaSecurityKey` instances loaded from the same file therefore share one cached signer, and that signer holds the RSA of the first host that signed.
+3. **The trigger.** `MembershipVerifierTests` runs several hosts in one process on the fixture's single key file: the shared host, plus per-test hosts it disposes. When a per-test host signed first and was disposed, the shared host's next signing used the disposed RSA.
+4. **Why only CI.** xUnit's order within a class depends on the platform. On Windows the long-lived host signed first, so the class passed. In CI's Linux order it failed.
+
+**Classification.** This is a lifetime defect in production code, not in the test fixture. The class disposed a key that a process-global cache it never opted out of still referenced. It surfaces whenever two hosts in one process use the same key file. The fixture's own key is disposed only after all of its hosts, so the fixture was not at fault.
+
+**Fix.** Each token provider's `RsaSecurityKey` now has a `CryptoProviderFactory` of its own with `CacheSignatureProviders = false`. Its signer therefore always uses the RSA the provider owns.
+
+What stays the same:
+- The RSA is still disposed with the provider.
+- The access token (never a verdict) is still cached.
+- Every failure still fails closed.
+- No exception is caught or suppressed.
+
+A signer is now built per assertion, which happens about once every four minutes per host.
+
+The same code in Tenant & Merchant's `IdentityServiceTokenProvider` (the template the Catalog provider was copied from) got the same fix. No test order triggered it there yet.
+
+| Commit | Change |
+|---|---|
+| `9b36fa6` fix(catalog) | `CatalogServiceTokenProvider` and the regression test `MembershipVerifierTests.AnotherHostsDisposedKey_NeverBreaksSigning` |
+| `707aa0d` fix(tenant) | `IdentityServiceTokenProvider` and the regression test `InvitationAcceptanceTests.AnotherHostsDisposedKey_NeverBreaksSigning` |
+
+Each regression test runs in any order. It signs with one host, disposes that host, then signs twice with a second host on the same key file (one `401` forces a renewal).
+
+**Evidence:**
+
+- **Before the fix:**
+  - Both regression tests failed with `ObjectDisposedException`, on Windows (`RSABCrypt`).
+  - The original CI failure was reproduced exactly in Linux: SDK 10.0.301 container, CI's checkout path, `git archive` of `7a3aa8a`. `AnActiveMember_…` failed in 3 of 3 runs of the class.
+- **After the fix:**
+  - In the same Linux container, `MembershipVerifierTests` passed 25/25 in 3 of 3 runs.
+  - On Windows, the class passed 25/25 in 20 of 20 runs, the original test passed 20 of 20 runs alone, and each regression test passed 10 of 10 runs.
+  - Catalog: unit 121/121, integration 122/122, against MongoDB.
+  - Tenant & Merchant: unit 447/447. The integration suite passed 219/219 in the full run, with Kafka and the Compose SQL Server 2022.
+- **Full solution, configured as in CI:**
+  - Release, `EC_REQUIRE_INFRA_TESTS=true`, Compose SQL Server 2022, MongoDB, the session Redis and Kafka
+  - 1,693 tests: 1,675 passed, 0 failed, and 18 skipped (the browser tests, which CI runs in a separate job, as here)
+  - Build: 0 warnings
+  - The CI secret scan over all logs: clean
+
+**The same latent pattern, unchanged.** Identity's `NotificationSecurityEmailDispatcher` and the BFF's `ClientAssertionFactory` also sign with an RSA they own and dispose, through the default cache. No test or deployment runs two of their hosts on one key file, and Phase 2.3 is closed, so they are unchanged. A host that ever runs two instances on one key file, in tests or in production, needs the same fix.
+
+### F2: a Firefox login case timed out (not reproduced)
+
+`BrowserFlowTests.Login_SetsTheAcceptedCookies_AndNoTokenReachesTheBrowser(engine: "firefox")` timed out after 30 s in `WaitForURLAsync("/")`, after the password was submitted.
+
+- **Where it hung.** The stack ends in `WaitForLoadStateAsync`: the address already matched, but Firefox never reported the `load` event.
+- **Not caused by Phase 4.** No Phase 4 commit touched the BFF, Identity or the browser tests.
+- **Reproduction attempts.** The browser suite passed 18/18 in 3 of 3 separate runs on Windows (Compose SQL Server and the session Redis).
+- **The Linux attempt.** It also passed 18/18 in 3 of 3 runs in Linux: SDK 10.0.301 container, CI's checkout path, Playwright browsers installed with `--with-deps` as in CI.
+- **Outcome.** The failure did not reproduce, so the cause is unknown and no code was changed. It is recorded as an open CI flake of the Phase 2.2 browser suite. If it recurs, the next step is a Playwright trace of the Firefox case.
