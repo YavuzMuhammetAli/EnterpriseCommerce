@@ -3,7 +3,13 @@ using System.Net.Http.Json;
 using System.Text;
 using EnterpriseCommerce.TenantMerchant.Domain.Memberships;
 using EnterpriseCommerce.TenantMerchant.IntegrationTests.Infrastructure;
+using EnterpriseCommerce.TenantMerchant.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace EnterpriseCommerce.TenantMerchant.IntegrationTests.Api;
 
@@ -324,16 +330,35 @@ public sealed class SelfServiceOnboardingTests(TenantMerchantApiFixture fixture)
     [Theory]
     [InlineData("0")]
     [InlineData("11")]
-    public async Task AnOutOfRangeLimit_StopsTheHost(string limit)
+    public void AnOutOfRangeLimit_StopsTheHost(string limit)
     {
-        fixture.RequireAvailable();
-        await using var factory = fixture.CreateFactory(
-            fixture.Database.ConnectionString,
-            builder => builder.UseSetting("TenantMerchant:Onboarding:MaxTenantsPerSubject", limit));
+        // The real Infrastructure registration and the IStartupValidator the host runs before it starts, without a web
+        // host: starting a failing WebApplicationFactory host races its teardown under load (docs/testing TS-3).
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:TenantMerchantDatabase"] = "Server=unused;Database=unused",
+            ["TenantMerchant:Onboarding:MaxTenantsPerSubject"] = limit,
+        }).Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IHostEnvironment>(new DevelopmentEnvironment());
+        services.AddTenantMerchantInfrastructure(configuration);
+        using var provider = services.BuildServiceProvider();
 
-        var failure = Assert.ThrowsAny<Exception>(() => factory.CreateClient());
+        var failure = Assert.ThrowsAny<Exception>(() => provider.GetRequiredService<IStartupValidator>().Validate());
 
         Assert.Contains("TenantMerchant:Onboarding is invalid", failure.ToString(), StringComparison.Ordinal);
+    }
+
+    private sealed class DevelopmentEnvironment : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = Environments.Development;
+
+        public string ApplicationName { get; set; } = "EnterpriseCommerce.TenantMerchant.Api";
+
+        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
+
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 
     [Fact]

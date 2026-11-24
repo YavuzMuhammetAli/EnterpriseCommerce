@@ -40,7 +40,10 @@ A multi-tenant, multi-vendor e-commerce marketplace built with .NET 10 microserv
 | [PHASE_3_S3_SELF_SERVICE_ONBOARDING.md](docs/architecture/PHASE_3_S3_SELF_SERVICE_ONBOARDING.md) | Phase 3 S3: self-service merchant onboarding, the per-user limit, per-user idempotency |
 | [TENANT_MERCHANT_API_CONTRACT.md](docs/api/TENANT_MERCHANT_API_CONTRACT.md) | Tenant & Merchant API contract (Phase 3 S1 to S3) |
 | [PHASE_3_S4_EVENT_FLOW.md](docs/architecture/PHASE_3_S4_EVENT_FLOW.md) | Phase 3 S4 (designed, ADR-023 accepted, step 1 of 6 done): the first integration event, the transactional outbox and the relay |
-| [Integration events](docs/events/README.md) | Event conventions (envelope, topics, versioning) and contracts, starting with [TENANT_MERCHANT_EVENTS.md](docs/events/TENANT_MERCHANT_EVENTS.md) |
+| [Integration events](docs/events/README.md) | Event conventions (envelope, topics, versioning) and contracts: [TENANT_MERCHANT_EVENTS.md](docs/events/TENANT_MERCHANT_EVENTS.md), [INVENTORY_EVENTS.md](docs/events/INVENTORY_EVENTS.md) |
+| [PHASE_5_INVENTORY.md](docs/architecture/PHASE_5_INVENTORY.md) | Phase 5: the Inventory service, its design, evidence, measurements and production gates |
+| [INVENTORY_API_CONTRACT.md](docs/api/INVENTORY_API_CONTRACT.md) | Inventory API contract (merchant stock management, internal reservations) |
+| [INVENTORY_OPERATIONS.md](docs/operations/INVENTORY_OPERATIONS.md) | Inventory operations: configuration, health, migrations, failure modes |
 
 ## Technology stack
 
@@ -193,7 +196,7 @@ docker compose --profile all ps
 docker compose --profile all down                    # stop (add -v to delete data volumes)
 ```
 
-No service starts without a profile. Images, ports, memory limits and connection details are in [deploy/docker/README.md](deploy/docker/README.md). Identity and Tenant & Merchant use SQL Server, Tenant & Merchant also Kafka, the BFF the session Redis, and Catalog MongoDB.
+No service starts without a profile. Images, ports, memory limits and connection details are in [deploy/docker/README.md](deploy/docker/README.md). Identity, Tenant & Merchant and Inventory use SQL Server, Tenant & Merchant and Inventory also Kafka, the BFF the session Redis, and Catalog MongoDB.
 
 ## Run tests
 
@@ -245,16 +248,27 @@ Naming and model: [ADR-020](docs/decisions/ADR-020-tenant-merchant-naming-and-te
 - **No Catalog integration events yet:** the standalone MongoDB has no transactions for an outbox (ADR-024 section 13).
 - Tested locally against MongoDB 8.0; not production-verified.
 
+**Implemented (Phase 5, Inventory):** the Inventory service on its own SQL Server database ([PHASE_5_INVENTORY.md](docs/architecture/PHASE_5_INVENTORY.md), [ADR-026](docs/decisions/ADR-026-inventory-service-design.md), [ADR-027](docs/decisions/ADR-027-catalog-variant-verification-for-other-services.md), [ADR-028](docs/decisions/ADR-028-inventory-integration-events-and-shared-outbox-building-block.md)).
+
+- **Stock per Catalog variant**, verified at Catalog when an item is created. Balances change only through explicit, reasoned movements in an append-only ledger. `0 ≤ reserved ≤ on hand` is enforced by the domain and by database constraints.
+- **Merchant stock management**, authorized per request by Tenant & Merchant. Owner and Admin manage stock; Staff reads.
+- **Reservations** for future checkout orchestration, through an internal API for allow-listed service clients:
+  - atomic multi-line placement that never oversells under concurrency
+  - idempotent creation, commit and release
+  - expiry on database time by a multi-instance worker, and lazily
+- **Events** (`StockLevelChanged` and the four reservation events) through the transactional outbox. The outbox code is now the shared `BuildingBlocks.Messaging`, also used by Tenant & Merchant.
+- Tested locally against SQL Server 2022 and Kafka 4.4; not production-verified.
+
 **Not implemented yet:**
 
 - Invitation email delivery, merchant applications, subscriptions and usage (later Tenant & Merchant slices and Notification)
-- Inventory operations, cart, checkout, orders, payments, fulfillment, notifications and admin features
+- Cart, checkout, orders, payments, fulfillment, notifications and admin features
 - Catalog integration events, a product image upload pipeline, and anonymous storefront browsing through the storefront BFF
 - Event consumers and sagas
 - Redis usage in any business service (the BFF session store is implemented in Phase 2.3 S7)
 - Application containers and Dockerfiles
 - OpenTelemetry, Prometheus, Grafana and Loki (planned as the observability phase)
-- The other seven business services (only documented so far)
+- The other six business services (only documented so far)
 
 ## Roadmap (indicative)
 

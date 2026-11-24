@@ -173,23 +173,36 @@ public sealed class PersistenceTests(SqlServerTestDatabase database) : IClassFix
             var item = await InventorySeed.CreateItemAsync(database, tenant, onHand: 100);
             using var start = new Barrier(Writers);
 
-            // Half receive one unit, half lose one: whatever the interleaving, every change applies once, in order.
-            var changes = await Task.WhenAll(Enumerable.Range(0, Writers).Select(writer => Task.Run(async () =>
+            // Half receive one unit, half lose one: whatever the interleaving, every applied change applies once, in
+            // order. A writer whose lock wait exceeds the bound (5 s, under heavy load) is refused with nothing written:
+            // the designed fail-closed answer (503), never a lost or doubled change.
+            var outcomes = await Task.WhenAll(Enumerable.Range(0, Writers).Select(writer => Task.Run(async () =>
             {
                 start.SignalAndWait(TimeSpan.FromSeconds(30));
-                return await InventorySeed.AdjustAsync(database, tenant, item.Id, writer % 2 == 0 ? 1 : -1, writer % 2 == 0 ? AdjustmentReason.Receipt : AdjustmentReason.Loss);
+                var delta = writer % 2 == 0 ? 1 : -1;
+                try
+                {
+                    var change = await InventorySeed.AdjustAsync(database, tenant, item.Id, delta, writer % 2 == 0 ? AdjustmentReason.Receipt : AdjustmentReason.Loss);
+                    Assert.True(change.Succeeded);
+                    return (Applied: true, Delta: delta);
+                }
+                catch (DataStoreUnavailableException)
+                {
+                    return (Applied: false, Delta: delta);
+                }
             })));
 
-            Assert.All(changes, change => Assert.True(change.Succeeded));
-            Assert.Equal($"100|{Writers + 1}", await database.ScalarAsync<string>($"SELECT CONCAT(OnHand, '|', Version) FROM InventoryItems WHERE Id = '{item.Id}'"));
+            var applied = outcomes.Where(outcome => outcome.Applied).ToList();
+            Assert.NotEmpty(applied);
+            Assert.Equal($"{100 + applied.Sum(outcome => outcome.Delta)}|{applied.Count + 1}", await database.ScalarAsync<string>($"SELECT CONCAT(OnHand, '|', Version) FROM InventoryItems WHERE Id = '{item.Id}'"));
             Assert.Equal(
-                string.Join(",", Enumerable.Range(1, Writers + 1)),
+                string.Join(",", Enumerable.Range(1, applied.Count + 1)),
                 await database.ScalarAsync<string>($"SELECT STRING_AGG(CAST(ItemVersion AS varchar(10)), ',') WITHIN GROUP (ORDER BY ItemVersion) FROM StockMovements WHERE InventoryItemId = '{item.Id}'"));
 
             // Each movement starts where the previous one ended: the ledger replays to the balance.
             Assert.Equal(0, await database.ScalarAsync<int>(
                 $"SELECT COUNT(*) FROM StockMovements m JOIN StockMovements p ON p.InventoryItemId = m.InventoryItemId AND p.ItemVersion = m.ItemVersion - 1 WHERE m.InventoryItemId = '{item.Id}' AND (m.OnHandBefore <> p.OnHandAfter OR m.ReservedBefore <> p.ReservedAfter)"));
-            Assert.Equal(Writers + 1, await database.ScalarAsync<int>($"SELECT COUNT(*) FROM OutboxMessages WHERE MessageKey = '{tenant}'"));
+            Assert.Equal(applied.Count + 1, await database.ScalarAsync<int>($"SELECT COUNT(*) FROM OutboxMessages WHERE MessageKey = '{tenant}'"));
         }
     }
 
