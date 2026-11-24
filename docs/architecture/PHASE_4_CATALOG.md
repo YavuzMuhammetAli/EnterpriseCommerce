@@ -368,7 +368,7 @@ The trigger is the first consumer: Cart, Order or Inventory.
 | Moving categories | A subtree ancestry update needs multi-document atomicity | A replica set, or a designed migration process |
 | Discounts, price lists, tax and multi-currency pricing | Not in the MVP | The checkout design (Order) |
 | Anonymous browsing through the storefront BFF | Needs a BFF anonymous pass-through design (D6) | A BFF design change |
-| Internal product reads for Cart and Order (snapshots) | No consumer yet | The Cart and Order phases |
+| Internal product reads for Cart and Order (snapshots) | Resolved for Inventory by ADR-027 and for Cart by [ADR-029](../decisions/ADR-029-cart-service-design.md) section 5 (Cart uses the public product read, no internal read). Still open for Order. | The Order phase |
 | A local membership projection | Membership events do not exist | Membership events, a consumer and an inbox (ADR-014 rule 3, ADR-023 section 7) |
 | Advanced search (Elasticsearch, OpenSearch) | Post-MVP (PROJECT_DECISIONS section 11) | An architecture review and an ADR |
 

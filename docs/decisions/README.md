@@ -34,5 +34,7 @@ The consolidated, current view of all decisions is [PROJECT_DECISIONS.md](../arc
 | [ADR-026](ADR-026-inventory-service-design.md) | Inventory Service Design | Accepted | |
 | [ADR-027](ADR-027-catalog-variant-verification-for-other-services.md) | Catalog Variant Verification for Other Services | Accepted | |
 | [ADR-028](ADR-028-inventory-integration-events-and-shared-outbox-building-block.md) | Inventory Integration Events and the Shared Outbox Building Block | Accepted | |
+| [ADR-029](ADR-029-cart-service-design.md) | Cart Service Design | Accepted | |
+| [ADR-030](ADR-030-cart-redis-cache-consistency.md) | Cart's Redis Cache and Its Consistency | Accepted | |
 
 New ADRs use the next number and the same four sections: Context, Decision, Consequences and Alternatives considered.

@@ -92,6 +92,15 @@ Any invalid value answers `400 validation-failed`. No other parameter, field or 
 - `200`: a public product.
 - `404 product-not-found`: the product is unknown, a draft or archived. These cases are indistinguishable.
 
+**Consumer: Cart** ([ADR-029](../decisions/ADR-029-cart-service-design.md) section 5). Cart calls this read, anonymously, to snapshot a product when a customer adds it to a cart or refreshes the cart. It depends on these fields:
+
+- `id` and `tenantId`
+- `name`
+- `variants[].id`, `sku`, `options`, `price.amount`, `price.currency` and `isActive`
+- `media[0].url` and `altText`
+
+It also depends on the `404` problem `type` `https://errors.enterprisecommerce.example/catalog/product-not-found`. A change to any of these is a breaking change for Cart. The consumer-contract test `CartConsumerContractTests` in `Catalog.IntegrationTests` pins them.
+
 ### 2.3 Look up a published product by slug
 
 `GET /api/v1/catalog/products/lookup?tenantId={tenantId}&slug={slug}`. Slugs are unique per tenant, so both are required (`400` otherwise).

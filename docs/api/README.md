@@ -11,6 +11,7 @@ API conventions and per-service API documentation.
 | [TENANT_MERCHANT_API_CONTRACT.md](TENANT_MERCHANT_API_CONTRACT.md) | Accepted and implemented for Phase 3 S1 (internal tenant provisioning, member reads) S2 (membership administration, invitations, [ADR-021](../decisions/ADR-021-merchant-invitations-and-membership-administration.md)) and S3 (self-service onboarding, [ADR-022](../decisions/ADR-022-self-service-tenant-onboarding.md)), and for Phase 4 the internal membership verification ([ADR-025](../decisions/ADR-025-merchant-authorization-through-tenant-merchant-membership-verification.md)). |
 | [CATALOG_API_CONTRACT.md](CATALOG_API_CONTRACT.md) | Accepted and implemented in Phase 4 ([ADR-024](../decisions/ADR-024-catalog-service-design.md), [ADR-025](../decisions/ADR-025-merchant-authorization-through-tenant-merchant-membership-verification.md)): public discovery, merchant products and brands, the internal category taxonomy. Phase 5 adds the internal variant verification ([ADR-027](../decisions/ADR-027-catalog-variant-verification-for-other-services.md)). |
 | [INVENTORY_API_CONTRACT.md](INVENTORY_API_CONTRACT.md) | Accepted and implemented in Phase 5 ([ADR-026](../decisions/ADR-026-inventory-service-design.md)): merchant stock management and the internal reservation API. |
+| [CART_API_CONTRACT.md](CART_API_CONTRACT.md) | Accepted for Phase 6 ([ADR-029](../decisions/ADR-029-cart-service-design.md), [ADR-030](../decisions/ADR-030-cart-redis-cache-consistency.md)): the storefront customer's cart. |
 
 ## Conventions
 
@@ -24,6 +25,7 @@ The cross-service conventions are in [IDENTITY_API_CONTRACT.md section 1](IDENTI
 - **Internal endpoints** live under `/internal/v1/...`, accept only service tokens of allow-listed `svc-` clients, and are never routed by the Gateway.
 - **Optimistic concurrency over HTTP** (first used by Catalog, Phase 4, [ADR-024](../decisions/ADR-024-catalog-service-design.md) section 14): reads return `ETag: "<version>"`; a full replacement requires `If-Match` (`428` without it, `412` when stale); a race lost on the server answers `409 concurrency-conflict`. State commands need no tag.
 - **Request body limit** (Catalog): 256 KiB, `413` above it.
+- **Optional `If-Match` on commands** (first used by Cart, Phase 6, [ADR-029](../decisions/ADR-029-cart-service-design.md) section 8): a command on a resource that the caller owns alone may send the tag it last saw; a stale tag answers `412`. It makes a retry after an ambiguous failure safe without an `Idempotency-Key`.
 - **Single-use secrets in responses** (first used by invitation creation, Phase 3 S2): returned once, with `Cache-Control: no-store`, never by a read, and sent back only in a request body, never in a URL.
 
 ## Current state

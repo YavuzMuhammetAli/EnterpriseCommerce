@@ -14,7 +14,7 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
 | 2 | Tenant & Merchant | `EnterpriseCommerce.TenantMerchant` ([ADR-020](../decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md)) | SQL Server | Phase 3 slices S1 (foundation and tenant provisioning), S2 (membership management) and S3 (self-service onboarding) implemented and tested locally. S4 (the first integration event, `TenantCreated`, through a transactional outbox and a Kafka relay, [ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md)) implemented and tested locally and in CI. Not production-verified ([PHASE_3_TENANT_MERCHANT.md](PHASE_3_TENANT_MERCHANT.md)). |
 | 3 | Catalog | `EnterpriseCommerce.Catalog` | MongoDB | Implemented in Phase 4 ([ADR-024](../decisions/ADR-024-catalog-service-design.md), [ADR-025](../decisions/ADR-025-merchant-authorization-through-tenant-merchant-membership-verification.md), [PHASE_4_CATALOG.md](PHASE_4_CATALOG.md)) and tested locally against MongoDB 8.0. Not production-verified. No integration events yet. |
 | 4 | Inventory | `EnterpriseCommerce.Inventory` | SQL Server | Implemented in Phase 5 ([ADR-026](../decisions/ADR-026-inventory-service-design.md), [ADR-027](../decisions/ADR-027-catalog-variant-verification-for-other-services.md), [ADR-028](../decisions/ADR-028-inventory-integration-events-and-shared-outbox-building-block.md), [PHASE_5_INVENTORY.md](PHASE_5_INVENTORY.md)) and tested locally against SQL Server 2022 and Kafka. Not production-verified. |
-| 5 | Cart | `EnterpriseCommerce.Cart` | SQL Server + Redis (acceleration only) | Planned |
+| 5 | Cart | `EnterpriseCommerce.Cart` | SQL Server + Redis (acceleration only) | Phase 6 in progress ([ADR-029](../decisions/ADR-029-cart-service-design.md), [ADR-030](../decisions/ADR-030-cart-redis-cache-consistency.md), [PHASE_6_CART.md](PHASE_6_CART.md)) |
 | 6 | Order | `EnterpriseCommerce.Order` | SQL Server | Planned |
 | 7 | Payment | `EnterpriseCommerce.Payment` | SQL Server | Planned |
 | 8 | Fulfillment | `EnterpriseCommerce.Fulfillment` | SQL Server | Planned |
@@ -203,6 +203,13 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
 - Owns: shopping carts, cart items, the cart lifecycle, and cart validation and expiration.
 - Data store: SQL Server is the durable store. Redis may accelerate cart access and short-lived operations, and Cart stays correct without it.
 - MVP constraint: a cart checks out with items from a **single merchant**.
+- Does not own products or prices (Catalog), stock or reservations (Inventory), orders or checkout (Order), or credentials (Identity).
+- **Design accepted for Phase 6** ([ADR-029](../decisions/ADR-029-cart-service-design.md), [ADR-030](../decisions/ADR-030-cart-redis-cache-consistency.md), API: [CART_API_CONTRACT.md](../api/CART_API_CONTRACT.md)):
+  - one cart per storefront customer (the token's `sub`), with a single merchant and a single currency
+  - Catalog snapshots through the public product read, at add and at refresh only; prices are indicative
+  - no stock reservation and no Inventory call
+  - optimistic concurrency with server-side retries; expiry after 30 days of inactivity
+  - a Redis cache ordered by `rowversion`, never needed for correctness
 
 ## 6. Order
 
