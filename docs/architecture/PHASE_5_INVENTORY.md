@@ -39,5 +39,5 @@
 | 6 | Merchant stock management with membership and Catalog verification | done |
 | 7 | Reservation lifecycle (internal API) | done |
 | 8 | Reservation expiry worker | done |
-| 9 | Kafka relay, Gateway route, topic and development keys | planned |
+| 9 | Kafka relay, Gateway route, topic and development keys | done |
 | 10 | Measurements, evidence and closure | planned |

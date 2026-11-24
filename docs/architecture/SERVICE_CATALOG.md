@@ -13,7 +13,7 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
 | 1 | Identity | `EnterpriseCommerce.Identity` | SQL Server | Implemented in Phase 2.3 (slices S1 to S7) and tested locally. Not production-verified, and production gates are open ([IDENTITY_OPERATIONS.md section 7](../security/IDENTITY_OPERATIONS.md#7-verification-level-and-remaining-production-gates)). |
 | 2 | Tenant & Merchant | `EnterpriseCommerce.TenantMerchant` ([ADR-020](../decisions/ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md)) | SQL Server | Phase 3 slices S1 (foundation and tenant provisioning), S2 (membership management) and S3 (self-service onboarding) implemented and tested locally. S4 (the first integration event, `TenantCreated`, through a transactional outbox and a Kafka relay, [ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md)) implemented and tested locally and in CI. Not production-verified ([PHASE_3_TENANT_MERCHANT.md](PHASE_3_TENANT_MERCHANT.md)). |
 | 3 | Catalog | `EnterpriseCommerce.Catalog` | MongoDB | Implemented in Phase 4 ([ADR-024](../decisions/ADR-024-catalog-service-design.md), [ADR-025](../decisions/ADR-025-merchant-authorization-through-tenant-merchant-membership-verification.md), [PHASE_4_CATALOG.md](PHASE_4_CATALOG.md)) and tested locally against MongoDB 8.0. Not production-verified. No integration events yet. |
-| 4 | Inventory | `EnterpriseCommerce.Inventory` | SQL Server | Planned |
+| 4 | Inventory | `EnterpriseCommerce.Inventory` | SQL Server | Implemented in Phase 5 ([ADR-026](../decisions/ADR-026-inventory-service-design.md), [ADR-027](../decisions/ADR-027-catalog-variant-verification-for-other-services.md), [ADR-028](../decisions/ADR-028-inventory-integration-events-and-shared-outbox-building-block.md), [PHASE_5_INVENTORY.md](PHASE_5_INVENTORY.md)) and tested locally against SQL Server 2022 and Kafka. Not production-verified. |
 | 5 | Cart | `EnterpriseCommerce.Cart` | SQL Server + Redis (acceleration only) | Planned |
 | 6 | Order | `EnterpriseCommerce.Order` | SQL Server | Planned |
 | 7 | Payment | `EnterpriseCommerce.Payment` | SQL Server | Planned |
@@ -172,6 +172,28 @@ The responsibilities below set boundaries, not detailed designs. Entities, APIs 
   - stock availability and inventory concurrency control
 - **Correctness relies on SQL Server transactions, concurrency control and unique reservation rules.** Redis locks are never the source of truth.
 - Reservation expiration is an explicit mechanism with a corresponding event ([ADR-013](../decisions/ADR-013-saga-based-workflow-coordination.md)).
+- Does not own products, variants or SKUs (Catalog), memberships (Tenant & Merchant), orders or checkout (Order).
+- **Implemented in Phase 5** ([ADR-026](../decisions/ADR-026-inventory-service-design.md), design and evidence: [PHASE_5_INVENTORY.md](PHASE_5_INVENTORY.md), API: [INVENTORY_API_CONTRACT.md](../api/INVENTORY_API_CONTRACT.md), events: [INVENTORY_EVENTS.md](../events/INVENTORY_EVENTS.md), operations: [INVENTORY_OPERATIONS.md](../operations/INVENTORY_OPERATIONS.md)):
+  - **Persistence:**
+    - its own SQL Server database: one balance per (tenant, variant), whole-unit quantities, `0 ≤ Reserved ≤ OnHand` as CHECK constraints
+    - an append-only, linear movement ledger
+    - reservations with immutable lines and `rowversion` tokens
+  - **Merchant API** (`/api/v1/inventory/tenants/{tenantId}/items`): create items of Catalog-verified variants ([ADR-027](../decisions/ADR-027-catalog-variant-verification-for-other-services.md)), list and read balances, adjust stock with reasons, and read the movement history.
+    - Authorized per request by Tenant & Merchant (ADR-025). Owner and Admin manage stock; Staff reads.
+    - Idempotent creation and adjustments.
+  - **Internal reservation API** (`/internal/v1/inventory/tenants/{tenantId}/reservations`): for allow-listed service clients (scope `svc.inventory.reservations`, empty by default).
+    - Atomic multi-line reservations, idempotent per (client, tenant, key).
+    - Commit and release, with terminal states final and lazy expiry.
+    - Each client sees only its own reservations.
+  - **Expiry:** a multi-instance worker on database time (`UPDLOCK, READPAST` claims), and `/health/expiry`.
+  - **Events:** `StockLevelChanged` and the four reservation events on `inventory.events`, through the transactional outbox and the shared relay of `BuildingBlocks.Messaging` ([ADR-028](../decisions/ADR-028-inventory-integration-events-and-shared-outbox-building-block.md)). Order is guaranteed per aggregate.
+  - **Host:** local JWT validation through `BuildingBlocks.Authentication`, fail-closed policies, `X-Correlation-ID`, problem details, a 256 KiB body limit, and readiness on the database and its migrations.
+- **Not implemented yet:**
+  - consumers (none needed)
+  - a merchant view of reservations
+  - Catalog-driven archival (Catalog publishes no events)
+  - a movement retention policy
+  - Order, the intended reservation caller
 
 ## 5. Cart
 
@@ -253,6 +275,7 @@ It routes Identity and each backend-for-frontend by host name, and it is the onl
   - a `/identity` path-prefix route to Identity, for development diagnostics only (ADR-017 section 10)
   - the Tenant & Merchant member API: `/api/v1/tenants/**` on host `localhost:7000` (Phase 3 S1)
   - the Catalog API: `/api/v1/catalog/**` on host `localhost:7000` (Phase 4)
+  - the Inventory merchant API: `/api/v1/inventory/**` on host `localhost:7000` (Phase 5)
 - **Internal paths are never forwarded.** A path whose first segment is `internal` answers `404` on every host, by every route and in every environment.
   - The check is case-insensitive, after percent-decoding and resolving empty and dot segments.
   - It runs on the incoming path, and again on the outgoing path of every proxied request after the route's transforms, so a prefix-removing or rewriting route cannot produce an internal destination (IDENTITY_API_CONTRACT.md section 2.12; finding P3-1, resolved).

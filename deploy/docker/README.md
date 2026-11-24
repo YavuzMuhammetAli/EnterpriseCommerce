@@ -80,6 +80,7 @@ One SQL Server instance hosts every SQL service's own database (ADR-011 rule 5),
 |---|---|---|
 | Identity | `ConnectionStrings__IdentityDatabase` | `EnterpriseCommerce_Identity` |
 | Tenant & Merchant | `ConnectionStrings__TenantMerchantDatabase` | `EnterpriseCommerce_TenantMerchant` |
+| Inventory | `ConnectionStrings__InventoryDatabase` | `EnterpriseCommerce_Inventory` |
 
 Catalog is the MongoDB service (ADR-011). Its database is `catalog` by default (`Catalog__Database__DatabaseName`), and its connection string uses the MongoDB setting above (with `MONGO_PORT=27018` when a local `mongod` holds 27017):
 
@@ -89,7 +90,7 @@ Catalog is the MongoDB service (ADR-011). Its database is `catalog` by default (
 
 The Compose MongoDB is a standalone node: it has no multi-document transactions, which is why Catalog writes single documents only and publishes no events yet ([ADR-024](../../docs/decisions/ADR-024-catalog-service-design.md) section 13). Catalog creates its indexes itself at startup. Operations: [CATALOG_OPERATIONS.md](../../docs/operations/CATALOG_OPERATIONS.md).
 
-Append `;Database=<name>` to the SQL Server setting above. In Development, `Identity__Database__ApplyMigrationsAtStartup=true` and `TenantMerchant__Database__ApplyMigrationsAtStartup=true` apply the migrations at startup. Integration tests create and drop their own throwaway databases (`EC_TEST_SQLSERVER`, [docs/testing](../../docs/testing/README.md)).
+Append `;Database=<name>` to the SQL Server setting above. In Development, `Identity__Database__ApplyMigrationsAtStartup=true` `TenantMerchant__Database__ApplyMigrationsAtStartup=true` and `Inventory__Database__ApplyMigrationsAtStartup=true` apply the migrations at startup. Integration tests create and drop their own throwaway databases (`EC_TEST_SQLSERVER`, [docs/testing](../../docs/testing/README.md)).
 
 ## BFF session Redis (`bff` profile)
 
@@ -111,6 +112,7 @@ docker compose exec redis-sessions redis-cli config get maxmemory-policy   # noe
 - `auto.create.topics.enable=false`: topics are created explicitly, never by an application ([docs/events](../../docs/events/README.md)).
 - The topics are declared in [kafka/topics.txt](kafka/topics.txt). The one-shot `kafka-init` service creates them once the broker is healthy (idempotent, `--if-not-exists`). `up -d --wait` does not wait for a one-shot container to finish, so confirm with `docker compose --profile kafka wait kafka-init` (exit code 0).
 - Tenant & Merchant publishes to `tenant-merchant.events` with `TenantMerchant__Kafka__BootstrapServers=localhost:9094` ([TENANT_MERCHANT_EVENT_RELAY.md](../../docs/operations/TENANT_MERCHANT_EVENT_RELAY.md)).
+- Inventory publishes to `inventory.events` with `Inventory__Kafka__BootstrapServers=localhost:9094` ([INVENTORY_OPERATIONS.md](../../docs/operations/INVENTORY_OPERATIONS.md)). On a broker started before Phase 5, run `docker compose --profile kafka run --rm kafka-init` once to create the new topic.
 - Replication factor is 1, which is suitable for local development only.
 
 ## Not included yet

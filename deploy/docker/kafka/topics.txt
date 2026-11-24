@@ -4,3 +4,4 @@
 #
 # name                    partitions  replication  configs
 tenant-merchant.events    3           1            cleanup.policy=delete,retention.ms=604800000
+inventory.events          3           1            cleanup.policy=delete,retention.ms=604800000

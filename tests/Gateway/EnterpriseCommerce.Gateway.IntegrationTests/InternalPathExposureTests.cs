@@ -59,6 +59,9 @@ public sealed class InternalPathExposureTests(KestrelGatewayFixture gateway) : I
             $"/internal/v1/tenants/{TenantId}",
             $"/internal/v1/tenants/{TenantId}/membership-verifications",
             "/internal/v1/catalog/categories",
+            $"/internal/v1/catalog/tenants/{TenantId}/variant-verifications",
+            $"/internal/v1/inventory/tenants/{TenantId}/reservations",
+            $"/internal/v1/inventory/tenants/{TenantId}/reservations/{TenantId}/commit",
         })
         {
             var response = await gateway.SendAsync("POST", target, host);
@@ -97,6 +100,12 @@ public sealed class InternalPathExposureTests(KestrelGatewayFixture gateway) : I
     [InlineData("/api/v1/catalog/products/../../../../internal/v1/tenants/0196f0a0-0000-7000-8000-000000000001/membership-verifications")]
     [InlineData("/api/v1/catalog/..%2F..%2F..%2Finternal/v1/catalog/categories")]
     [InlineData("/INTERNAL/v1/catalog/categories")]
+    [InlineData($"/api/v1/inventory/../../../internal/v1/inventory/tenants/{TenantId}/reservations")]
+    [InlineData($"/api/v1/inventory/%2e%2e/%2e%2e/%2e%2e/internal/v1/inventory/tenants/{TenantId}/reservations")]
+    [InlineData($"/api/v1/inventory/tenants/{TenantId}/items/..%2F..%2F..%2F..%2F..%2F..%2Finternal/v1/inventory/tenants/{TenantId}/reservations")]
+    [InlineData($"/api/v1/inventory/tenants/{TenantId}/items/../../../../../../internal/v1/catalog/tenants/{TenantId}/variant-verifications")]
+    [InlineData($"/Internal/V1/Inventory/tenants/{TenantId}/reservations")]
+    [InlineData($"/%69nternal/v1/inventory/tenants/{TenantId}/reservations")]
     [InlineData("http://localhost:5000/internal/v1/accounts/1/disable")]
     [InlineData("http://localhost:5000/identity/internal/v1/accounts/1/disable")]
     public async Task AlternatePathForms_CannotBypassTheBlock(string target)
@@ -132,6 +141,20 @@ public sealed class InternalPathExposureTests(KestrelGatewayFixture gateway) : I
     [InlineData("POST", $"/api/v1/catalog/tenants/{TenantId}/products")]
     [InlineData("PUT", $"/api/v1/catalog/tenants/{TenantId}/brands/{TenantId}")]
     public async Task TheCatalogApi_IsForwarded(string method, string target)
+    {
+        var response = await gateway.SendAsync(method, target, "localhost:7000");
+
+        Assert.True(response.Forwarded, $"{target} was not forwarded (status {response.Status}).");
+        Assert.Equal(200, response.Status);
+        Assert.Equal(target, response.BackendTarget);
+    }
+
+    [Theory]
+    [InlineData("GET", $"/api/v1/inventory/tenants/{TenantId}/items?sku=SKU-1&page=2")]
+    [InlineData("POST", $"/api/v1/inventory/tenants/{TenantId}/items")]
+    [InlineData("POST", $"/api/v1/inventory/tenants/{TenantId}/items/{TenantId}/adjustments")]
+    [InlineData("GET", $"/api/v1/inventory/tenants/{TenantId}/items/{TenantId}/movements")]
+    public async Task TheInventoryApi_IsForwarded(string method, string target)
     {
         var response = await gateway.SendAsync(method, target, "localhost:7000");
 

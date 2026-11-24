@@ -18,6 +18,7 @@ public sealed class DevelopmentRouteTests : IDisposable
         // The Development cluster points at a local service that is not running in tests; send it nowhere instead.
         builder.UseSetting("ReverseProxy:Clusters:tenant-merchant:Destinations:primary:Address", "http://127.0.0.1:1/");
         builder.UseSetting("ReverseProxy:Clusters:catalog:Destinations:primary:Address", "http://127.0.0.1:1/");
+        builder.UseSetting("ReverseProxy:Clusters:inventory:Destinations:primary:Address", "http://127.0.0.1:1/");
     });
 
     [Fact]
@@ -59,6 +60,43 @@ public sealed class DevelopmentRouteTests : IDisposable
         Assert.Equal("catalog-api", route.Name);
         Assert.Equal("/api/v1/catalog/{**catch-all}", route.Path);
         Assert.Equal(["localhost:7000"], route.Hosts);
+    }
+
+    [Fact]
+    public void TheInventoryRoute_ExposesOnlyTheMerchantInventoryApi()
+    {
+        // ADR-026: the merchant API is public behind the Gateway; the reservation API is internal only.
+        var route = Assert.Single(Routes(), candidate => candidate.Name.StartsWith("inventory", StringComparison.Ordinal));
+
+        Assert.Equal("inventory-api", route.Name);
+        Assert.Equal("/api/v1/inventory/{**catch-all}", route.Path);
+        Assert.Equal(["localhost:7000"], route.Hosts);
+    }
+
+    [Theory]
+    [InlineData("/internal/v1/inventory/tenants/0196f0a0-0000-7000-8000-000000000001/reservations")]
+    [InlineData("/internal/v1/inventory/tenants/0196f0a0-0000-7000-8000-000000000001/reservations/0196f0a0-0000-7000-8000-000000000002/commit")]
+    [InlineData("/internal/v1/catalog/tenants/0196f0a0-0000-7000-8000-000000000001/variant-verifications")]
+    public async Task InternalInventoryAndVerificationPaths_AreRefusedOnTheServiceRouteHost(string path)
+    {
+        using var client = _gateway.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("http://localhost:7000") });
+
+        using var response = await client.PostAsync(path, content: null, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("/api/v1/inventory/tenants/0196f0a0-0000-7000-8000-000000000001/items")]
+    [InlineData("/api/v1/inventory/tenants/0196f0a0-0000-7000-8000-000000000001/items/0196f0a0-0000-7000-8000-000000000002/movements")]
+    public async Task TheInventoryApi_IsForwardedOnTheServiceRouteHost(string path)
+    {
+        using var client = _gateway.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("http://localhost:7000") });
+
+        using var response = await client.GetAsync(path, TestContext.Current.CancellationToken);
+
+        // Forwarded to the (unreachable) Inventory destination.
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
     }
 
     [Theory]

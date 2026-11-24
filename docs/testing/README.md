@@ -8,7 +8,7 @@
 | `EnterpriseCommerce.{Service}.IntegrationTests` | Integration | The real HTTP pipeline in memory (`WebApplicationFactory`), and later real infrastructure |
 | `EnterpriseCommerce.Bff.BrowserTests` | Browser | The BFF flows in Chromium, Firefox and WebKit (Playwright) against Identity and the BFF on real Kestrel listeners |
 | `EnterpriseCommerce.Gateway.IntegrationTests` | Integration | The Gateway's edge rules (internal paths are never forwarded) and the committed Development route set |
-| `EnterpriseCommerce.ArchitectureTests` | Architecture | Layer dependency direction, forbidden technologies in inner layers, no cross-service references, naming conventions, service ownership (credentials only in Identity, merchant roles never in Identity, no service naming another service's database), and the messaging boundaries of ADR-023 (Confluent.Kafka only in allow-listed Infrastructure projects, no rejected messaging package, messaging types only in those Infrastructure assemblies) |
+| `EnterpriseCommerce.ArchitectureTests` | Architecture | Layer dependency direction, forbidden technologies in inner layers, no cross-service references, naming conventions, service ownership (credentials only in Identity, merchant roles never in Identity, no service naming another service's database), and the messaging boundaries of ADR-023 and ADR-028 (Confluent.Kafka declared only by `BuildingBlocks.Messaging`, the block referenced only by Infrastructure projects, no rejected messaging package, messaging types only in the block and in allow-listed publishers' Infrastructure) |
 
 The TenantMerchant integration tests sign real RS256 `at+jwt` tokens with a test issuer (`TestTokenIssuer`), which serves discovery and the JWKS to the service's own JWT bearer handler. The validation configuration is exercised end to end, without a dependency on the Identity projects.
 
@@ -31,12 +31,13 @@ Infrastructure comes from the Compose profiles; there are no per-test containers
 
 | Variable | Needed by | Example (local) |
 |---|---|---|
-| `EC_TEST_SQLSERVER` | Identity, BFF and TenantMerchant integration tests (throwaway databases, dropped afterwards) | `Server=127.0.0.1,1433;User ID=sa;Password=<MSSQL_SA_PASSWORD>;TrustServerCertificate=true` (`--profile sqlserver`) |
+| `EC_TEST_SQLSERVER` | Identity, BFF, TenantMerchant and Inventory integration tests (throwaway databases, dropped afterwards) | `Server=127.0.0.1,1433;User ID=sa;Password=<MSSQL_SA_PASSWORD>;TrustServerCertificate=true` (`--profile sqlserver`) |
 | `EC_TEST_REDIS_SESSIONS` | BFF integration and browser tests (the dedicated `noeviction` session Redis; keys under one prefix per run, deleted afterwards) | `127.0.0.1:6380,password=<REDIS_SESSIONS_PASSWORD>` (`--profile bff`) |
 | `EC_TEST_REDIS_RESTART_CONTAINER` | The real Redis restart test (it runs in the serial collection, after the parallel tests) | `enterprisecommerce-redis-sessions-1` |
 | `EC_TEST_BROWSERS=true` | Playwright browser tests (they install the browsers on first run) | |
-| `EC_TEST_KAFKA` | TenantMerchant Kafka tests of the outbox relay (one topic per test, created with AdminClient and deleted afterwards) | `127.0.0.1:9094` (`--profile kafka`) |
+| `EC_TEST_KAFKA` | TenantMerchant and Inventory Kafka tests of the outbox relay (one topic per test, created with AdminClient and deleted afterwards) | `127.0.0.1:9094` (`--profile kafka`) |
 | `EC_TEST_KAFKA_RESTART_CONTAINER` | The real Kafka outage test (it stops and starts the broker; serial collection, after the parallel tests) | `enterprisecommerce-kafka-1` (`kafka` in CI) |
+| `EC_TEST_MEASURE=true` | The opt-in Inventory measurements (`InventoryMeasurements`); never in CI. `EC_TEST_MEASURE_OUTPUT` names a file the result rows are appended to. | |
 | `EC_TEST_MONGODB` | Catalog integration tests (one throwaway database per test fixture, `ec_catalog_test_<guid>`, dropped afterwards) | `mongodb://localdev:<MONGO_ROOT_PASSWORD>@127.0.0.1:27018/?authSource=admin` (`MONGO_PORT=27018 docker compose --profile mongodb up -d --wait`) |
 
 Kafka behaviour is not mocked where it matters either. The TenantMerchant outbox relay's Kafka tests publish to a real broker:
@@ -134,6 +135,16 @@ Known issues stay visible: a run with such a failure is reported as failed, and 
 | Assessment | A race in the test host's teardown when the application fails during start, under heavy load. The validation itself is deterministic. The root cause inside `WebApplicationFactory` is **not demonstrated**. |
 | Workaround (in place) | The relay settings are tested without a web host. `OutboxStartupValidationTests` builds the real Infrastructure registration and runs the `IStartupValidator` that the host runs before it starts. |
 | Next step | If the onboarding test fails the same way, move it to the same approach. An upstream report needs a minimal reproduction. |
+
+### TS-4: Catalog's chunked oversized body sometimes answers 400 instead of 413 (open)
+
+| | |
+|---|---|
+| Test | `Catalog.IntegrationTests.Api.RequestSizeLimitTests.AnOversizedBody_Is413` (Phase 4), on real Kestrel |
+| Symptom | The declared oversized body answers `413`. The chunked oversized body to `/brands` sometimes answers `400 Bad Request` instead (line 54). |
+| Occurrences | 2026-11-24, Phase 5, Windows: 2 failures in about 10 full runs of the Catalog integration suite. Every isolated run passed. The test and the brands endpoint are unchanged by Phase 5, and the new Catalog endpoint is not on this path. |
+| Assessment | A race between Kestrel's request-body limit and the JSON binding of a chunked body. When binding reads past the limit first, it reports a malformed body (`400`) instead of `BadHttpRequestException` with status `413`. The body is refused either way, before any authorization or store work, so the security property holds; only the status differs. The root cause is **not demonstrated**. |
+| Next step | Reproduce in isolation under load; if confirmed, map a body-size failure surfaced through binding to `413`, or assert "refused, never processed" for the chunked case. The test is not weakened in Phase 5. |
 
 ## CI-1: test steps could not fail on a test failure (fixed 2026-11-23)
 
