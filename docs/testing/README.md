@@ -136,15 +136,16 @@ Known issues stay visible: a run with such a failure is reported as failed, and 
 | Workaround (in place) | The relay settings are tested without a web host. `OutboxStartupValidationTests` builds the real Infrastructure registration and runs the `IStartupValidator` that the host runs before it starts. |
 | Next step | If the onboarding test fails the same way, move it to the same approach. An upstream report needs a minimal reproduction. |
 
-### TS-4: Catalog's chunked oversized body sometimes answers 400 instead of 413 (open)
+### TS-4: Catalog's chunked oversized body sometimes answered 400 instead of 413 (resolved 2026-11-24)
 
 | | |
 |---|---|
 | Test | `Catalog.IntegrationTests.Api.RequestSizeLimitTests.AnOversizedBody_Is413` (Phase 4), on real Kestrel |
-| Symptom | The declared oversized body answers `413`. The chunked oversized body to `/brands` sometimes answers `400 Bad Request` instead (line 54). |
-| Occurrences | 2026-11-24, Phase 5, Windows: 2 failures in about 10 full runs of the Catalog integration suite. Every isolated run passed. The test and the brands endpoint are unchanged by Phase 5, and the new Catalog endpoint is not on this path. |
-| Assessment | A race between Kestrel's request-body limit and the JSON binding of a chunked body. When binding reads past the limit first, it reports a malformed body (`400`) instead of `BadHttpRequestException` with status `413`. The body is refused either way, before any authorization or store work, so the security property holds; only the status differs. The root cause is **not demonstrated**. |
-| Next step | Reproduce in isolation under load; if confirmed, map a body-size failure surfaced through binding to `413`, or assert "refused, never processed" for the chunked case. The test is not weakened in Phase 5. |
+| Symptom | The chunked oversized request to `/brands` sometimes answered `400` with the problem "The request is malformed." instead of `413` (line 54). The declared-length request always answered `413`. |
+| Occurrences | 2026-11-24, Windows: 1 failure in 15 TRX-recorded runs of the suite alone. In a probe of 300 chunked sequences inside the running suite, 18 answered `400`. Alone, 0 of 300 did. |
+| Root cause | **The test's body was oversized *and* malformed:** 256 KiB + 1 zero bytes. A chunked body's size is known only once more than the limit has arrived. Kestrel then fails the body read with its `BadHttpRequestException` (413), and the requests that answered `413` logged it ("Reading the request body failed with an IOException ... Request body too large"). The minimal-API JSON binding parses whatever has arrived. When it parsed the leading zero bytes first, it refused the JSON as malformed: in Development, binding throws a `BadHttpRequestException` with status 400, which `GlobalExceptionHandler` answers as `400`. The `400` requests logged no size exception. Which happens first depends on timing, so the outcome varied under load. **Both are correct refusals before any authorization or store work.** The server is not at fault, and the 256 KiB contract holds. |
+| Resolution | The 413 case now sends a body that is valid JSON up to the limit, so its size is the only reason to refuse it: 0 of 600 probe requests answered `400`. The expectation stays `413`. A new test, `AnOversizedMalformedChunkedBody_IsRefusedAsTooLargeOrMalformed_AndNeverProcessed`, pins the legitimate behaviour for a body that is both too large and malformed: `413` or `400`, a problem body, and no membership call. After the change, the suite passed 20 of 20 TRX-recorded runs. |
+| Residual | Kestrel closes the connection after a `413` without reading the rest of an oversized upload. A client still sending may then see a reset instead of the response (`HttpRequestError.ResponseEnded`), as RFC 9110 allows. The probe saw this only on a client reused after a rejected upload, never in the test's own shape (a fresh connection for each oversized request, 600 of 600 `413`). |
 
 ## CI-1: test steps could not fail on a test failure (fixed 2026-11-23)
 
