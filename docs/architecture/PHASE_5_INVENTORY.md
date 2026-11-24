@@ -212,18 +212,25 @@ The database is created with `READ_COMMITTED_SNAPSHOT` on, by EF Core. Every dec
 | TenantMerchant.UnitTests | 447 | 447 |
 | TenantMerchant.IntegrationTests | 219 | 219 |
 | Catalog.UnitTests | 121 | 121 |
-| Catalog.IntegrationTests | 122 | 136 |
+| Catalog.IntegrationTests | 122 | 137 |
 | Inventory.UnitTests | – | 90 |
-| Inventory.IntegrationTests | – | 127 (122 run; 5 opt-in measurements skipped) |
+| Inventory.IntegrationTests | – | 128 (122 run; 6 opt-in measurements skipped) |
 | Gateway.IntegrationTests | 85 | 101 |
 | Bff.UnitTests | 103 | 103 |
 | Bff.IntegrationTests | 63 | 63 |
 | Bff.BrowserTests | 18 | 18 |
-| **Total** | **1,693** | **2,004** |
+| **Total** | **1,693** | **2,006** |
 
 **The full-solution parallel run** (all modules at once, browser tests skipped) gave 2,004 tests: 1,979 passed, 2 failed and 23 skipped. The two failures were F3 and F4 below; both were fixed, and their suites then passed.
 
-**The final per-module run** passed every module except one test of `Catalog.IntegrationTests` (135 of 136). Its name was not captured, and 4 further runs of that suite were green (136 of 136). The only known intermittent Catalog test is TS-4 (F5), but this occurrence is **not demonstrated** to be it.
+**The phase-closure per-module run** passed every module except one test of `Catalog.IntegrationTests` (135 of 136). Its name was not captured.
+
+**The reliability review** (2026-11-24, after commit `1576684`) recorded every investigative run with TRX:
+
+- **The Catalog failure is TS-4.** 15 runs of the Catalog suite alone showed one failure: `RequestSizeLimitTests.AnOversizedBody_Is413`, `400` instead of `413` at the chunked request. The phase-closure failure itself was not recorded, so its identity is inferred from this, the only failing test seen in that suite. The root cause is in the test's body (F5), and after the fix the suite passed 20 of 20 runs.
+- **The Kafka failure is TS-5** (F6), an environment defect. The test class passed 15 of 15 runs both before and after the fix. A timed copy of the test reproduced the failure in 2 of 21 runs before the fix.
+- **The complete Kafka-backed sequence** after the fix: TenantMerchant.IntegrationTests (including its Kafka and broker-outage tests) passed 219 of 219 in 2 of 2 runs. Inventory.IntegrationTests passed 122 of 122 executed in 2 of 2 runs (6 opt-in measurements skipped).
+- **The final per-module regression,** each of the 15 projects run separately and recorded with TRX: **2,006 tests, 2,000 passed, 0 failed, 6 skipped by design** (the opt-in measurements). No test was rerun to obtain this result. The browser tests ran with `EC_TEST_BROWSERS=true`, and every infrastructure test ran against the Compose servers with `EC_REQUIRE_INFRA_TESTS=true`.
 
 ## 10. Findings during the phase
 

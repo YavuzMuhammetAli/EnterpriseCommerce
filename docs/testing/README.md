@@ -25,6 +25,14 @@ dotnet test --solution EnterpriseCommerce.sln -c Release
 dotnet test --project tests/ArchitectureTests/EnterpriseCommerce.ArchitectureTests
 ```
 
+**Keep the evidence of a failure.** Filtering the console output down to its summary lines loses the failing test's name and exception: two intermittent failures were first recorded without them (TS-4, TS-5). For repeated or investigative runs, write a TRX report per run, which records each test's outcome, duration, message and stack trace:
+
+```bash
+dotnet test --project <test project> -c Release --no-build --report-xunit-trx --results-directory <one directory per run>
+```
+
+CI keeps the complete console output in `test-output.log`, which includes every failure's message and stack trace.
+
 ## Infrastructure-backed tests
 
 Infrastructure comes from the Compose profiles; there are no per-test containers. Tests that need infrastructure skip with a reason when it is not configured. With `EC_REQUIRE_INFRA_TESTS=true` (CI) they fail instead, so they can never silently disappear.
