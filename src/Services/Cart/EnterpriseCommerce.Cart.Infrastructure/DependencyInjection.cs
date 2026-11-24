@@ -1,19 +1,22 @@
 using EnterpriseCommerce.Cart.Application.Carts;
 using EnterpriseCommerce.Cart.Application.Common;
+using EnterpriseCommerce.Cart.Application.Catalog;
 using EnterpriseCommerce.Cart.Infrastructure.Caching;
+using EnterpriseCommerce.Cart.Infrastructure.Catalog;
 using EnterpriseCommerce.Cart.Infrastructure.Cleanup;
 using EnterpriseCommerce.Cart.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace EnterpriseCommerce.Cart.Infrastructure;
 
 /// <summary>
 /// Registers the Infrastructure-layer implementations: the service's own SQL Server persistence, the expired-cart
-/// cleanup and the cache Redis connection (ADR-029, ADR-030).
+/// cleanup, the cache Redis connection and the Catalog product read (ADR-029, ADR-030).
 /// </summary>
 public static class DependencyInjection
 {
@@ -53,7 +56,28 @@ public static class DependencyInjection
         services.AddHostedService<CartCleanupWorker>();
 
         AddCache(services, configuration);
+        AddCatalog(services, configuration);
         return services;
+    }
+
+    /// <summary>
+    /// Catalog's public product read (ADR-029 section 5): anonymous, so no service client is involved. Outside Development
+    /// the address is required; in Development an unconfigured read fails closed with <c>503</c>.
+    /// </summary>
+    private static void AddCatalog(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<CatalogReadOptions>()
+            .Bind(configuration.GetSection(CatalogReadOptions.SectionName))
+            .Validate<IHostEnvironment>(
+                (options, environment) => !options.Validate(environment.IsDevelopment()).Any(),
+                $"{CatalogReadOptions.SectionName} is invalid (ADR-029): see CART_OPERATIONS.md section 2 for the required values.")
+            .ValidateOnStart();
+        services.AddHttpClient<ICatalogProductReader, CatalogProductReader>((provider, client) =>
+        {
+            var options = provider.GetRequiredService<IOptions<CatalogReadOptions>>().Value;
+            client.Timeout = options.Timeout;
+            client.MaxResponseContentBufferSize = options.MaxResponseBytes;
+        });
     }
 
     private static void AddSettings<TSettings>(IServiceCollection services, IConfiguration configuration, string section, Func<TSettings, IEnumerable<string>> validate)
