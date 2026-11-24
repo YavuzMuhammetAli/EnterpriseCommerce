@@ -1,9 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
+using EnterpriseCommerce.TenantMerchant.Application.Invitations;
 using EnterpriseCommerce.TenantMerchant.Domain.Memberships;
 using EnterpriseCommerce.TenantMerchant.IntegrationTests.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EnterpriseCommerce.TenantMerchant.IntegrationTests.Api;
 
@@ -370,5 +372,31 @@ public sealed class InvitationAcceptanceTests(TenantMerchantApiFixture fixture) 
         Assert.DoesNotContain(text, line => line.Contains("secret.person", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(text, line => line.Contains("other.person", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(text, line => line.Contains("stub-service-token-", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Two hosts in one process loading the same key file. The first host signs and is disposed, which disposes its RSA;
+    /// the second must still sign, twice. A signer shared across key instances (the process-wide crypto provider cache)
+    /// would use the disposed RSA here.
+    /// </summary>
+    [Fact]
+    public async Task AnotherHostsDisposedKey_NeverBreaksSigning()
+    {
+        fixture.RequireAvailable();
+        fixture.Identity.SetAccount("acc-keys-invitee", new StubAccount("keys@example.test"));
+        await using (var first = fixture.CreateFactory(fixture.Database.ConnectionString))
+        {
+            Assert.Equal(
+                IdentityEmailCheck.Match,
+                await first.Services.GetRequiredService<IIdentityAccountVerifier>().CheckEmailAsync("acc-keys-invitee", "keys@example.test", Ct));
+        }
+
+        await using var second = fixture.CreateFactory(fixture.Database.ConnectionString);
+        var verifier = second.Services.GetRequiredService<IIdentityAccountVerifier>();
+        var tokensBefore = fixture.Identity.TokenRequests;
+        fixture.Identity.RejectTokens = 1;
+
+        Assert.Equal(IdentityEmailCheck.Match, await verifier.CheckEmailAsync("acc-keys-invitee", "keys@example.test", Ct));
+        Assert.Equal(2, fixture.Identity.TokenRequests - tokensBefore);
     }
 }
