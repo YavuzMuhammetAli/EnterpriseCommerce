@@ -22,7 +22,7 @@ public sealed class MigrationTests(SqlServerTestDatabase database) : IClassFixtu
 
         var applied = await context.Database.GetAppliedMigrationsAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(["InitialInventorySchema"], applied.Select(name => name[(name.IndexOf('_') + 1)..]));
+        Assert.Equal(["InitialInventorySchema", "InventoryListingOrder"], applied.Select(name => name[(name.IndexOf('_') + 1)..]));
         Assert.Empty(await context.Database.GetPendingMigrationsAsync(TestContext.Current.CancellationToken));
         Assert.False(context.Database.HasPendingModelChanges());
     }

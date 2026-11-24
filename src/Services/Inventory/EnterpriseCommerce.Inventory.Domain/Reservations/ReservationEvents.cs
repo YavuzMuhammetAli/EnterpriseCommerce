@@ -17,7 +17,8 @@ public sealed record ReservationSnapshot(
         reservation.Id,
         reservation.TenantId,
         reservation.Status,
-        [.. reservation.Lines.Select(line => new ReservationEventLine(line.InventoryItemId, line.ProductId, line.VariantId, line.Quantity))],
+        // Ascending item ID as .NET orders GUIDs (the lock order), whatever order the lines were loaded in.
+        [.. reservation.Lines.OrderBy(line => line.InventoryItemId).Select(line => new ReservationEventLine(line.InventoryItemId, line.ProductId, line.VariantId, line.Quantity))],
         reservation.ExpiresAt,
         reservation.Reference,
         reservation.Version);

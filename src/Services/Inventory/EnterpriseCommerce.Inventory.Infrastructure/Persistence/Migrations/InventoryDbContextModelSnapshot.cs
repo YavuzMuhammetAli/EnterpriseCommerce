@@ -160,9 +160,6 @@ namespace EnterpriseCommerce.Inventory.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TenantId", "Id")
-                        .HasDatabaseName("IX_InventoryItems_TenantId_Id");
-
                     b.HasIndex("TenantId", "ProductId")
                         .HasDatabaseName("IX_InventoryItems_TenantId_ProductId");
 
@@ -172,6 +169,9 @@ namespace EnterpriseCommerce.Inventory.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenantId", "VariantId")
                         .IsUnique()
                         .HasDatabaseName("UX_InventoryItems_TenantId_VariantId");
+
+                    b.HasIndex("TenantId", "CreatedAt", "Id")
+                        .HasDatabaseName("IX_InventoryItems_TenantId_CreatedAt_Id");
 
                     b.HasIndex("TenantId", "CreatedBySubject", "CreationKey")
                         .IsUnique()

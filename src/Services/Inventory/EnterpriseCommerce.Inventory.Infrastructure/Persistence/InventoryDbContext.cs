@@ -152,8 +152,9 @@ internal sealed class InventoryDbContext(
             item.HasIndex(i => new { i.TenantId, i.VariantId }).IsUnique().HasDatabaseName(ItemVariantIndex);
             item.HasIndex(i => new { i.TenantId, i.CreatedBySubject, i.CreationKey }).IsUnique().HasDatabaseName(ItemCreationKeyIndex);
 
-            // The tenant's listing in creation order (version 7 IDs), and its product and SKU filters.
-            item.HasIndex(i => new { i.TenantId, i.Id }).HasDatabaseName("IX_InventoryItems_TenantId_Id");
+            // The tenant's listing in creation order, and its product and SKU filters. Creation time, not the version 7 ID:
+            // SQL Server orders uniqueidentifier values by their last bytes first, which is not the time order.
+            item.HasIndex(i => new { i.TenantId, i.CreatedAt, i.Id }).HasDatabaseName("IX_InventoryItems_TenantId_CreatedAt_Id");
             item.HasIndex(i => new { i.TenantId, i.ProductId }).HasDatabaseName("IX_InventoryItems_TenantId_ProductId");
             item.HasIndex(i => new { i.TenantId, i.Sku }).HasDatabaseName("IX_InventoryItems_TenantId_Sku");
         });
