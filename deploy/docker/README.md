@@ -20,7 +20,7 @@ No service starts by default. Choose what you need:
 | `sqlserver` | SQL Server | `mcr.microsoft.com/mssql/server:2022-CU28-ubuntu-22.04` | `localhost:1433`  | 2.5 GB (engine limited to 2 GB) |
 | `mongodb`   | MongoDB    | `mongo:8.0.38`                                          | `localhost:27017` | 1 GB (WiredTiger cache 0.5 GB) |
 | `redis`     | Redis      | `redis:8.8.4-alpine`                                    | `localhost:6379`  | 384 MB (maxmemory 256 MB) |
-| `kafka`     | Kafka (KRaft, single node) | `apache/kafka:4.4.0`                    | `localhost:9094`  | 1 GB (heap 512 MB) |
+| `kafka`     | Kafka (KRaft, single node) | `apache/kafka:4.4.0`                    | `127.0.0.1:9094`  | 1 GB (heap 512 MB) |
 | `mailsink`  | Mailpit (development mail catcher) | `axllent/mailpit:v1.34.0` | SMTP `localhost:1025`, inbox `http://localhost:8025` | 128 MB |
 | `all`       | SQL Server, MongoDB, Redis and Kafka | | | about 5 GB in total |
 
@@ -70,7 +70,7 @@ memory=8GB
 | MongoDB    | `mongodb://<MONGO_ROOT_USERNAME>:<MONGO_ROOT_PASSWORD>@localhost:27017/?authSource=admin` |
 | Redis      | `localhost:6379,password=<REDIS_PASSWORD>` |
 | BFF session Redis (`bff` profile) | `localhost:6380,password=<REDIS_SESSIONS_PASSWORD>` |
-| Kafka      | bootstrap servers `localhost:9094` (containers on the compose network use `kafka:9092`) |
+| Kafka      | bootstrap servers `127.0.0.1:9094` (containers on the compose network use `kafka:9092`) |
 
 Services will receive connection settings through configuration and environment variables when they adopt these components. No connection string is hard-coded in source.
 
@@ -111,8 +111,9 @@ docker compose exec redis-sessions redis-cli config get maxmemory-policy   # noe
 - KRaft mode. One node acts as both broker and controller. There is no ZooKeeper.
 - `auto.create.topics.enable=false`: topics are created explicitly, never by an application ([docs/events](../../docs/events/README.md)).
 - The topics are declared in [kafka/topics.txt](kafka/topics.txt). The one-shot `kafka-init` service creates them once the broker is healthy (idempotent, `--if-not-exists`). `up -d --wait` does not wait for a one-shot container to finish, so confirm with `docker compose --profile kafka wait kafka-init` (exit code 0).
-- Tenant & Merchant publishes to `tenant-merchant.events` with `TenantMerchant__Kafka__BootstrapServers=localhost:9094` ([TENANT_MERCHANT_EVENT_RELAY.md](../../docs/operations/TENANT_MERCHANT_EVENT_RELAY.md)).
-- Inventory publishes to `inventory.events` with `Inventory__Kafka__BootstrapServers=localhost:9094` ([INVENTORY_OPERATIONS.md](../../docs/operations/INVENTORY_OPERATIONS.md)). On a broker started before Phase 5, run `docker compose --profile kafka run --rm kafka-init` once to create the new topic.
+- Tenant & Merchant publishes to `tenant-merchant.events` with `TenantMerchant__Kafka__BootstrapServers=127.0.0.1:9094` ([TENANT_MERCHANT_EVENT_RELAY.md](../../docs/operations/TENANT_MERCHANT_EVENT_RELAY.md)).
+- Inventory publishes to `inventory.events` with `Inventory__Kafka__BootstrapServers=127.0.0.1:9094` ([INVENTORY_OPERATIONS.md](../../docs/operations/INVENTORY_OPERATIONS.md)). On a broker started before Phase 5, run `docker compose --profile kafka run --rm kafka-init` once to create the new topic.
+- The external listener is published on `127.0.0.1` only, and advertises `127.0.0.1:9094`, not `localhost`: where `localhost` resolves to `::1` first (Windows), a client of an advertised `localhost` tried IPv6 first and waited about 2 seconds for each refused connect ([docs/testing TS-5](../../docs/testing/README.md)). Use `127.0.0.1:9094` as the bootstrap servers too. A broker created before this change still advertises `localhost`; `docker compose --profile kafka up -d --wait` recreates it with the new setting and keeps its data volume.
 - Replication factor is 1, which is suitable for local development only.
 
 ## Not included yet

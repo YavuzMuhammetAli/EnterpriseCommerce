@@ -327,7 +327,7 @@ Infrastructure tests follow the existing rule: they skip when infrastructure is 
   - The test stops the container, as the Redis restart test does.
   - The API still answers `201`, the attempts grow, and health reports `Degraded`.
   - After the restart, the backlog drains in order.
-  - A TCP forwarder cannot simulate the outage: the client would reconnect to the advertised listener `localhost:9094` past it.
+  - A TCP forwarder cannot simulate the outage: the client would reconnect to the advertised listener (`127.0.0.1:9094` since TS-5; `localhost:9094` before) past it.
 - **A missing topic** shows up in the log and the health check, and no topic is created.
 
 **Fact identity and dual publication, producer side (S4; SQL Server and Kafka):**

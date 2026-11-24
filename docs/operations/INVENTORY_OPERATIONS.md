@@ -20,7 +20,7 @@ The operational runbook of the Inventory service: local start, configuration, mi
    ```powershell
    $env:ConnectionStrings__InventoryDatabase = 'Server=127.0.0.1,1433;Database=EnterpriseCommerce_Inventory;User ID=sa;Password=<MSSQL_SA_PASSWORD>;TrustServerCertificate=true'
    $env:Inventory__Database__ApplyMigrationsAtStartup = 'true'
-   $env:Inventory__Kafka__BootstrapServers = 'localhost:9094'
+   $env:Inventory__Kafka__BootstrapServers = '127.0.0.1:9094'
    dotnet run --project src/Services/Inventory/EnterpriseCommerce.Inventory.Api --launch-profile https   # https://localhost:7104
    ```
 

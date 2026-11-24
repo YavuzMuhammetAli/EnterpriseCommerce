@@ -64,7 +64,7 @@ docker compose --profile kafka up -d --wait
 docker compose --profile kafka wait kafka-init     # exit code 0: the topics of kafka/topics.txt exist
 
 # Then run Tenant & Merchant with:
-TenantMerchant__Kafka__BootstrapServers=localhost:9094
+TenantMerchant__Kafka__BootstrapServers=127.0.0.1:9094
 ```
 
 `up --wait` does not wait for the one-shot `kafka-init` to finish, so `wait kafka-init` confirms it. The manifest is [deploy/docker/kafka/topics.txt](../../deploy/docker/kafka/topics.txt). **No application creates a topic.**

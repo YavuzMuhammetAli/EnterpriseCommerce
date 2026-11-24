@@ -143,7 +143,10 @@ services:
     logging: *default-logging
 
   # Single-node Kafka in KRaft mode (combined broker + controller, no ZooKeeper).
-  # Containers on the compose network use kafka:9092; host applications use localhost:9094.
+  # Containers on the compose network use kafka:9092; host applications use 127.0.0.1:9094.
+  # The external listener advertises 127.0.0.1, the only address its port is published on. Advertising "localhost"
+  # made every new client try [::1] first wherever localhost resolves to IPv6 first (Windows): nothing listens there,
+  # and Windows refuses such a connect only after about 2 seconds (docs/testing TS-5).
   kafka:
     image: apache/kafka:4.4.0
     profiles: ["kafka", "all"]
@@ -152,7 +155,7 @@ services:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: "broker,controller"
       KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094"
-      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092,EXTERNAL://localhost:${KAFKA_EXTERNAL_PORT:-9094}"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092,EXTERNAL://127.0.0.1:${KAFKA_EXTERNAL_PORT:-9094}"
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT"
       KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
       KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
