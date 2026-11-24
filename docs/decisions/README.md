@@ -28,8 +28,11 @@ The consolidated, current view of all decisions is [PROJECT_DECISIONS.md](../arc
 | [ADR-020](ADR-020-tenant-merchant-naming-and-tenant-merchant-cardinality.md) | Tenant & Merchant Naming and Tenant-Merchant Cardinality | Accepted | |
 | [ADR-021](ADR-021-merchant-invitations-and-membership-administration.md) | Merchant Invitations and Membership Administration | Accepted (amended) | ADR-022 (section 4 owner rule) |
 | [ADR-022](ADR-022-self-service-tenant-onboarding.md) | Self-Service Tenant Onboarding | Accepted | |
-| [ADR-023](ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md) | Integration Event Publishing and the Transactional Outbox Implementation | Accepted | |
+| [ADR-023](ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md) | Integration Event Publishing and the Transactional Outbox Implementation | Accepted (amended for Inventory; section 8 applied) | ADR-028 (section 2 ordering for Inventory; the shared building block) |
 | [ADR-024](ADR-024-catalog-service-design.md) | Catalog Service Design | Accepted | |
 | [ADR-025](ADR-025-merchant-authorization-through-tenant-merchant-membership-verification.md) | Merchant Authorization through Tenant & Merchant Membership Verification | Accepted | |
+| [ADR-026](ADR-026-inventory-service-design.md) | Inventory Service Design | Accepted | |
+| [ADR-027](ADR-027-catalog-variant-verification-for-other-services.md) | Catalog Variant Verification for Other Services | Accepted | |
+| [ADR-028](ADR-028-inventory-integration-events-and-shared-outbox-building-block.md) | Inventory Integration Events and the Shared Outbox Building Block | Accepted | |
 
 New ADRs use the next number and the same four sections: Context, Decision, Consequences and Alternatives considered.

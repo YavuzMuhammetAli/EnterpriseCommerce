@@ -12,6 +12,7 @@
 
   It also resolves the PROJECT_DECISIONS section 13 rows "Kafka client library" and "Outbox implementation details".
 - **Amends:** nothing in the decision text of ADR-005 or ADR-012. Their status lines point here.
+- **Amended by:** [ADR-028](ADR-028-inventory-integration-events-and-shared-outbox-building-block.md) (2026-11-24, Phase 5). For the Inventory producer only, the section 2 ordering guarantee is per aggregate in commit order, not per tenant. ADR-028 also applies section 8: the outbox code now lives in `EnterpriseCommerce.BuildingBlocks.Messaging`.
 - **Related:**
   - [ADR-003](ADR-003-database-per-service.md) (database per service)
   - [ADR-009](ADR-009-selective-cqrs.md) (no mediator without a decision)
