@@ -14,7 +14,7 @@ namespace EnterpriseCommerce.Catalog.Api.Security;
 /// <c>401</c> on every protected endpoint; public discovery endpoints are anonymous and ignore any token.
 /// </para>
 /// <para>
-/// Two policies separate the callers. A service token is never accepted where a user token is required, nor the
+/// The policies separate the callers. A service token is never accepted where a user token is required, nor the
 /// reverse, and both answer <c>403</c>. Every other endpoint requires an authenticated caller by default (fallback
 /// policy), so a new endpoint fails closed until it states its policy. Merchant access to a tenant is then decided per
 /// request from Tenant &amp; Merchant's verdict (ADR-025 section 2).
@@ -24,6 +24,9 @@ internal static class CatalogSecuritySetup
 {
     /// <summary>The allow-listed service caller of the internal taxonomy API.</summary>
     public const string TaxonomyServicePolicy = "taxonomy-service";
+
+    /// <summary>The allow-listed service caller of the internal variant verification (ADR-027).</summary>
+    public const string VariantVerificationServicePolicy = "variant-verification-service";
 
     /// <summary>An authenticated merchant-portal user. Membership is verified per request by the Application layer.</summary>
     public const string MerchantUserPolicy = "merchant-user";
@@ -35,13 +38,17 @@ internal static class CatalogSecuritySetup
         var taxonomy = builder.Configuration.GetSection(TaxonomySettings.SectionName).Get<TaxonomySettings>()
             ?? new TaxonomySettings();
 
-        var problems = authentication.Validate(builder.Environment.IsDevelopment()).Concat(taxonomy.Validate()).ToList();
+        var variantVerification = builder.Configuration.GetSection(VariantVerificationSettings.SectionName).Get<VariantVerificationSettings>()
+            ?? new VariantVerificationSettings();
+
+        var problems = authentication.Validate(builder.Environment.IsDevelopment()).Concat(taxonomy.Validate()).Concat(variantVerification.Validate()).ToList();
         if (problems.Count > 0)
         {
             throw new InvalidOperationException($"Invalid Catalog security configuration: {string.Join(" ", problems)}");
         }
 
         var taxonomyClients = taxonomy.AllowedClientIds.ToHashSet(StringComparer.Ordinal);
+        var variantVerificationClients = variantVerification.AllowedClientIds.ToHashSet(StringComparer.Ordinal);
         var userAudiences = authentication.EffectiveUserAudiences;
 
         builder.Services.AddResourceServerJwtBearer(new ResourceServerTokenSettings(
@@ -60,6 +67,14 @@ internal static class CatalogSecuritySetup
                     && CallerClaims.HasScope(context.User, TaxonomySettings.Scope)
                     && CallerClaims.ServiceClientOf(context.User) is { } client
                     && taxonomyClients.Contains(client)))
+            .AddPolicy(VariantVerificationServicePolicy, policy => policy
+                .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme)
+                .RequireAuthenticatedUser()
+                .RequireAssertion(context =>
+                    CallerClaims.HasAudience(context.User, authentication.ServiceAudience)
+                    && CallerClaims.HasScope(context.User, VariantVerificationSettings.Scope)
+                    && CallerClaims.ServiceClientOf(context.User) is { } client
+                    && variantVerificationClients.Contains(client)))
             .AddPolicy(MerchantUserPolicy, policy => policy
                 .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme)
                 .RequireAuthenticatedUser()

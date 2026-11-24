@@ -35,7 +35,7 @@
 | 2 | `BuildingBlocks.Messaging`; Tenant & Merchant moves to it | done |
 | 3 | Service scaffold and domain | done |
 | 4 | SQL Server persistence, migration, outbox mapping and event contracts | done |
-| 5 | Catalog variant verification endpoint | planned |
+| 5 | Catalog variant verification endpoint | done |
 | 6 | Merchant stock management with membership and Catalog verification | planned |
 | 7 | Reservation lifecycle (internal API) | planned |
 | 8 | Reservation expiry worker | planned |

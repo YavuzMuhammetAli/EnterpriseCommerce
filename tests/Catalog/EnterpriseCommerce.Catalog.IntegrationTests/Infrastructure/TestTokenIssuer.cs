@@ -58,6 +58,8 @@ public sealed class TestTokenIssuer : IDisposable
     public const string UserAudience = "ec-merchant";
     public const string TaxonomyScope = "svc.catalog.taxonomy";
     public const string TaxonomyClient = "svc-test-taxonomy";
+    public const string VariantVerificationScope = "svc.catalog.variant-verification";
+    public const string VariantVerificationClient = "svc-test-inventory";
 
     private readonly RSA _signingKey = RSA.Create(3072);
     private readonly RSA _unknownKey = RSA.Create(3072);

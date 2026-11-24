@@ -51,6 +51,7 @@ How to run, configure and troubleshoot the Catalog service (Phase 4).
 | `Catalog:Authentication:ServiceAudience` | `catalog-api` | |
 | `Catalog:Authentication:UserAudiences` | `["ec-merchant"]` | Front ends whose users may call the merchant API |
 | `Catalog:Taxonomy:AllowedClientIds` | empty | `svc-` clients that may write categories |
+| `Catalog:VariantVerification:AllowedClientIds` | empty | `svc-` clients that may verify variants (ADR-027): `svc-inventory`. Without it, Inventory cannot create inventory items (`503 catalog-unavailable` there). |
 | `Catalog:MembershipVerification:BaseAddress` | none | Tenant & Merchant's internal address |
 | `Catalog:MembershipVerification:TokenEndpoint` | none | Identity's token endpoint |
 | `Catalog:MembershipVerification:Issuer` | `Catalog:Authentication:Issuer` | The audience of the client assertion |

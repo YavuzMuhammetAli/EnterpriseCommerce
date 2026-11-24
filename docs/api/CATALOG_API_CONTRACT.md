@@ -25,6 +25,7 @@
 | `POST .../products/{productId}/publish`, `/unpublish`, `/archive`, `/restore` | `MerchantOwner`, `MerchantAdmin` (`PublishProducts`) | [4.6](#46-lifecycle-commands) |
 | `POST`, `GET`, `GET {brandId}`, `PUT {brandId}`, `POST {brandId}/retire`, `/reactivate` under `/api/v1/catalog/tenants/{tenantId}/brands` | Reads: any member; changes: `MerchantOwner`, `MerchantAdmin` | [5](#5-brands) |
 | `/internal/v1/catalog/categories` (create, list, read, replace, retire, reactivate) | Allow-listed service client (scope `svc.catalog.taxonomy`) | [6](#6-internal-category-taxonomy) |
+| `POST /internal/v1/catalog/tenants/{tenantId}/variant-verifications` | Allow-listed service client (scope `svc.catalog.variant-verification`) | [6a](#6a-internal-variant-verification) |
 | `GET /health`, `/health/live`, `/health/ready` | Anonymous | [8](#8-health) |
 
 **Rules for every endpoint:**
@@ -319,6 +320,51 @@ Identity__Clients__N__Kind=Service
 Identity__Clients__N__ServiceScopes__0__Scope=svc.catalog.taxonomy
 Identity__Clients__N__ServiceScopes__0__Audience=catalog-api
 Catalog__Taxonomy__AllowedClientIds__0=svc-admin
+```
+
+## 6a. Internal variant verification
+
+Added in Phase 5 for Inventory ([ADR-027](../decisions/ADR-027-catalog-variant-verification-for-other-services.md)). It answers an allow-listed service client whether a variant belongs to a product of a tenant, with the product's status. It never returns product content or prices.
+
+`POST /internal/v1/catalog/tenants/{tenantId}/variant-verifications`
+
+```json
+{ "productId": "<guid>", "variantId": "<guid>" }
+```
+
+**Answers:**
+
+- `200` with `Cache-Control: no-store`. A found variant answers:
+
+  ```json
+  { "found": true, "productStatus": "Draft", "variantActive": true, "sku": "TSHIRT-BLUE-M" }
+  ```
+
+  Anything else answers:
+
+  ```json
+  { "found": false, "productStatus": null, "variantActive": null, "sku": null }
+  ```
+
+- `found` is true only when a product with that ID in that tenant has a variant with that ID. A missing product, another tenant's product and a missing variant all give the same negative verdict.
+- `productStatus` is an open set (`Draft`, `Published`, `Archived` today); a caller must fail closed on an unknown value.
+- A missing or empty ID, or an unknown body member, answers `400`.
+
+**Caller requirements:**
+
+- a service token (`ec_ptype=service`, `sub == client_id`, `svc-` prefix)
+- the audience `catalog-api`; another audience answers `401`
+- the scope `svc.catalog.variant-verification`
+- a client in `Catalog:VariantVerification:AllowedClientIds`, which is empty by default and accepts only `svc-` entries
+
+Any other caller answers `403`. The allow-list is separate from the taxonomy's. Inventory's client is `svc-inventory`:
+
+```
+Identity__Clients__N__ClientId=svc-inventory
+Identity__Clients__N__Kind=Service
+Identity__Clients__N__ServiceScopes__0__Scope=svc.catalog.variant-verification
+Identity__Clients__N__ServiceScopes__0__Audience=catalog-api
+Catalog__VariantVerification__AllowedClientIds__0=svc-inventory
 ```
 
 ## 7. Authentication and authorization

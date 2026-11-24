@@ -83,6 +83,7 @@ app.MapCatalogHealthChecks();
 app.MapMerchantProductEndpoints();
 app.MapBrandEndpoints();
 app.MapCategoryEndpoints();
+app.MapVariantVerificationEndpoints();
 app.MapPublicProductEndpoints();
 
 await app.RunAsync();

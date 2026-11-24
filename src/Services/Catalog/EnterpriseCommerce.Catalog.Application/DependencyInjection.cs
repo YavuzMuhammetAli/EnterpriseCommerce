@@ -22,6 +22,7 @@ public static class DependencyInjection
         services.AddScoped<ReplaceProductMediaHandler>();
         services.AddScoped<ProductLifecycleHandler>();
         services.AddScoped<MerchantProductQueryHandler>();
+        services.AddScoped<VariantVerificationHandler>();
         services.AddScoped<BrandHandlers>();
         services.AddScoped<CategoryHandlers>();
         services.AddScoped<PublicCatalogHandler>();

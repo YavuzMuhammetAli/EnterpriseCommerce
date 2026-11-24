@@ -48,6 +48,7 @@ public class CatalogApiFixture : IAsyncLifetime
             builder.UseEnvironment("Development");
             builder.UseSetting("Catalog:Authentication:Issuer", TestTokenIssuer.Issuer);
             builder.UseSetting("Catalog:Taxonomy:AllowedClientIds:0", TestTokenIssuer.TaxonomyClient);
+            builder.UseSetting("Catalog:VariantVerification:AllowedClientIds:0", TestTokenIssuer.VariantVerificationClient);
             builder.UseSetting("ConnectionStrings:CatalogDatabase", UnreachableMongo);
             builder.UseSetting("Catalog:Database:ServerSelectionTimeout", "00:00:00.300");
             builder.UseSetting("Catalog:MembershipVerification:BaseAddress", StubTenantMerchant.BaseAddress.AbsoluteUri);

@@ -90,3 +90,35 @@ internal sealed class TaxonomySettings
         }
     }
 }
+
+/// <summary>
+/// The internal variant verification for other services (ADR-027 section 1, CATALOG_API_CONTRACT.md section 6a).
+/// Configuration section <c>Catalog:VariantVerification</c>, separate from the taxonomy's: a client allowed for one is
+/// not allowed for the other.
+/// </summary>
+internal sealed class VariantVerificationSettings
+{
+    public const string SectionName = "Catalog:VariantVerification";
+
+    /// <summary>The scope a service token needs for the variant verification.</summary>
+    public const string Scope = "svc.catalog.variant-verification";
+
+    /// <summary>
+    /// The <c>svc-</c> clients allowed to verify variants. Empty by default, which denies every caller; Inventory's
+    /// <c>svc-inventory</c> is added per environment.
+    /// </summary>
+    public string[] AllowedClientIds { get; set; } = [];
+
+    public IEnumerable<string> Validate()
+    {
+        foreach (var clientId in AllowedClientIds)
+        {
+            if (clientId is null
+                || !clientId.StartsWith(CallerClaims.ServiceClientPrefix, StringComparison.Ordinal)
+                || clientId.Length <= CallerClaims.ServiceClientPrefix.Length)
+            {
+                yield return $"{SectionName}:AllowedClientIds may contain only '{CallerClaims.ServiceClientPrefix}' service clients.";
+            }
+        }
+    }
+}
