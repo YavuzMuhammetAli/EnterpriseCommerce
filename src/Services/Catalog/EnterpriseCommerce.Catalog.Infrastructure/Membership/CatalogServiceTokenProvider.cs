@@ -80,7 +80,15 @@ internal sealed class CatalogServiceTokenProvider(
         {
             var rsa = RSA.Create();
             rsa.ImportFromPem(File.ReadAllText(settings.PrivateKeyPath!));
-            _key = new RsaSecurityKey(rsa) { KeyId = settings.KeyId };
+            _key = new RsaSecurityKey(rsa)
+            {
+                KeyId = settings.KeyId,
+
+                // Not the process-wide CryptoProviderFactory.Default: it caches signers by public key, so another key
+                // instance with the same key material (another host in the process) would sign with this instance's
+                // RSA after Dispose. A signer of its own is released after each assertion without disposing the RSA.
+                CryptoProviderFactory = new CryptoProviderFactory { CacheSignatureProviders = false },
+            };
         }
 
         var now = timeProvider.GetUtcNow().UtcDateTime;

@@ -61,6 +61,29 @@ public sealed class MembershipVerifierTests(CatalogApiFixture fixture) : IClassF
         Assert.Equal(3, fixture.TenantMerchant.VerificationCalls - callsBefore);
     }
 
+    /// <summary>
+    /// Two hosts in one process loading the same key file (as in production after a restart, and in these tests). The
+    /// first host signs and is disposed, which disposes its RSA; the second must still sign, twice. A signer shared
+    /// across key instances (the process-wide crypto provider cache) would use the disposed RSA here.
+    /// </summary>
+    [Fact]
+    public async Task AnotherHostsDisposedKey_NeverBreaksSigning()
+    {
+        fixture.TenantMerchant.SetMember(TenantId, "owner-keys", "MerchantOwner");
+        await using (var first = fixture.CreateFactory())
+        {
+            Assert.True((await first.Services.GetRequiredService<IMembershipVerifier>().VerifyAsync(TenantId, "owner-keys", null, Token)).Active);
+        }
+
+        await using var second = fixture.CreateFactory();
+        var verifier = second.Services.GetRequiredService<IMembershipVerifier>();
+        var tokensBefore = fixture.TenantMerchant.TokenRequests;
+        fixture.TenantMerchant.RejectTokens = 1;
+
+        Assert.True((await verifier.VerifyAsync(TenantId, "owner-keys", null, Token)).Active);
+        Assert.Equal(2, fixture.TenantMerchant.TokenRequests - tokensBefore);
+    }
+
     [Fact]
     public async Task ARejectedToken_IsRenewedOnce()
     {
