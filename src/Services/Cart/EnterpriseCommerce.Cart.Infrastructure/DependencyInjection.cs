@@ -100,6 +100,15 @@ public static class DependencyInjection
             .ValidateOnStart();
         services.AddSingleton<CartCacheConnection>();
         services.AddSingleton<CartCacheHealthCheck>();
-        services.AddSingleton<ICartCache, NoCartCache>();
+        services.AddSingleton<CartCacheCircuit>();
+        services.AddSingleton<CartCacheRepairQueue>();
+        services.AddSingleton<RedisCartCache>();
+        services.AddHostedService<CartCacheRepairWorker>();
+        services.AddHostedService<CartCacheWarmup>();
+
+        // Decided when first resolved, from the validated options: a disabled cache never touches Redis.
+        services.AddSingleton<ICartCache>(provider => provider.GetRequiredService<IOptions<CartCacheOptions>>().Value.Enabled
+            ? provider.GetRequiredService<RedisCartCache>()
+            : new NoCartCache());
     }
 }

@@ -22,7 +22,7 @@ internal sealed class CartCacheHealthCheck(IOptions<CartCacheOptions> options, I
         {
             // Resolved here, not injected: a disabled cache has no connection string to connect with.
             var connection = (CartCacheConnection)services.GetService(typeof(CartCacheConnection))!;
-            await connection.Database.PingAsync().WaitAsync(cancellationToken);
+            await (await connection.GetDatabaseAsync(cancellationToken)).PingAsync().WaitAsync(cancellationToken);
             return HealthCheckResult.Healthy();
         }
         catch (Exception exception) when (exception is RedisException or TimeoutException)
