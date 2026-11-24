@@ -1,3 +1,4 @@
+using EnterpriseCommerce.BuildingBlocks.Messaging;
 using EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
 using EnterpriseCommerce.TenantMerchant.UnitTests.Application;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -16,9 +17,9 @@ public sealed class OutboxRelayTests
     private readonly FakeOutboxStore _store = new();
     private readonly FakeOutboxPublisher _publisher = new();
     private readonly FakeOutboxLeadership _leadership = new();
-    private readonly OutboxRelayState _state = new();
+    private readonly OutboxRelayState _state = new(OutboxMetrics.For(TenantMerchantOutbox.MeterName));
     private readonly FixedTimeProvider _time = new(Now);
-    private readonly OutboxOptions _settings = new() { BatchSize = 3, HaltAfterAttempts = 4 };
+    private readonly OutboxOptions _settings = new() { Topic = TenantMerchantOutbox.DefaultTopic, BatchSize = 3, HaltAfterAttempts = 4 };
 
     [Fact]
     public async Task AStandby_PublishesNothing_AndTriesTheLockAgainAfterFivePollIntervals()

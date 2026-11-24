@@ -1,4 +1,4 @@
-using EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
+using EnterpriseCommerce.BuildingBlocks.Messaging;
 using EnterpriseCommerce.TenantMerchant.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;

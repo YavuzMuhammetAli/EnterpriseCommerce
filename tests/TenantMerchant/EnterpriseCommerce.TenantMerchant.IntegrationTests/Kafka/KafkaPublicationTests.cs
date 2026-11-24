@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Confluent.Kafka;
+using EnterpriseCommerce.BuildingBlocks.Messaging;
 using EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
 using EnterpriseCommerce.TenantMerchant.IntegrationTests.Infrastructure;
 using EnterpriseCommerce.TenantMerchant.UnitTests.Infrastructure;
@@ -275,7 +276,7 @@ public sealed class KafkaPublicationTests(TenantMerchantApiFixture fixture) : IC
         new(
             database.ConnectionString,
             new OutboxOptions { Topic = topic, BatchSize = batchSize, PollInterval = TimeSpan.FromMilliseconds(100) },
-            new KafkaOutboxPublisher(Options.Create(new KafkaOptions { BootstrapServers = KafkaTestEnvironment.BootstrapServers, MessageTimeout = TimeSpan.FromSeconds(10) }), NullLogger<KafkaOutboxPublisher>.Instance),
+            new KafkaOutboxPublisher(Options.Create(new KafkaOptions { BootstrapServers = KafkaTestEnvironment.BootstrapServers, MessageTimeout = TimeSpan.FromSeconds(10) }), TenantMerchantOutbox.Profile, NullLogger<KafkaOutboxPublisher>.Instance),
             wrapStore);
 
     /// <summary>Runs relay cycles until no row is pending, within the deadline. A cycle's own wait is not slept.</summary>

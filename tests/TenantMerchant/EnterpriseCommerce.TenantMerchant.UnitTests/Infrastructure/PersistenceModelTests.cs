@@ -27,7 +27,7 @@ public sealed class PersistenceModelTests : IDisposable
     {
         // ADR-023 section 5: no foreign key to a business table, and (EventId, EventVersion) unique so that a dual
         // publication can write two versions of one fact.
-        var outbox = _context.Model.FindEntityType(typeof(EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging.OutboxMessage))!;
+        var outbox = _context.Model.FindEntityType(typeof(EnterpriseCommerce.BuildingBlocks.Messaging.OutboxMessage))!;
 
         Assert.Empty(outbox.GetForeignKeys());
         Assert.Empty(outbox.GetReferencingForeignKeys());
@@ -40,8 +40,11 @@ public sealed class PersistenceModelTests : IDisposable
     [Fact]
     public void Model_EntityTypesBelongToTenantMerchant()
     {
+        // The one shared type is the technical outbox row of the messaging building block (ADR-028 section 4): no
+        // business type of another service, and no shared business model.
         var foreign = _context.Model.GetEntityTypes()
             .Select(entity => entity.ClrType)
+            .Where(type => type != typeof(EnterpriseCommerce.BuildingBlocks.Messaging.OutboxMessage))
             .Where(type => type.Namespace is null || !type.Namespace.StartsWith("EnterpriseCommerce.TenantMerchant.", StringComparison.Ordinal));
 
         Assert.Empty(foreign);
@@ -89,7 +92,8 @@ public sealed class PersistenceModelTests : IDisposable
     {
         var withoutRowVersion = _context.Model.GetEntityTypes()
             .Where(entity => entity.FindProperty(TenantMerchantDbContext.RowVersion) is not { IsConcurrencyToken: true })
-            .Select(entity => entity.GetTableName());
+            .Select(entity => entity.GetTableName())
+            .Order(StringComparer.Ordinal);
 
         // The audit table is never updated, so it has no concurrency token: its trigger refuses updates and deletes.
         // The outbox is technical: only the single leader relay updates it, with set-based statements conditioned on

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The SQL Server transactional outbox and its Kafka relay, shared by the publishing services (ADR-023 sections 4 to 6,
+    moved here by ADR-028 section 4 when the second publisher arrived): the envelope and serializer, the OutboxMessages
+    model mapping, the relay with its leadership and store, the Confluent.Kafka publisher, options, health and meters.
+    Technical code only: no business type, no service contract. Each service keeps its own domain-event mapper.
+    Referenced only by Infrastructure projects (architecture test), and the only Confluent.Kafka code of src/.
+  -->
+
+  <ItemGroup>
+    <PackageReference Include="Confluent.Kafka" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+  </ItemGroup>
+
+</Project>

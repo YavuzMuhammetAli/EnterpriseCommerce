@@ -1,7 +1,7 @@
-namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
+namespace EnterpriseCommerce.BuildingBlocks.Messaging;
 
 /// <summary>A committed, unpublished outbox row, as the relay reads it.</summary>
-internal sealed record PendingOutboxMessage(
+public sealed record PendingOutboxMessage(
     long Sequence,
     Guid EventId,
     string Topic,
@@ -14,13 +14,13 @@ internal sealed record PendingOutboxMessage(
     DateTimeOffset? LastAttemptAt);
 
 /// <summary>The pending backlog: its size and the business time of its oldest row.</summary>
-internal readonly record struct OutboxBacklog(long Count, DateTimeOffset? OldestOccurredAt);
+public readonly record struct OutboxBacklog(long Count, DateTimeOffset? OldestOccurredAt);
 
 /// <summary>
 /// Why a publication failed: a bounded set, safe as a metric tag and in <c>LastError</c>. Only
 /// <see cref="Transient"/> is expected to heal by itself; the others need an operator (ADR-023 section 6).
 /// </summary>
-internal enum PublishFailureCategory
+public enum PublishFailureCategory
 {
     /// <summary>Broker, network or timeout: retried with backoff.</summary>
     Transient,
@@ -42,7 +42,7 @@ internal enum PublishFailureCategory
 }
 
 /// <summary>The outcome of one publication: delivered, or a categorized failure with the broker's error code.</summary>
-internal readonly record struct PublishResult(bool Delivered, PublishFailureCategory Category, string Code)
+public readonly record struct PublishResult(bool Delivered, PublishFailureCategory Category, string Code)
 {
     public static PublishResult Success { get; } = new(true, PublishFailureCategory.Transient, string.Empty);
 
@@ -56,7 +56,7 @@ internal readonly record struct PublishResult(bool Delivered, PublishFailureCate
 }
 
 /// <summary>Whether the relay's topic exists.</summary>
-internal enum TopicStatus
+public enum TopicStatus
 {
     Unknown,
     Exists,
@@ -66,7 +66,7 @@ internal enum TopicStatus
 }
 
 /// <summary>The relay's access to <c>OutboxMessages</c>. Every call is one short statement; no transaction spans a publication.</summary>
-internal interface IOutboxStore
+public interface IOutboxStore
 {
     /// <summary>Up to <paramref name="batchSize"/> committed, unpublished rows in <c>Sequence</c> order.</summary>
     Task<IReadOnlyList<PendingOutboxMessage>> ReadPendingAsync(int batchSize, CancellationToken cancellationToken);
@@ -84,7 +84,7 @@ internal interface IOutboxStore
 }
 
 /// <summary>Publishes one outbox row and waits for the broker's acknowledgement. Kafka types stay behind it.</summary>
-internal interface IOutboxPublisher : IDisposable
+public interface IOutboxPublisher : IDisposable
 {
     /// <summary>Produces the row and awaits its delivery report. Never throws for a broker failure.</summary>
     Task<PublishResult> PublishAsync(PendingOutboxMessage message, CancellationToken cancellationToken);
@@ -94,7 +94,7 @@ internal interface IOutboxPublisher : IDisposable
 }
 
 /// <summary>Leader election of the relay: one publishing instance per service (ADR-023 section 5).</summary>
-internal interface IOutboxLeadership : IAsyncDisposable
+public interface IOutboxLeadership : IAsyncDisposable
 {
     /// <summary>Whether this instance holds the leadership after the call: kept if still held, acquired if free.</summary>
     Task<bool> TryEnsureAsync(CancellationToken cancellationToken);
@@ -104,7 +104,7 @@ internal interface IOutboxLeadership : IAsyncDisposable
 }
 
 /// <summary>The exponential backoff of ADR-023 section 6: 1 second doubled per attempt, capped, with jitter.</summary>
-internal static class OutboxBackoff
+public static class OutboxBackoff
 {
     /// <summary>The wait before attempt <paramref name="attempts"/> + 1: between 50 % and 100 % of the capped exponential value.</summary>
     public static TimeSpan For(int attempts, TimeSpan maxBackoff, double jitter)

@@ -1,4 +1,4 @@
-namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
+namespace EnterpriseCommerce.BuildingBlocks.Messaging;
 
 /// <summary>What one relay instance knows about itself, for health and metrics. Immutable; replaced on every change.</summary>
 /// <param name="Enabled">Whether the relay runs (Kafka is configured).</param>
@@ -8,7 +8,7 @@ namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
 /// <param name="Topic">The last topic check.</param>
 /// <param name="LastFailure">The category of the last failed publication, until a publication succeeds.</param>
 /// <param name="Backlog">The pending rows when last read.</param>
-internal sealed record OutboxRelayStatus(
+public sealed record OutboxRelayStatus(
     bool Enabled,
     bool IsLeader,
     DateTimeOffset? BackingOffUntil,
@@ -20,11 +20,17 @@ internal sealed record OutboxRelayStatus(
     public static OutboxRelayStatus Initial { get; } = new(false, false, null, false, TopicStatus.Unknown, null, new OutboxBacklog(0, null));
 }
 
-/// <summary>The relay's status, written by the relay only and read by the health check and the meters.</summary>
-internal sealed class OutboxRelayState
+/// <summary>
+/// The relay's status, written by the relay only and read by the health check and the meters. It carries the service's
+/// <see cref="OutboxMetrics"/>, so that the relay records into the meter of the service it runs in.
+/// </summary>
+public sealed class OutboxRelayState(OutboxMetrics metrics)
 {
     private readonly Lock _gate = new();
     private volatile OutboxRelayStatus _current = OutboxRelayStatus.Initial;
+
+    /// <summary>The meters this relay records into.</summary>
+    public OutboxMetrics Metrics { get; } = metrics ?? throw new ArgumentNullException(nameof(metrics));
 
     public OutboxRelayStatus Current => _current;
 

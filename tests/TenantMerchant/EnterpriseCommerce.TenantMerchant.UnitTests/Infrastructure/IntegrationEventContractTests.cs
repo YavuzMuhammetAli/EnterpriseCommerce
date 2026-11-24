@@ -5,6 +5,7 @@ using System.Text.Json.Schema;
 using EnterpriseCommerce.TenantMerchant.Application.Common;
 using EnterpriseCommerce.TenantMerchant.Domain.Memberships;
 using EnterpriseCommerce.TenantMerchant.Domain.Tenants;
+using EnterpriseCommerce.BuildingBlocks.Messaging;
 using EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
 
 namespace EnterpriseCommerce.TenantMerchant.UnitTests.Infrastructure;
@@ -130,7 +131,7 @@ public sealed class IntegrationEventContractTests
             Now,
             [new IntegrationEventVersion(2, new { name = "v2" }), new IntegrationEventVersion(1, new { name = "v1" })]);
 
-        var rows = IntegrationEventSerializer.ToOutboxMessages(fact, "tenant-merchant", Metadata, Topic);
+        var rows = IntegrationEventSerializer.ToOutboxMessages(fact, "tenant-merchant", Metadata.CorrelationId, Metadata.CausationId, Topic);
 
         Assert.Equal([2, 1], rows.Select(row => row.EventVersion));
         Assert.All(rows, row =>
@@ -149,7 +150,7 @@ public sealed class IntegrationEventContractTests
     {
         var fact = new IntegrationEventFact(Guid.CreateVersion7(Now), "SyntheticHappened", Guid.CreateVersion7(Now), null, Now, [new IntegrationEventVersion(1, new { }), new IntegrationEventVersion(1, new { })]);
 
-        Assert.Throws<InvalidOperationException>(() => IntegrationEventSerializer.ToOutboxMessages(fact, "tenant-merchant", Metadata, Topic));
+        Assert.Throws<InvalidOperationException>(() => IntegrationEventSerializer.ToOutboxMessages(fact, "tenant-merchant", Metadata.CorrelationId, Metadata.CausationId, Topic));
     }
 
     [Fact]

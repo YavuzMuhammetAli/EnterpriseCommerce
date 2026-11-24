@@ -1,4 +1,5 @@
 using System.Diagnostics.Metrics;
+using EnterpriseCommerce.BuildingBlocks.Messaging;
 using EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
 using EnterpriseCommerce.TenantMerchant.UnitTests.Application;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -17,7 +18,7 @@ public sealed class OutboxObservabilityTests
     private static readonly DateTimeOffset Now = new(2026, 11, 23, 12, 0, 0, TimeSpan.Zero);
 
     private readonly FakeOutboxStore _store = new();
-    private readonly OutboxRelayState _state = new();
+    private readonly OutboxRelayState _state = new(OutboxMetrics.For(TenantMerchantOutbox.MeterName));
     private readonly FixedTimeProvider _time = new(Now);
 
     [Fact]
@@ -70,7 +71,7 @@ public sealed class OutboxObservabilityTests
         {
             InstrumentPublished = (instrument, meterListener) =>
             {
-                if (instrument.Meter.Name == OutboxMetrics.MeterName)
+                if (instrument.Meter.Name == TenantMerchantOutbox.MeterName)
                 {
                     meterListener.EnableMeasurementEvents(instrument);
                 }
@@ -84,7 +85,7 @@ public sealed class OutboxObservabilityTests
         var publisher = new FakeOutboxPublisher();
         var relay = new OutboxRelay(
             _store, publisher, new FakeOutboxLeadership(), _state,
-            Options.Create(new OutboxOptions { HaltAfterAttempts = 2 }), Options.Create(new KafkaOptions { BootstrapServers = "localhost:9094" }),
+            Options.Create(new OutboxOptions { Topic = TenantMerchantOutbox.DefaultTopic, HaltAfterAttempts = 2 }), Options.Create(new KafkaOptions { BootstrapServers = "localhost:9094" }),
             _time, NullLogger<OutboxRelay>.Instance, () => 1);
         _store.Add();
         _store.Add();
@@ -94,7 +95,7 @@ public sealed class OutboxObservabilityTests
         publisher.Respond = _ => PublishResult.Failure(PublishFailureCategory.Rejected, "MsgSizeTooLarge");
         await relay.RunCycleAsync(TestContext.Current.CancellationToken);
 
-        OutboxMetrics.Observe(_state);
+        _state.Metrics.Observe(_state);
         listener.RecordObservableInstruments();
         listener.Dispose();
 
@@ -114,7 +115,7 @@ public sealed class OutboxObservabilityTests
     }
 
     private async Task<HealthStatus> CheckAsync() =>
-        (await new OutboxHealthCheck(_store, _state, Options.Create(new OutboxOptions()), _time)
+        (await new OutboxHealthCheck(_store, _state, Options.Create(TenantMerchantOutbox.DefaultOptions()), _time)
             .CheckHealthAsync(new HealthCheckContext(), TestContext.Current.CancellationToken)).Status;
 }
 

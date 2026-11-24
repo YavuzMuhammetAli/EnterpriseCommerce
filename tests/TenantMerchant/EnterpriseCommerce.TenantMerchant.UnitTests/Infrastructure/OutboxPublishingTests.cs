@@ -1,5 +1,6 @@
 using System.Text;
 using Confluent.Kafka;
+using EnterpriseCommerce.BuildingBlocks.Messaging;
 using EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
 
 namespace EnterpriseCommerce.TenantMerchant.UnitTests.Infrastructure;
@@ -28,7 +29,7 @@ public sealed class OutboxPublishingTests
     [Fact]
     public void TheProducer_IsIdempotent_WaitsForAllReplicas_AndNeverCreatesTopics()
     {
-        var config = KafkaOutboxPublisher.ProducerConfig(new KafkaOptions { BootstrapServers = "broker:9092", MessageTimeout = TimeSpan.FromSeconds(20) });
+        var config = KafkaOutboxPublisher.ProducerConfig(new KafkaOptions { BootstrapServers = "broker:9092", MessageTimeout = TimeSpan.FromSeconds(20) }, TenantMerchantOutbox.Profile.KafkaClientId);
 
         Assert.Equal(Acks.All, config.Acks);
         Assert.True(config.EnableIdempotence);
@@ -48,7 +49,7 @@ public sealed class OutboxPublishingTests
             SslCaLocation = "/run/secrets/ca.pem",
             SslCertificateLocation = "/run/secrets/client.pem",
             SslKeyLocation = "/run/secrets/client.key",
-        });
+        }, TenantMerchantOutbox.Profile.KafkaClientId);
 
         Assert.Equal(SecurityProtocol.Ssl, config.SecurityProtocol);
         Assert.Equal(("/run/secrets/ca.pem", "/run/secrets/client.pem", "/run/secrets/client.key"), (config.SslCaLocation, config.SslCertificateLocation, config.SslKeyLocation));
@@ -88,7 +89,7 @@ public sealed class OutboxPublishingTests
     [Fact]
     public void TheDefaultOutboxSettings_AreValid_AndMatchTheDesign()
     {
-        var settings = new OutboxOptions();
+        var settings = TenantMerchantOutbox.DefaultOptions();
 
         Assert.Empty(settings.Validate());
         Assert.Equal(("tenant-merchant.events", TimeSpan.FromSeconds(1), 100, TimeSpan.FromSeconds(60)), (settings.Topic, settings.PollInterval, settings.BatchSize, settings.MaxBackoff));
@@ -107,7 +108,7 @@ public sealed class OutboxPublishingTests
     [InlineData("StaleAfter", "00:00:01")]
     public void AnOutboxSettingOutOfRange_IsRefused(string setting, string value)
     {
-        var settings = new OutboxOptions();
+        var settings = TenantMerchantOutbox.DefaultOptions();
         switch (setting)
         {
             case "Topic": settings.Topic = value; break;

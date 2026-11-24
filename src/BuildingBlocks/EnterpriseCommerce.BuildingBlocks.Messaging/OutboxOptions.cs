@@ -1,21 +1,19 @@
 using System.Text.RegularExpressions;
 
-namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
+namespace EnterpriseCommerce.BuildingBlocks.Messaging;
 
 /// <summary>
-/// Settings of the transactional outbox and its relay (<c>TenantMerchant:Outbox</c>; PHASE_3_S4_EVENT_FLOW.md section 5).
-/// Validated at startup.
+/// Settings of the transactional outbox and its relay (the service's <see cref="OutboxRelayProfile.OutboxSection"/>, for
+/// example <c>TenantMerchant:Outbox</c>; ADR-023 section 5). Validated at startup. The registration sets
+/// <see cref="Topic"/> to the profile's default topic before it binds the section.
 /// </summary>
-internal sealed partial class OutboxOptions
+public sealed partial class OutboxOptions
 {
-    public const string SectionName = "TenantMerchant:Outbox";
-    public const string DefaultTopic = "tenant-merchant.events";
-
     /// <summary>The base of the exponential backoff (ADR-023 section 6: 1 second).</summary>
     public static readonly TimeSpan BaseBackoff = TimeSpan.FromSeconds(1);
 
     /// <summary>The topic written to each new row (ADR-023 section 2: <c>&lt;service&gt;.events</c>).</summary>
-    public string Topic { get; set; } = DefaultTopic;
+    public string Topic { get; set; } = string.Empty;
 
     /// <summary>The idle polling interval. A full batch starts the next one at once.</summary>
     public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(1);

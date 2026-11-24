@@ -1,11 +1,11 @@
-namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
+namespace EnterpriseCommerce.BuildingBlocks.Messaging;
 
 /// <summary>
 /// One serialized integration event message waiting for, or done with, publication (ADR-023 section 5). Written in the
-/// business transaction by <see cref="Persistence.TenantMerchantDbContext"/>; read and marked only by the relay. It is
+/// business transaction by the publishing service's <c>DbContext</c>; read and marked only by the relay. It is
 /// technical: no business code reads it, and it has no foreign key to a business table.
 /// </summary>
-internal sealed class OutboxMessage
+public sealed class OutboxMessage
 {
     /// <summary>The topic-name limit of Kafka.</summary>
     public const int TopicMaxLength = 249;

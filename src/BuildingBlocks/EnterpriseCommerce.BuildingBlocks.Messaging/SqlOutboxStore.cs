@@ -1,25 +1,28 @@
-using EnterpriseCommerce.TenantMerchant.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
+namespace EnterpriseCommerce.BuildingBlocks.Messaging;
 
 /// <summary>
-/// EF Core implementation of <see cref="IOutboxStore"/>. Each call runs in its own scope, as one statement in its own
-/// implicit transaction, so no database transaction is ever held while the relay waits for Kafka.
+/// EF Core implementation of <see cref="IOutboxStore"/> on the publishing service's <typeparamref name="TContext"/>,
+/// whose model maps <see cref="OutboxMessage"/> through <see cref="OutboxModel.MapOutboxMessages"/>. Each call runs in
+/// its own scope, as one statement in its own implicit transaction, so no database transaction is ever held while the
+/// relay waits for Kafka.
 /// </summary>
-internal sealed class SqlOutboxStore(IServiceScopeFactory scopes) : IOutboxStore
+/// <typeparam name="TContext">The service's own <c>DbContext</c>.</typeparam>
+public sealed class SqlOutboxStore<TContext>(IServiceScopeFactory scopes) : IOutboxStore
+    where TContext : DbContext
 {
     public async Task<IReadOnlyList<PendingOutboxMessage>> ReadPendingAsync(int batchSize, CancellationToken cancellationToken)
     {
         await using var scope = scopes.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<TenantMerchantDbContext>();
+        var context = scope.ServiceProvider.GetRequiredService<TContext>();
 
         // Committed rows only: READPAST skips rows still locked by an open business transaction (and with
         // READ_COMMITTED_SNAPSHOT an uncommitted row is not visible either); the next poll takes them. The relay reads
         // every pending row, not a high-water mark, so a row whose identity value is lower than an already published
         // one is still found once its transaction commits.
-        var rows = await context.OutboxMessages
+        var rows = await context.Set<OutboxMessage>()
             .FromSql($"SELECT TOP ({batchSize}) * FROM [OutboxMessages] WITH (READPAST) WHERE [PublishedAt] IS NULL ORDER BY [Sequence]")
             .AsNoTracking()
             .Select(m => new PendingOutboxMessage(m.Sequence, m.EventId, m.Topic, m.MessageKey, m.EventType, m.EventVersion, m.Envelope, m.OccurredAt, m.Attempts, m.LastAttemptAt))
@@ -35,8 +38,8 @@ internal sealed class SqlOutboxStore(IServiceScopeFactory scopes) : IOutboxStore
         }
 
         await using var scope = scopes.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<TenantMerchantDbContext>();
-        await context.OutboxMessages
+        var context = scope.ServiceProvider.GetRequiredService<TContext>();
+        await context.Set<OutboxMessage>()
             .Where(m => sequences.Contains(m.Sequence) && m.PublishedAt == null)
             .ExecuteUpdateAsync(set => set.SetProperty(m => m.PublishedAt, publishedAt), cancellationToken);
     }
@@ -46,8 +49,8 @@ internal sealed class SqlOutboxStore(IServiceScopeFactory scopes) : IOutboxStore
         var lastError = error.Length <= OutboxMessage.LastErrorMaxLength ? error : error[..OutboxMessage.LastErrorMaxLength];
 
         await using var scope = scopes.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<TenantMerchantDbContext>();
-        await context.OutboxMessages
+        var context = scope.ServiceProvider.GetRequiredService<TContext>();
+        await context.Set<OutboxMessage>()
             .Where(m => m.Sequence == sequence && m.PublishedAt == null)
             .ExecuteUpdateAsync(
                 set => set
@@ -60,8 +63,8 @@ internal sealed class SqlOutboxStore(IServiceScopeFactory scopes) : IOutboxStore
     public async Task<OutboxBacklog> GetBacklogAsync(CancellationToken cancellationToken)
     {
         await using var scope = scopes.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<TenantMerchantDbContext>();
-        var backlog = await context.OutboxMessages
+        var context = scope.ServiceProvider.GetRequiredService<TContext>();
+        var backlog = await context.Set<OutboxMessage>()
             .Where(m => m.PublishedAt == null)
             .GroupBy(_ => 1)
             .Select(group => new { Count = group.LongCount(), Oldest = group.Min(m => (DateTimeOffset?)m.OccurredAt) })
@@ -72,7 +75,7 @@ internal sealed class SqlOutboxStore(IServiceScopeFactory scopes) : IOutboxStore
     public async Task<int> DeletePublishedBeforeAsync(DateTimeOffset cutoff, int batchSize, CancellationToken cancellationToken)
     {
         await using var scope = scopes.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<TenantMerchantDbContext>();
+        var context = scope.ServiceProvider.GetRequiredService<TContext>();
 
         // Pending rows are never deleted (ADR-023 section 5): the filter requires a publication time.
         return await context.Database.ExecuteSqlAsync(

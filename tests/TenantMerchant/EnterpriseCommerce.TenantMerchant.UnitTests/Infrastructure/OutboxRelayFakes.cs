@@ -1,3 +1,4 @@
+using EnterpriseCommerce.BuildingBlocks.Messaging;
 using EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
 
 namespace EnterpriseCommerce.TenantMerchant.UnitTests.Infrastructure;

@@ -9,7 +9,7 @@ How to configure, observe and recover the transactional outbox and its Kafka rel
   - [ADR-023](../decisions/ADR-023-integration-event-publishing-and-transactional-outbox-implementation.md)
   - the design and implementation decisions of [PHASE_3_S4_EVENT_FLOW.md](../architecture/PHASE_3_S4_EVENT_FLOW.md)
 - **Contracts:** [docs/events](../events/README.md) and [TENANT_MERCHANT_EVENTS.md](../events/TENANT_MERCHANT_EVENTS.md).
-- **Code:** `src/Services/TenantMerchant/EnterpriseCommerce.TenantMerchant.Infrastructure/Messaging/`.
+- **Code:** the shared outbox and relay in `src/BuildingBlocks/EnterpriseCommerce.BuildingBlocks.Messaging/` (since Phase 5, [ADR-028](../decisions/ADR-028-inventory-integration-events-and-shared-outbox-building-block.md) section 4, with unchanged behaviour), and the service's profile and mapper in `src/Services/TenantMerchant/EnterpriseCommerce.TenantMerchant.Infrastructure/Messaging/`.
 
 ## 1. What runs
 

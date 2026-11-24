@@ -1,7 +1,7 @@
-namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
+namespace EnterpriseCommerce.BuildingBlocks.Messaging;
 
 /// <summary>How the relay connects to Kafka.</summary>
-internal enum KafkaSecurityProtocol
+public enum KafkaSecurityProtocol
 {
     /// <summary>No encryption and no authentication. Development only (ADR-023 section 6).</summary>
     Plaintext,
@@ -11,16 +11,15 @@ internal enum KafkaSecurityProtocol
 }
 
 /// <summary>
-/// The relay's Kafka connection (<c>TenantMerchant:Kafka</c>; PHASE_3_S4_EVENT_FLOW.md section 5). Without
+/// The relay's Kafka connection (the service's <see cref="OutboxRelayProfile.KafkaSection"/>, for example
+/// <c>TenantMerchant:Kafka</c>; ADR-023 section 6). Without
 /// <see cref="BootstrapServers"/> the relay is disabled in Development and the service refuses to start elsewhere.
 /// Outside Development only mutual TLS is accepted: the connection must be encrypted and authenticated. SASL is not
 /// supported yet (a production gate): the service holds no credential (ServiceOwnershipTests), and a client key is a
 /// mounted file, never a configuration value.
 /// </summary>
-internal sealed class KafkaOptions
+public sealed class KafkaOptions
 {
-    public const string SectionName = "TenantMerchant:Kafka";
-
     /// <summary>Comma-separated <c>host:port</c> pairs.</summary>
     public string? BootstrapServers { get; set; }
 

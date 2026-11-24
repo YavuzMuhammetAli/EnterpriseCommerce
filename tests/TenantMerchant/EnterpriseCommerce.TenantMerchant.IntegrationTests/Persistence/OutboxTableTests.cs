@@ -1,4 +1,5 @@
 using EnterpriseCommerce.TenantMerchant.IntegrationTests.Infrastructure;
+using EnterpriseCommerce.BuildingBlocks.Messaging;
 using EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
 using Microsoft.Data.SqlClient;
 

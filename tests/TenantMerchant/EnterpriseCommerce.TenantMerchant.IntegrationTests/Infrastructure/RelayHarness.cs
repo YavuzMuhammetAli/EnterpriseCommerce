@@ -1,3 +1,4 @@
+using EnterpriseCommerce.BuildingBlocks.Messaging;
 using EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
 using EnterpriseCommerce.TenantMerchant.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -76,10 +77,10 @@ internal sealed class RelayHarness : IAsyncDisposable
         services.AddDbContext<TenantMerchantDbContext>(options => options.UseSqlServer(connectionString));
         _services = services.BuildServiceProvider();
 
-        Settings = settings ?? new OutboxOptions { PollInterval = TimeSpan.FromMilliseconds(100) };
-        var store = new SqlOutboxStore(_services.GetRequiredService<IServiceScopeFactory>());
+        Settings = settings ?? new OutboxOptions { Topic = TenantMerchantOutbox.DefaultTopic, PollInterval = TimeSpan.FromMilliseconds(100) };
+        var store = new SqlOutboxStore<TenantMerchantDbContext>(_services.GetRequiredService<IServiceScopeFactory>());
         Store = wrapStore is null ? store : wrapStore(store);
-        Leadership = new SqlOutboxLeadership(Options.Create(new TenantMerchantDatabaseOptions { ConnectionString = connectionString }));
+        Leadership = new SqlOutboxLeadership(() => connectionString, TenantMerchantOutbox.Profile.LockApplicationName);
         Publisher = publisher ?? new RecordingPublisher();
         Relay = new OutboxRelay(
             Store,
@@ -100,7 +101,7 @@ internal sealed class RelayHarness : IAsyncDisposable
 
     public IOutboxPublisher Publisher { get; }
 
-    public OutboxRelayState State { get; } = new();
+    public OutboxRelayState State { get; } = new(OutboxMetrics.For(TenantMerchantOutbox.MeterName));
 
     public OutboxRelay Relay { get; }
 

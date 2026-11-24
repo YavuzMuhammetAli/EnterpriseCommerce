@@ -1,3 +1,4 @@
+using EnterpriseCommerce.BuildingBlocks.Messaging;
 using EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
 using EnterpriseCommerce.TenantMerchant.IntegrationTests.Infrastructure;
 using Microsoft.Data.SqlClient;
@@ -142,8 +143,8 @@ public sealed class OutboxRelaySqlTests(SqlServerTestDatabase database) : IClass
     {
         database.RequireAvailable();
         var ct = TestContext.Current.CancellationToken;
-        await using var first = new SqlOutboxLeadership(Microsoft.Extensions.Options.Options.Create(new EnterpriseCommerce.TenantMerchant.Infrastructure.Persistence.TenantMerchantDatabaseOptions { ConnectionString = database.ConnectionString }));
-        await using var second = new SqlOutboxLeadership(Microsoft.Extensions.Options.Options.Create(new EnterpriseCommerce.TenantMerchant.Infrastructure.Persistence.TenantMerchantDatabaseOptions { ConnectionString = database.ConnectionString }));
+        await using var first = new SqlOutboxLeadership(() => database.ConnectionString, TenantMerchantOutbox.Profile.LockApplicationName);
+        await using var second = new SqlOutboxLeadership(() => database.ConnectionString, TenantMerchantOutbox.Profile.LockApplicationName);
 
         Assert.True(await first.TryEnsureAsync(ct));
         Assert.False(await second.TryEnsureAsync(ct));
@@ -196,7 +197,7 @@ public sealed class OutboxRelaySqlTests(SqlServerTestDatabase database) : IClass
         await Eventually.TrueAsync(async () => (await OutboxRows.ReadAsync(database)).All(row => row.PublishedAt is not null), TimeSpan.FromSeconds(30));
         await hosted.Relay.StopAsync(ct);
 
-        await using var successor = new SqlOutboxLeadership(Microsoft.Extensions.Options.Options.Create(new EnterpriseCommerce.TenantMerchant.Infrastructure.Persistence.TenantMerchantDatabaseOptions { ConnectionString = database.ConnectionString }));
+        await using var successor = new SqlOutboxLeadership(() => database.ConnectionString, TenantMerchantOutbox.Profile.LockApplicationName);
         Assert.True(await successor.TryEnsureAsync(ct));
         Assert.Equal(2, hosted.Deliveries.Count);
         Assert.False(hosted.State.Current.IsLeader);

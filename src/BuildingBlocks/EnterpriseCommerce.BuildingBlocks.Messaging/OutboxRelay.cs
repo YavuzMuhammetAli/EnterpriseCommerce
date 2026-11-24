@@ -3,11 +3,13 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
+namespace EnterpriseCommerce.BuildingBlocks.Messaging;
 
 /// <summary>
 /// Publishes committed outbox rows to Kafka (ADR-023 sections 5 and 6, PHASE_3_S4_EVENT_FLOW.md section 5). A hosted
-/// service, never part of a request: the API returns after the business commit and never waits for Kafka.
+/// service of each publishing service, never part of a request: the API returns after the business commit and never
+/// waits for Kafka. Its log event IDs are 3300 to 3349 (ADR-028 section 4); the host's <c>Service</c> log property tells
+/// the services apart.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -25,7 +27,7 @@ namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
 /// resumes by itself once an operator fixes the cause. Attempts are stored on the row, so a restart keeps the backoff.
 /// </para>
 /// </remarks>
-internal sealed partial class OutboxRelay(
+public sealed partial class OutboxRelay(
     IOutboxStore store,
     IOutboxPublisher publisher,
     IOutboxLeadership leadership,
@@ -95,7 +97,7 @@ internal sealed partial class OutboxRelay(
     /// One cycle: keep or acquire the leadership, confirm the topic, publish one batch, and clean up when due. Returns
     /// how long to wait before the next cycle: zero while a full batch suggests more rows.
     /// </summary>
-    internal async Task<TimeSpan> RunCycleAsync(CancellationToken stoppingToken)
+    public async Task<TimeSpan> RunCycleAsync(CancellationToken stoppingToken)
     {
         var started = Stopwatch.GetTimestamp();
         try
@@ -119,7 +121,7 @@ internal sealed partial class OutboxRelay(
         }
         finally
         {
-            OutboxMetrics.CycleDuration.Record(Stopwatch.GetElapsedTime(started).TotalSeconds);
+            state.Metrics.CycleDuration.Record(Stopwatch.GetElapsedTime(started).TotalSeconds);
         }
     }
 
@@ -244,14 +246,14 @@ internal sealed partial class OutboxRelay(
 
             var started = Stopwatch.GetTimestamp();
             var result = await publisher.PublishAsync(message, CancellationToken.None);
-            OutboxMetrics.PublishDuration.Record(Stopwatch.GetElapsedTime(started).TotalSeconds);
+            state.Metrics.PublishDuration.Record(Stopwatch.GetElapsedTime(started).TotalSeconds);
             if (!result.Delivered)
             {
                 return (delivered, (message, result));
             }
 
             delivered.Add(message.Sequence);
-            OutboxMetrics.Published.Add(1);
+            state.Metrics.Published.Add(1);
         }
 
         return (delivered, null);
@@ -273,7 +275,7 @@ internal sealed partial class OutboxRelay(
         await store.RecordFailureAsync(message.Sequence, now, result.Describe(), timeout?.Token ?? stoppingToken);
 
         var attempts = message.Attempts + 1;
-        OutboxMetrics.PublishFailures.Add(1, OutboxMetrics.CategoryTag(result.Category));
+        state.Metrics.PublishFailures.Add(1, OutboxMetrics.CategoryTag(result.Category));
         if (result.Category == PublishFailureCategory.Topic)
         {
             // Confirm the topic again before the next attempt.
@@ -290,7 +292,7 @@ internal sealed partial class OutboxRelay(
         var correlationId = SafeCorrelationId(message.Envelope);
         if (halted && !wasHalted)
         {
-            OutboxMetrics.Halts.Add(1, OutboxMetrics.CategoryTag(result.Category));
+            state.Metrics.Halts.Add(1, OutboxMetrics.CategoryTag(result.Category));
             LogHalted(logger, message.EventType, message.EventId, message.EventVersion, message.MessageKey, correlationId, result.Category.ToString(), result.Code, attempts);
         }
         else if (halted && attempts % 10 == 0)
@@ -398,7 +400,7 @@ internal sealed partial class OutboxRelay(
     /// <summary>When the head row may be attempted again.</summary>
     private readonly record struct RetryGate(long Sequence, int Attempts, DateTimeOffset DueAt);
 
-    [LoggerMessage(EventId = 3300, Level = LogLevel.Warning, Message = "The outbox relay is disabled: TenantMerchant:Kafka:BootstrapServers is not set (Development only). Committed events stay pending in OutboxMessages")]
+    [LoggerMessage(EventId = 3300, Level = LogLevel.Warning, Message = "The outbox relay is disabled: no Kafka BootstrapServers is configured (Development only). Committed events stay pending in OutboxMessages")]
     private static partial void LogRelayDisabled(ILogger logger);
 
     [LoggerMessage(EventId = 3301, Level = LogLevel.Information, Message = "The outbox relay acquired the leadership and publishes")]
@@ -425,7 +427,7 @@ internal sealed partial class OutboxRelay(
     [LoggerMessage(
         EventId = 3312,
         Level = LogLevel.Error,
-        Message = "The outbox relay is halted at {EventType} {EventId} v{EventVersion} of tenant {TenantId} (correlation {CorrelationId}): {FailureCategory} {ErrorCode} after {Attempts} attempts. Nothing after it is published until the cause is fixed (runbook: TENANT_MERCHANT_EVENT_RELAY.md)")]
+        Message = "The outbox relay is halted at {EventType} {EventId} v{EventVersion} of tenant {TenantId} (correlation {CorrelationId}): {FailureCategory} {ErrorCode} after {Attempts} attempts. Nothing after it is published until the cause is fixed (see the service's event relay runbook)")]
     private static partial void LogHalted(ILogger logger, string eventType, Guid eventId, int eventVersion, string tenantId, string correlationId, string failureCategory, string errorCode, int attempts);
 
     [LoggerMessage(

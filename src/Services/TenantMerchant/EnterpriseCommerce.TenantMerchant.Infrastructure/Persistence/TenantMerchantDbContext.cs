@@ -1,3 +1,4 @@
+using EnterpriseCommerce.BuildingBlocks.Messaging;
 using EnterpriseCommerce.TenantMerchant.Application.Common;
 using EnterpriseCommerce.TenantMerchant.Domain.Audit;
 using EnterpriseCommerce.TenantMerchant.Domain.Common;
@@ -35,7 +36,7 @@ internal sealed class TenantMerchantDbContext(
     DbContextOptions<TenantMerchantDbContext> options,
     IOptions<OutboxOptions>? outboxOptions = null) : DbContext(options)
 {
-    private readonly string _outboxTopic = outboxOptions?.Value.Topic ?? OutboxOptions.DefaultTopic;
+    private readonly string _outboxTopic = outboxOptions?.Value.Topic is { Length: > 0 } topic ? topic : TenantMerchantOutbox.DefaultTopic;
     private MessageMetadata? _messageMetadata;
 
     public const string TenantSlugIndex = "UX_Tenants_Slug";
@@ -45,8 +46,8 @@ internal sealed class TenantMerchantDbContext(
     public const string PendingInvitationIndex = "UX_MerchantInvitations_TenantId_NormalizedEmail_Pending";
     public const string InvitationTokenHashIndex = "UX_MerchantInvitations_TokenHash";
     public const string RowVersion = "RowVersion";
-    public const string OutboxEventVersionIndex = "UX_OutboxMessages_EventId_EventVersion";
-    public const string OutboxEnvelopeSizeConstraint = "CK_OutboxMessages_EnvelopeSize";
+    public const string OutboxEventVersionIndex = OutboxModel.EventVersionIndex;
+    public const string OutboxEnvelopeSizeConstraint = OutboxModel.EnvelopeSizeConstraint;
 
     /// <summary>Refuses a membership change that leaves a tenant without an active owner (error 50001).</summary>
     public const string RequireActiveOwnerTrigger = "TR_Memberships_RequireActiveOwner";
@@ -292,37 +293,8 @@ internal sealed class TenantMerchantDbContext(
         MapOutbox(modelBuilder);
     }
 
-    private static void MapOutbox(ModelBuilder modelBuilder) =>
-        modelBuilder.Entity<OutboxMessage>(message =>
-        {
-            message.ToTable("OutboxMessages", table =>
-            {
-                table.HasCheckConstraint("CK_OutboxMessages_EventVersion", "[EventVersion] > 0");
-                table.HasCheckConstraint("CK_OutboxMessages_Attempts", "[Attempts] >= 0");
-
-                // ADR-023 section 3: at most 64 KiB as UTF-8. The serializer checks it before the write as well.
-                table.HasCheckConstraint(
-                    OutboxEnvelopeSizeConstraint,
-                    $"DATALENGTH(CAST([Envelope] COLLATE Latin1_General_100_BIN2_UTF8 AS varchar(max))) <= {OutboxMessage.EnvelopeMaxBytes}");
-            });
-
-            // The identity is the publication order. No foreign key: the table is technical.
-            message.HasKey(m => m.Sequence).IsClustered();
-            message.Property(m => m.Sequence).UseIdentityColumn();
-            message.Property(m => m.Topic).HasMaxLength(OutboxMessage.TopicMaxLength).IsUnicode(false);
-            message.Property(m => m.MessageKey).HasMaxLength(OutboxMessage.MessageKeyMaxLength).IsUnicode(false);
-            message.Property(m => m.EventType).HasMaxLength(OutboxMessage.EventTypeMaxLength).IsUnicode(false);
-            message.Property(m => m.Envelope);
-            message.Property(m => m.Attempts).HasDefaultValue(0);
-            message.Property(m => m.LastError).HasMaxLength(OutboxMessage.LastErrorMaxLength);
-
-            // One message per (fact, version): a dual publication writes two versions of one event ID (ADR-023 section 3).
-            message.HasIndex(m => new { m.EventId, m.EventVersion }).IsUnique().HasDatabaseName(OutboxEventVersionIndex);
-
-            // The relay's poll and the cleanup.
-            message.HasIndex(m => m.Sequence).HasFilter("[PublishedAt] IS NULL").HasDatabaseName("IX_OutboxMessages_Pending");
-            message.HasIndex(m => m.PublishedAt).HasFilter("[PublishedAt] IS NOT NULL").HasDatabaseName("IX_OutboxMessages_Published");
-        });
+    /// <summary>The shared <c>OutboxMessages</c> mapping (ADR-028 section 4), unchanged from Phase 3 S4.</summary>
+    private static void MapOutbox(ModelBuilder modelBuilder) => modelBuilder.MapOutboxMessages();
 
     private static string AllowedValues<TEnum>(string column)
         where TEnum : struct, Enum =>

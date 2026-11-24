@@ -5,7 +5,7 @@ using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
+namespace EnterpriseCommerce.BuildingBlocks.Messaging;
 
 /// <summary>
 /// Publishes outbox rows to Kafka with Confluent.Kafka (ADR-023 sections 1, 4 and 5): the key is the row's
@@ -13,11 +13,8 @@ namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
 /// values. The producer is idempotent and waits for every in-sync replica (<c>acks=all</c>); each call awaits the
 /// delivery report, so the relay publishes strictly one message at a time. It never creates a topic.
 /// </summary>
-internal sealed partial class KafkaOutboxPublisher(IOptions<KafkaOptions> options, ILogger<KafkaOutboxPublisher> logger) : IOutboxPublisher
+public sealed partial class KafkaOutboxPublisher(IOptions<KafkaOptions> options, OutboxRelayProfile profile, ILogger<KafkaOutboxPublisher> logger) : IOutboxPublisher
 {
-    /// <summary>The producer's <c>client.id</c>.</summary>
-    public const string ClientId = "tenant-merchant-outbox-relay";
-
     private readonly Lock _gate = new();
     private IProducer<string, byte[]>? _producer;
 
@@ -77,7 +74,7 @@ internal sealed partial class KafkaOutboxPublisher(IOptions<KafkaOptions> option
     }
 
     /// <summary>The Kafka record of a row: the same bytes on every attempt, so a redelivery is byte-identical.</summary>
-    internal static Message<string, byte[]> ToKafkaMessage(PendingOutboxMessage message) => new()
+    public static Message<string, byte[]> ToKafkaMessage(PendingOutboxMessage message) => new()
     {
         Key = message.MessageKey,
         Value = Encoding.UTF8.GetBytes(message.Envelope),
@@ -92,14 +89,14 @@ internal sealed partial class KafkaOutboxPublisher(IOptions<KafkaOptions> option
     };
 
     /// <summary>The envelope's correlation ID. The body is authoritative; the header only repeats it.</summary>
-    internal static string CorrelationIdOf(string envelope)
+    public static string CorrelationIdOf(string envelope)
     {
         using var document = JsonDocument.Parse(envelope);
         return document.RootElement.GetProperty("correlationId").GetString() ?? string.Empty;
     }
 
     /// <summary>Maps a broker or client error to the bounded failure category.</summary>
-    internal static PublishFailureCategory Categorize(ErrorCode code) => code switch
+    public static PublishFailureCategory Categorize(ErrorCode code) => code switch
     {
         ErrorCode.UnknownTopicOrPart or ErrorCode.Local_UnknownTopic or ErrorCode.Local_UnknownPartition => PublishFailureCategory.Topic,
 
@@ -129,7 +126,7 @@ internal sealed partial class KafkaOutboxPublisher(IOptions<KafkaOptions> option
     {
         try
         {
-            using var admin = new AdminClientBuilder(ClientConfig(options.Value)).Build();
+            using var admin = new AdminClientBuilder(ClientConfig(options.Value, profile.KafkaClientId)).Build();
             var metadata = admin.GetMetadata(topic, options.Value.MessageTimeout);
             var described = metadata.Topics.SingleOrDefault(candidate => candidate.Topic == topic);
             return described?.Error.Code switch
@@ -154,7 +151,7 @@ internal sealed partial class KafkaOutboxPublisher(IOptions<KafkaOptions> option
     {
         lock (_gate)
         {
-            return _producer ??= new ProducerBuilder<string, byte[]>(ProducerConfig(options.Value))
+            return _producer ??= new ProducerBuilder<string, byte[]>(ProducerConfig(options.Value, profile.KafkaClientId))
                 .SetErrorHandler((_, error) =>
                 {
                     // librdkafka reports broker connection problems here and retries them itself; the relay acts on the
@@ -189,7 +186,8 @@ internal sealed partial class KafkaOutboxPublisher(IOptions<KafkaOptions> option
         producer?.Dispose();
     }
 
-    internal static ProducerConfig ProducerConfig(KafkaOptions settings) => new(ClientConfig(settings))
+    /// <summary>The producer settings of ADR-023 section 5, with the service's <c>client.id</c>.</summary>
+    public static ProducerConfig ProducerConfig(KafkaOptions settings, string clientId) => new(ClientConfig(settings, clientId))
     {
         Acks = Acks.All,
         EnableIdempotence = true,
@@ -202,12 +200,14 @@ internal sealed partial class KafkaOutboxPublisher(IOptions<KafkaOptions> option
         AllowAutoCreateTopics = false,
     };
 
-    internal static ClientConfig ClientConfig(KafkaOptions settings)
+    public static ClientConfig ClientConfig(KafkaOptions settings, string clientId)
     {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentException.ThrowIfNullOrEmpty(clientId);
         var config = new ClientConfig
         {
             BootstrapServers = settings.BootstrapServers,
-            ClientId = ClientId,
+            ClientId = clientId,
             SecurityProtocol = settings.SecurityProtocol == KafkaSecurityProtocol.Ssl ? SecurityProtocol.Ssl : SecurityProtocol.Plaintext,
         };
         if (settings.SecurityProtocol == KafkaSecurityProtocol.Ssl)

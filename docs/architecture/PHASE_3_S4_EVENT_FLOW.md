@@ -462,7 +462,7 @@ On acceptance (done 2026-11-23):
 **What was built.** Code map:
 - `TenantMerchant.Domain/Common/DomainEvents.cs` and `Tenants/TenantCreated.cs`
 - `TenantMerchant.Application/Common/MessageMetadata.cs`
-- `TenantMerchant.Infrastructure/Messaging/`: the outbox entity, envelope, serializer, mapper, options, relay, Kafka publisher, leadership, store, state, metrics and health check
+- `TenantMerchant.Infrastructure/Messaging/`: the outbox entity, envelope, serializer, mapper, options, relay, Kafka publisher, leadership, store, state, metrics and health check. Since Phase 5 everything except the mapper and the service's profile lives in `EnterpriseCommerce.BuildingBlocks.Messaging` ([ADR-028](../decisions/ADR-028-inventory-integration-events-and-shared-outbox-building-block.md) section 4).
 - the migration `IntegrationEventOutbox`
 - `/health/outbox`
 - `deploy/docker/kafka/` and the `kafka-init` service

@@ -1,3 +1,4 @@
+using EnterpriseCommerce.BuildingBlocks.Messaging;
 using EnterpriseCommerce.TenantMerchant.Application.Common;
 using EnterpriseCommerce.TenantMerchant.Domain.Common;
 using EnterpriseCommerce.TenantMerchant.Domain.Tenants;
@@ -24,7 +25,7 @@ internal static class TenantMerchantIntegrationEvents
     /// <summary>The outbox rows of one domain event: one per published version, sharing one event ID.</summary>
     /// <exception cref="InvalidOperationException">The event has no mapping, or breaks a contract rule.</exception>
     public static IReadOnlyList<OutboxMessage> ToOutboxMessages(IDomainEvent domainEvent, MessageMetadata metadata, string topic) =>
-        IntegrationEventSerializer.ToOutboxMessages(ToFact(domainEvent), Producer, metadata, topic);
+        IntegrationEventSerializer.ToOutboxMessages(ToFact(domainEvent), Producer, metadata.CorrelationId, metadata.CausationId, topic);
 
     /// <summary>
     /// Maps a domain event to its fact. Every domain event of the service is public today; an internal one must be listed
@@ -48,3 +49,13 @@ internal static class TenantMerchantIntegrationEvents
         _ => throw new InvalidOperationException($"TenantCreated v{version} has no payload mapping."),
     };
 }
+
+/// <summary>
+/// The payload of <c>TenantCreated</c> v1 (<c>docs/events/schemas/tenant-merchant/TenantCreated.v1.schema.json</c>).
+/// <paramref name="Status"/> and <paramref name="Origin"/> are open sets, so they are strings in the contract.
+/// </summary>
+/// <param name="Slug">The tenant's immutable slug.</param>
+/// <param name="DisplayName">The merchant display name, exactly as stored.</param>
+/// <param name="Status">The tenant status at creation (open set).</param>
+/// <param name="Origin">How the tenant was created (open set, informational only).</param>
+internal sealed record TenantCreatedV1Payload(string Slug, string DisplayName, string Status, string Origin);

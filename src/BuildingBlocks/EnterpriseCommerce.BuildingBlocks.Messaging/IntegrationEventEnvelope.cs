@@ -1,4 +1,4 @@
-namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
+namespace EnterpriseCommerce.BuildingBlocks.Messaging;
 
 /// <summary>
 /// The self-contained body of every integration event message (ADR-023 section 4,
@@ -16,7 +16,7 @@ namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
 /// <param name="CorrelationId">The flow's correlation ID.</param>
 /// <param name="CausationId">The causing message's <c>eventId</c>, or for a root message the request's correlation ID.</param>
 /// <param name="Payload">The event-specific data.</param>
-internal sealed record IntegrationEventEnvelope<TPayload>(
+public sealed record IntegrationEventEnvelope<TPayload>(
     Guid EventId,
     string EventType,
     int EventVersion,
@@ -29,13 +29,3 @@ internal sealed record IntegrationEventEnvelope<TPayload>(
     string CausationId,
     TPayload Payload)
     where TPayload : notnull;
-
-/// <summary>
-/// The payload of <c>TenantCreated</c> v1 (<c>docs/events/schemas/tenant-merchant/TenantCreated.v1.schema.json</c>).
-/// <paramref name="Status"/> and <paramref name="Origin"/> are open sets, so they are strings in the contract.
-/// </summary>
-/// <param name="Slug">The tenant's immutable slug.</param>
-/// <param name="DisplayName">The merchant display name, exactly as stored.</param>
-/// <param name="Status">The tenant status at creation (open set).</param>
-/// <param name="Origin">How the tenant was created (open set, informational only).</param>
-internal sealed record TenantCreatedV1Payload(string Slug, string DisplayName, string Status, string Origin);

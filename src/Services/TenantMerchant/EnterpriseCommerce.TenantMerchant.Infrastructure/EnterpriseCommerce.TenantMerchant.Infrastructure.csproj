@@ -3,11 +3,11 @@
   <!--
     Tenant & Merchant Infrastructure: EF Core persistence in the service's own SQL Server database (ADR-011, ADR-020),
     the HTTP client of Identity's internal email verification API (ADR-021), and the transactional outbox with its
-    Kafka relay (ADR-023, Messaging/): the only Confluent.Kafka code of the service.
+    Kafka relay (ADR-023), from EnterpriseCommerce.BuildingBlocks.Messaging (ADR-028), with the service's own mapper
+    (Messaging/).
   -->
 
   <ItemGroup>
-    <PackageReference Include="Confluent.Kafka" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
@@ -27,6 +27,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\EnterpriseCommerce.BuildingBlocks.Messaging\EnterpriseCommerce.BuildingBlocks.Messaging.csproj" />
     <ProjectReference Include="..\EnterpriseCommerce.TenantMerchant.Application\EnterpriseCommerce.TenantMerchant.Application.csproj" />
     <ProjectReference Include="..\EnterpriseCommerce.TenantMerchant.Domain\EnterpriseCommerce.TenantMerchant.Domain.csproj" />
   </ItemGroup>

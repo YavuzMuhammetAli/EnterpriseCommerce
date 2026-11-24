@@ -1,9 +1,7 @@
 using System.Data;
-using EnterpriseCommerce.TenantMerchant.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
-using Microsoft.Extensions.Options;
 
-namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
+namespace EnterpriseCommerce.BuildingBlocks.Messaging;
 
 /// <summary>
 /// The relay's leadership: an exclusive, session-owned SQL Server application lock held on a dedicated, unpooled
@@ -12,16 +10,19 @@ namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
 /// every cycle, so a broken connection ends its publishing at once.
 /// </summary>
 /// <remarks>
-/// The lock is per database, so every Tenant &amp; Merchant instance of one environment competes for it. A process that
-/// freezes while its session stays open keeps the lock (a known limit, PHASE_3_S4_EVENT_FLOW.md section 11).
+/// The lock is per database, and every service has its own database, so the instances of one service compete for it.
+/// A process that freezes while its session stays open keeps the lock (a known limit, PHASE_3_S4_EVENT_FLOW.md
+/// section 11).
 /// </remarks>
-internal sealed class SqlOutboxLeadership(IOptions<TenantMerchantDatabaseOptions> database) : IOutboxLeadership
+/// <param name="connectionString">Reads the service database's connection string when the lock is first needed.</param>
+/// <param name="applicationName">The application name of the lock session, which identifies it in <c>sys.dm_exec_sessions</c>.</param>
+public sealed class SqlOutboxLeadership(Func<string?> connectionString, string applicationName) : IOutboxLeadership
 {
     /// <summary>The application lock resource (PHASE_3_S4_EVENT_FLOW.md section 5).</summary>
     public const string LockResource = "outbox-relay";
 
-    /// <summary>The application name of the lock session, which identifies it in <c>sys.dm_exec_sessions</c>.</summary>
-    public const string ApplicationName = "tenant-merchant-outbox-relay";
+    /// <summary>The application name of the lock session.</summary>
+    public string ApplicationName { get; } = applicationName;
 
     private SqlConnection? _connection;
 
@@ -37,13 +38,13 @@ internal sealed class SqlOutboxLeadership(IOptions<TenantMerchantDatabaseOptions
             await CloseAsync();
         }
 
-        var connectionString = new SqlConnectionStringBuilder(database.Value.ConnectionString)
+        var sessionConnectionString = new SqlConnectionStringBuilder(connectionString())
         {
             // Unpooled: closing the connection ends the session and with it the lock.
             Pooling = false,
             ApplicationName = ApplicationName,
         }.ConnectionString;
-        var connection = new SqlConnection(connectionString);
+        var connection = new SqlConnection(sessionConnectionString);
         try
         {
             await connection.OpenAsync(cancellationToken);

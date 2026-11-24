@@ -4,9 +4,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using System.Text.RegularExpressions;
-using EnterpriseCommerce.TenantMerchant.Application.Common;
 
-namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
+namespace EnterpriseCommerce.BuildingBlocks.Messaging;
 
 /// <summary>
 /// One logical business fact to publish (ADR-023 section 3): one <see cref="EventId"/>, and one payload per published
@@ -19,7 +18,7 @@ namespace EnterpriseCommerce.TenantMerchant.Infrastructure.Messaging;
 /// <param name="TenantId">The tenant, or <c>null</c> for a fact that is not tenant-scoped.</param>
 /// <param name="OccurredAt">The business time of the fact.</param>
 /// <param name="Versions">The payload of each published version.</param>
-internal sealed record IntegrationEventFact(
+public sealed record IntegrationEventFact(
     Guid EventId,
     string EventType,
     Guid AggregateId,
@@ -28,14 +27,14 @@ internal sealed record IntegrationEventFact(
     IReadOnlyList<IntegrationEventVersion> Versions);
 
 /// <summary>One version of a fact: the payload contract version and its payload.</summary>
-internal sealed record IntegrationEventVersion(int Version, object Payload);
+public sealed record IntegrationEventVersion(int Version, object Payload);
 
 /// <summary>
 /// Serializes integration events into envelopes and outbox rows with the encoding of ADR-023 section 3: UTF-8 JSON,
 /// camelCase, UTC timestamps with <c>Z</c>, lowercase <c>D</c> GUIDs, at most 64 KiB. Every rule a consumer would
 /// treat as malformed is checked here, before the row is written, so the transaction fails instead of the relay.
 /// </summary>
-internal static partial class IntegrationEventSerializer
+public static partial class IntegrationEventSerializer
 {
     /// <summary>The serializer settings of every envelope. Read-only.</summary>
     public static JsonSerializerOptions Options { get; } = CreateOptions();
@@ -44,14 +43,21 @@ internal static partial class IntegrationEventSerializer
     /// Creates the outbox rows of one fact: one row per version, all with the fact's event ID, and all with the same
     /// <c>publishedVersions</c>, computed once here from the versions the fact is published in.
     /// </summary>
+    /// <param name="fact">The fact and its versions.</param>
+    /// <param name="producer">The producing service, for example <c>tenant-merchant</c>.</param>
+    /// <param name="correlationId">The flow's correlation ID.</param>
+    /// <param name="causationId">The causing message's event ID, or for a root message the correlation ID.</param>
+    /// <param name="topic">The topic, fixed when the row is written.</param>
     public static IReadOnlyList<OutboxMessage> ToOutboxMessages(
         IntegrationEventFact fact,
         string producer,
-        MessageMetadata metadata,
+        string correlationId,
+        string causationId,
         string topic)
     {
         ArgumentNullException.ThrowIfNull(fact);
-        ArgumentNullException.ThrowIfNull(metadata);
+        ArgumentNullException.ThrowIfNull(correlationId);
+        ArgumentNullException.ThrowIfNull(causationId);
         ArgumentException.ThrowIfNullOrEmpty(topic);
 
         if (fact.Versions.Count == 0)
@@ -81,8 +87,8 @@ internal static partial class IntegrationEventSerializer
                     fact.AggregateId,
                     fact.TenantId,
                     fact.OccurredAt,
-                    metadata.CorrelationId,
-                    metadata.CausationId,
+                    correlationId,
+                    causationId,
                     version.Payload);
 
                 return new OutboxMessage
