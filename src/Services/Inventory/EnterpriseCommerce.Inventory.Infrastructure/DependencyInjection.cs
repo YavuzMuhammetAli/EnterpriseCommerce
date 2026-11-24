@@ -6,6 +6,7 @@ using EnterpriseCommerce.Inventory.Application.Items;
 using EnterpriseCommerce.Inventory.Application.Reservations;
 using EnterpriseCommerce.Inventory.Infrastructure.Messaging;
 using EnterpriseCommerce.Inventory.Infrastructure.Persistence;
+using EnterpriseCommerce.Inventory.Infrastructure.Reservations;
 using EnterpriseCommerce.Inventory.Infrastructure.ServiceClients;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -50,6 +51,16 @@ public static class DependencyInjection
             .Validate(settings => !settings.Validate().Any(), $"{ReservationSettings.SectionName} is invalid: DefaultLifetime and MaxLifetime 1 minute to 24 hours, DefaultLifetime at most MaxLifetime.")
             .ValidateOnStart();
         services.AddSingleton(provider => provider.GetRequiredService<IOptions<ReservationSettings>>().Value);
+
+        // The expiry worker on every instance (ADR-026 section 7); multi-instance safe without a leader.
+        services.AddOptions<ReservationExpiryOptions>()
+            .Bind(configuration.GetSection(ReservationExpiryOptions.SectionName))
+            .Validate(settings => !settings.Validate().Any(), $"{ReservationExpiryOptions.SectionName} is invalid: Interval 1 second to 5 minutes, BatchSize 1 to 500, OverdueAfter 10 seconds to 1 hour.")
+            .ValidateOnStart();
+        services.AddSingleton<ReservationExpiryState>();
+        services.AddSingleton<ReservationExpiryRunner>();
+        services.AddScoped<ReservationExpiryHealthCheck>();
+        services.AddHostedService<ReservationExpiryWorker>();
 
         // The outbox settings, the topic of every new row, and the relay that publishes committed rows to Kafka
         // (ADR-023 sections 5 and 6, ADR-028), from the shared block.

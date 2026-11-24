@@ -3,6 +3,7 @@ using System.Text;
 using EnterpriseCommerce.Inventory.Application.Common;
 using EnterpriseCommerce.Inventory.Domain.Common;
 using EnterpriseCommerce.Inventory.Domain.Items;
+using EnterpriseCommerce.Inventory.Domain.Reservations;
 
 namespace EnterpriseCommerce.Inventory.IntegrationTests.Infrastructure;
 
@@ -57,4 +58,24 @@ internal static class InventorySeed
                 return change.Succeeded ? WriteDecision.Commit(change) : WriteDecision.Rollback(change);
             },
             TestContext.Current.CancellationToken);
+
+    /// <summary>Places a committed reservation of one unit per item, as the given client.</summary>
+    public static Task<Guid> ReserveAsync(SqlServerTestDatabase database, Guid tenantId, IReadOnlyList<InventoryItem> items, string client = "svc-test-order", int quantity = 1) =>
+        database.Gate().ExecuteAsync(
+            "test-reserve",
+            async (session, cancellationToken) =>
+            {
+                session.UseMessageMetadata(Metadata);
+                var locked = await session.LockItemsOfVariantsAsync(tenantId, [.. items.Select(item => item.VariantId)], cancellationToken);
+                var placement = Reservation.Place(
+                    tenantId, client, Key(), [.. items.Select(item => new ReservationLineRequest(item.VariantId, quantity))], locked, null, TimeSpan.FromMinutes(15), Correlation, session.Now);
+                Assert.Equal(PlacementError.None, placement.Error);
+                session.Add(placement.Reservation!);
+                return WriteDecision.Commit(placement.Reservation!.Id);
+            },
+            TestContext.Current.CancellationToken);
+
+    /// <summary>Moves a reservation's expiry into the past, as if its lifetime had passed.</summary>
+    public static Task MakeOverdueAsync(SqlServerTestDatabase database, Guid reservationId) =>
+        database.ExecuteAsync($"UPDATE Reservations SET CreatedAt = DATEADD(MINUTE, -30, SYSUTCDATETIME()), ExpiresAt = DATEADD(MINUTE, -15, SYSUTCDATETIME()) WHERE Id = '{reservationId}'");
 }

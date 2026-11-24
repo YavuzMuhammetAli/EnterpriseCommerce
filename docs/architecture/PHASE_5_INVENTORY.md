@@ -38,6 +38,6 @@
 | 5 | Catalog variant verification endpoint | done |
 | 6 | Merchant stock management with membership and Catalog verification | done |
 | 7 | Reservation lifecycle (internal API) | done |
-| 8 | Reservation expiry worker | planned |
+| 8 | Reservation expiry worker | done |
 | 9 | Kafka relay, Gateway route, topic and development keys | planned |
 | 10 | Measurements, evidence and closure | planned |

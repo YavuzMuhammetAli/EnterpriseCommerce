@@ -1,5 +1,6 @@
 using EnterpriseCommerce.BuildingBlocks.Messaging;
 using EnterpriseCommerce.Inventory.Infrastructure;
+using EnterpriseCommerce.Inventory.Infrastructure.Reservations;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
@@ -28,7 +29,9 @@ internal static class InventoryHealthChecks
         services.AddHealthChecks()
             .AddCheck<InventoryDatabaseHealthCheck>(
                 "inventory-database", failureStatus: HealthStatus.Unhealthy, tags: [InventoryInfrastructureHealth.ReadyTag], timeout: InventoryInfrastructureHealth.CheckTimeout)
-            .AddCheck<OutboxHealthCheck>("outbox", failureStatus: HealthStatus.Degraded, tags: [EventRelayTag], timeout: InventoryInfrastructureHealth.CheckTimeout);
+            .AddCheck<OutboxHealthCheck>("outbox", failureStatus: HealthStatus.Degraded, tags: [EventRelayTag], timeout: InventoryInfrastructureHealth.CheckTimeout)
+            .AddCheck<ReservationExpiryHealthCheck>(
+                "reservation-expiry", failureStatus: HealthStatus.Degraded, tags: [InventoryInfrastructureHealth.ExpiryTag], timeout: InventoryInfrastructureHealth.CheckTimeout);
         return services;
     }
 
