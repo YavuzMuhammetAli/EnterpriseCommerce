@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <!-- Signs real RS256 at+jwt test tokens, validated by the service's own JWT bearer configuration. -->
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
+    <!-- Test topics and reading published messages from the real broker (Kafka tests). Test-only. -->
+    <PackageReference Include="Confluent.Kafka" />
+    <!-- Validates the stored and published integration events against docs/events/schemas. -->
+    <PackageReference Include="Corvus.Json.Validator" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\EnterpriseCommerce.Inventory.UnitTests\Infrastructure\EventSchemas.cs" Link="Infrastructure\EventSchemas.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Services\Inventory\EnterpriseCommerce.Inventory.Api\EnterpriseCommerce.Inventory.Api.csproj" />
+  </ItemGroup>
+
+</Project>

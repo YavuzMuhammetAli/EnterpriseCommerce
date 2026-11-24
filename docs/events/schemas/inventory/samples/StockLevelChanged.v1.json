@@ -1,0 +1,29 @@
+{
+  "eventId": "019ab9b0-6e7f-7012-8a3b-4c5d6e7f8091",
+  "eventType": "StockLevelChanged",
+  "eventVersion": 1,
+  "publishedVersions": [
+    1
+  ],
+  "producer": "inventory",
+  "aggregateId": "019ab9a3-1111-7aaa-8bbb-0c1d2e3f4a5b",
+  "tenantId": "019ab9a1-2c3d-7e4f-8a5b-6c7d8e9f0a1b",
+  "occurredAtUtc": "2026-11-24T10:20:30.456Z",
+  "correlationId": "7c1e2d3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+  "causationId": "7c1e2d3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+  "payload": {
+    "movementId": "019ab9b0-6e7f-7012-8a3b-4c5d6e7f8091",
+    "movementType": "Reservation",
+    "adjustmentReason": null,
+    "productId": "019ab9a2-aaaa-7bbb-8ccc-0d1e2f3a4b5c",
+    "variantId": "019ab9a2-bbbb-7ccc-8ddd-1e2f3a4b5c6d",
+    "sku": "TSHIRT-BLUE-M",
+    "onHandDelta": 0,
+    "reservedDelta": 2,
+    "onHand": 40,
+    "reserved": 5,
+    "available": 35,
+    "itemVersion": 7,
+    "reservationId": "019ab9b0-5d6e-7f80-9a1b-2c3d4e5f6a7b"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "eventId": "019ab9b0-5d6f-7aaa-8bbb-1c2d3e4f5a6b",
+  "eventType": "ReservationCreated",
+  "eventVersion": 1,
+  "publishedVersions": [
+    1
+  ],
+  "producer": "inventory",
+  "aggregateId": "019ab9b0-5d6e-7f80-9a1b-2c3d4e5f6a7b",
+  "tenantId": "019ab9a1-2c3d-7e4f-8a5b-6c7d8e9f0a1b",
+  "occurredAtUtc": "2026-11-24T10:20:30.456Z",
+  "correlationId": "7c1e2d3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+  "causationId": "7c1e2d3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+  "payload": {
+    "status": "Active",
+    "lines": [
+      {
+        "inventoryItemId": "019ab9a3-1111-7aaa-8bbb-0c1d2e3f4a5b",
+        "productId": "019ab9a2-aaaa-7bbb-8ccc-0d1e2f3a4b5c",
+        "variantId": "019ab9a2-bbbb-7ccc-8ddd-1e2f3a4b5c6d",
+        "quantity": 2
+      },
+      {
+        "inventoryItemId": "019ab9a3-2222-7aaa-8bbb-0c1d2e3f4a5c",
+        "productId": "019ab9a2-aaaa-7bbb-8ccc-0d1e2f3a4b5c",
+        "variantId": "019ab9a2-cccc-7ddd-8eee-2f3a4b5c6d7e",
+        "quantity": 1
+      }
+    ],
+    "expiresAtUtc": "2026-11-24T10:35:30.456Z",
+    "reference": "order-019ab9b0",
+    "reservationVersion": 1
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.enterprisecommerce.local/events/inventory/ReservationExpired.v1.schema.json",
+  "title": "ReservationExpired, version 1 (payload)",
+  "description": "The payload of ReservationExpired v1 (producer inventory, topic inventory.events, key = tenant ID). It is the 'payload' property of an envelope that validates against envelope.v1.schema.json, whose aggregateId is the reservation. An active reservation passed its expiry and expired, by the expiry worker or lazily during a commit or release: every line's quantity became available again. Emitted once (ADR-013 rule 7, ADR-026 section 7). The four reservation events share this payload shape. The order is guaranteed per reservation in commit order (ADR-028 section 3). It names no service client, actor or idempotency key. Contract: docs/events/INVENTORY_EVENTS.md. Additional properties are allowed so that optional properties added later in v1 never invalidate messages for existing consumers.",
+  "type": "object",
+  "required": [
+    "status",
+    "lines",
+    "expiresAtUtc",
+    "reference",
+    "reservationVersion"
+  ],
+  "properties": {
+    "status": {
+      "description": "The reservation status after the fact (Expired for this event). Open set: consumers must handle unknown values (see the contract). Known values: Active, Committed, Released, Expired.",
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[A-Z][A-Za-z0-9]{0,31}$"
+    },
+    "lines": {
+      "description": "The reserved lines: 1 to 50 distinct inventory items of the tenant, in ascending item ID order.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "required": [
+          "inventoryItemId",
+          "productId",
+          "variantId",
+          "quantity"
+        ],
+        "properties": {
+          "inventoryItemId": {
+            "description": "The inventory item of the line.",
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "productId": {
+            "description": "Catalog's product ID of the item.",
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "variantId": {
+            "description": "Catalog's variant ID of the item.",
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "quantity": {
+            "description": "The reserved whole units, 1 to 1,000,000.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "expiresAtUtc": {
+      "description": "When the reservation expires (or expired), in database time: ISO-8601 UTC with Z.",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "reference": {
+      "description": "The owner's opaque reference, for example an order ID, or null: 1 to 64 of A-Z a-z 0-9 - _ . :, never personal data.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9_.:-]{1,64}$"
+    },
+    "reservationVersion": {
+      "description": "The reservation's version: 1 when created, 2 after its terminal transition.",
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "additionalProperties": true
+}

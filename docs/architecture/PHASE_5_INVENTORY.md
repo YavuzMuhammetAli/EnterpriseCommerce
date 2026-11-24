@@ -34,7 +34,7 @@
 | 1 | Design decisions (ADR-026 to ADR-028) | done |
 | 2 | `BuildingBlocks.Messaging`; Tenant & Merchant moves to it | done |
 | 3 | Service scaffold and domain | done |
-| 4 | SQL Server persistence, migration, outbox mapping and event contracts | planned |
+| 4 | SQL Server persistence, migration, outbox mapping and event contracts | done |
 | 5 | Catalog variant verification endpoint | planned |
 | 6 | Merchant stock management with membership and Catalog verification | planned |
 | 7 | Reservation lifecycle (internal API) | planned |

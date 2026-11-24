@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.enterprisecommerce.local/events/inventory/StockLevelChanged.v1.schema.json",
+  "title": "StockLevelChanged, version 1 (payload)",
+  "description": "The payload of StockLevelChanged v1 (producer inventory, topic inventory.events, key = tenant ID). It is the 'payload' property of an envelope that validates against envelope.v1.schema.json, whose aggregateId is the inventory item. One event states one committed movement of the item's balance: the movement, its deltas and the balance after it. The order is guaranteed per item in commit order, and itemVersion increases by one per movement (ADR-028 section 3). Contract: docs/events/INVENTORY_EVENTS.md. Additional properties are allowed so that optional properties added later in v1 never invalidate messages for existing consumers.",
+  "type": "object",
+  "required": [
+    "movementId",
+    "movementType",
+    "adjustmentReason",
+    "productId",
+    "variantId",
+    "sku",
+    "onHandDelta",
+    "reservedDelta",
+    "onHand",
+    "reserved",
+    "available",
+    "itemVersion",
+    "reservationId"
+  ],
+  "properties": {
+    "movementId": {
+      "description": "The movement's ID (GUID version 7, lowercase D format). It equals the envelope's eventId: one movement is one fact.",
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "movementType": {
+      "description": "What the movement did. Open set: new values may appear within v1 and consumers must handle unknown values without treating them as any known value (see the contract). Known values: InitialStock, Adjustment, Reservation, ReservationRelease, ReservationExpiry, ReservationCommit.",
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[A-Z][A-Za-z0-9]{0,31}$"
+    },
+    "adjustmentReason": {
+      "description": "The reason of an Adjustment movement; null for every other type. Open set when present. Known values: Receipt, Return, Damage, Loss, Correction, CycleCount.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 32,
+      "pattern": "^[A-Z][A-Za-z0-9]{0,31}$"
+    },
+    "productId": {
+      "description": "Catalog's product ID of the item, verified when the item was created (ADR-027).",
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "variantId": {
+      "description": "Catalog's variant ID of the item: unique per tenant in Inventory.",
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "sku": {
+      "description": "The SKU snapshot recorded when the item was created: informational, Catalog owns the SKU and the snapshot can be stale (ADR-026 section 11). 1 to 64 of A-Z a-z 0-9 . _ -.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9._-]{1,64}$"
+    },
+    "onHandDelta": {
+      "description": "The change of on-hand stock: the initial stock, the adjustment, the negative committed quantity, or 0.",
+      "type": "integer",
+      "minimum": -1000000000,
+      "maximum": 1000000000
+    },
+    "reservedDelta": {
+      "description": "The change of reserved stock: the reserved quantity, its negative on release, expiry or commit, or 0.",
+      "type": "integer",
+      "minimum": -1000000000,
+      "maximum": 1000000000
+    },
+    "onHand": {
+      "description": "On-hand stock after the movement.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000000
+    },
+    "reserved": {
+      "description": "Reserved stock after the movement; never above onHand.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000000
+    },
+    "available": {
+      "description": "onHand minus reserved after the movement; never negative.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000000
+    },
+    "itemVersion": {
+      "description": "The item's version after the movement: 1 for the initial stock, then increased by exactly 1 per movement. A consumer can order an item's facts by it and ignore an older state.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "reservationId": {
+      "description": "The reservation of a Reservation, ReservationRelease, ReservationExpiry or ReservationCommit movement; null otherwise. Lowercase GUID, D format.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    }
+  },
+  "additionalProperties": true
+}

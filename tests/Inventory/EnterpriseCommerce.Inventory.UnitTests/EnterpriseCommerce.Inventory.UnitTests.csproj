@@ -5,6 +5,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Validates the produced integration events against docs/events/schemas. -->
+    <PackageReference Include="Corvus.Json.Validator" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\..\src\Services\Inventory\EnterpriseCommerce.Inventory.Api\EnterpriseCommerce.Inventory.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Services\Inventory\EnterpriseCommerce.Inventory.Application\EnterpriseCommerce.Inventory.Application.csproj" />
     <ProjectReference Include="..\..\..\src\Services\Inventory\EnterpriseCommerce.Inventory.Domain\EnterpriseCommerce.Inventory.Domain.csproj" />

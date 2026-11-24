@@ -19,6 +19,7 @@ The accepted rules these conventions implement ([ADR-005](../decisions/ADR-005-k
 | Producer | Contract | Topic | Events |
 |---|---|---|---|
 | Tenant & Merchant | [TENANT_MERCHANT_EVENTS.md](TENANT_MERCHANT_EVENTS.md) | `tenant-merchant.events` | `TenantCreated` v1 (published since S4) |
+| Inventory | [INVENTORY_EVENTS.md](INVENTORY_EVENTS.md) | `inventory.events` | `StockLevelChanged`, `ReservationCreated`, `ReservationCommitted`, `ReservationReleased`, `ReservationExpired`, all v1 (published since Phase 5). Ordered per aggregate, not per tenant ([ADR-028](../decisions/ADR-028-inventory-integration-events-and-shared-outbox-building-block.md) section 3). |
 | Catalog | none yet | none (`catalog.events` when introduced) | **No events in Phase 4.** The standalone MongoDB has no multi-document transactions for a transactional outbox, and no consumer exists. Prerequisites: a replica set in Compose and CI, a MongoDB outbox design under ADR-023, and the first consumer ([ADR-024](../decisions/ADR-024-catalog-service-design.md) section 13). |
 
 Schemas and golden samples live in [schemas/](schemas/):
@@ -38,7 +39,7 @@ Schemas and golden samples live in [schemas/](schemas/):
 | Characters | Lowercase letters, digits, `.` and `-`. Never `_`. | |
 | Message key | The tenant ID (lowercase GUID, `D` format) for every tenant-scoped message | |
 
-- **Ordering:** the messages of one tenant arrive in commit order, within one partition. There is no order across tenants.
+- **Ordering:** the messages of one tenant arrive in commit order, within one partition. There is no order across tenants. **Exception, Inventory:** its order is guaranteed per aggregate only (ADR-028 section 3); see each producer's contract.
 - **Topic creation is explicit.**
   - Topics are declared in a committed manifest and created by the Compose setup (locally), the test fixtures (tests), or infrastructure as code (deployed environments).
   - An application never creates a topic.
