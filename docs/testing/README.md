@@ -39,13 +39,15 @@ Infrastructure comes from the Compose profiles; there are no per-test containers
 
 | Variable | Needed by | Example (local) |
 |---|---|---|
-| `EC_TEST_SQLSERVER` | Identity, BFF, TenantMerchant and Inventory integration tests (throwaway databases, dropped afterwards) | `Server=127.0.0.1,1433;User ID=sa;Password=<MSSQL_SA_PASSWORD>;TrustServerCertificate=true` (`--profile sqlserver`) |
+| `EC_TEST_SQLSERVER` | Identity, BFF, TenantMerchant, Inventory and Cart integration tests (throwaway databases, dropped afterwards) | `Server=127.0.0.1,1433;User ID=sa;Password=<MSSQL_SA_PASSWORD>;TrustServerCertificate=true` (`--profile sqlserver`) |
 | `EC_TEST_REDIS_SESSIONS` | BFF integration and browser tests (the dedicated `noeviction` session Redis; keys under one prefix per run, deleted afterwards) | `127.0.0.1:6380,password=<REDIS_SESSIONS_PASSWORD>` (`--profile bff`) |
 | `EC_TEST_REDIS_RESTART_CONTAINER` | The real Redis restart test (it runs in the serial collection, after the parallel tests) | `enterprisecommerce-redis-sessions-1` |
+| `EC_TEST_REDIS_CACHE` | Cart's cache tests (the shared `allkeys-lru` cache Redis; keys under one prefix per fixture, deleted afterwards) | `127.0.0.1:6379,password=<REDIS_PASSWORD>` (`--profile redis`) |
+| `EC_TEST_REDIS_CACHE_RESTART_CONTAINER` | Cart's real cache Redis restart test (it stops and starts the container; serial collection) | `enterprisecommerce-redis-1` (`redis-cache` in CI) |
 | `EC_TEST_BROWSERS=true` | Playwright browser tests (they install the browsers on first run) | |
 | `EC_TEST_KAFKA` | TenantMerchant and Inventory Kafka tests of the outbox relay (one topic per test, created with AdminClient and deleted afterwards) | `127.0.0.1:9094` (`--profile kafka`) |
 | `EC_TEST_KAFKA_RESTART_CONTAINER` | The real Kafka outage test (it stops and starts the broker; serial collection, after the parallel tests) | `enterprisecommerce-kafka-1` (`kafka` in CI) |
-| `EC_TEST_MEASURE=true` | The opt-in Inventory measurements (`InventoryMeasurements`); never in CI. `EC_TEST_MEASURE_OUTPUT` names a file the result rows are appended to. | |
+| `EC_TEST_MEASURE=true` | The opt-in Inventory and Cart measurements (`InventoryMeasurements`, `CartMeasurements`); never in CI. `EC_TEST_MEASURE_OUTPUT` names a file the result rows are appended to. | |
 | `EC_TEST_MONGODB` | Catalog integration tests (one throwaway database per test fixture, `ec_catalog_test_<guid>`, dropped afterwards) | `mongodb://localdev:<MONGO_ROOT_PASSWORD>@127.0.0.1:27018/?authSource=admin` (`MONGO_PORT=27018 docker compose --profile mongodb up -d --wait`) |
 
 Kafka behaviour is not mocked where it matters either. The TenantMerchant outbox relay's Kafka tests publish to a real broker:
@@ -59,7 +61,7 @@ Kafka behaviour is not mocked where it matters either. The TenantMerchant outbox
 
 The relay's decision logic (backoff, the halted state, prefix marking) is also unit-tested against fakes of its store, producer and leadership. Its SQL Server behaviour (committed-only reads, leadership and takeover after a killed session) runs against the real database.
 
-Redis behaviour is never mocked: persistence, `noeviction`, restarts, outages (a TCP forwarder cuts the real connection) and cross-instance refresh concurrency all run against the real session Redis. Fault injection is limited to the BFF's back channel to Identity (lost responses, refused connections, `503`).
+Redis behaviour is never mocked: persistence, `noeviction`, restarts, outages (a TCP forwarder cuts the real connection) and cross-instance refresh concurrency all run against the real session Redis. Cart's cache tests run against the real cache Redis in the same way: ordered compare-and-set writes, TTLs, races, a refused port, a relay that is cut and restored, and a real container restart. Fault injection is limited to the BFF's back channel to Identity (lost responses, refused connections, `503`).
 
 ```bash
 cd deploy/docker && docker compose --profile sqlserver --profile bff up -d --wait && cd ../..

@@ -48,7 +48,7 @@ public sealed class CartSecurityTests(CartApiFixture fixture) : IClassFixture<Ca
             "wrong typ" => fixture.Tokens.CreateToken(TokenSpec.Customer("someone") with { TokenType = "JWT" }),
             "unknown key" => fixture.Tokens.CreateToken(TokenSpec.Customer("someone") with { SignWithUnknownKey = true }),
             "other issuer" => fixture.Tokens.CreateToken(TokenSpec.Customer("someone") with { Issuer = "https://evil.example/" }),
-            "HS256" => "eyJhbGciOiJIUzI1NiIsInR5cCI6ImF0K2p3dCJ9.eyJzdWIiOiJzb21lb25lIiwiYXVkIjoiZWMtc3RvcmVmcm9udCJ9.c2lnbmF0dXJl",
+            "HS256" => ForgedSymmetricToken(),
             "garbage" => "not-a-token",
             _ => throw new ArgumentOutOfRangeException(nameof(kind)),
         };
@@ -153,6 +153,13 @@ public sealed class CartSecurityTests(CartApiFixture fixture) : IClassFixture<Ca
         Assert.DoesNotContain(token, text, StringComparison.Ordinal);
         Assert.DoesNotContain(token.Split('.')[1], text, StringComparison.Ordinal);
         Assert.DoesNotContain(customer, text, StringComparison.Ordinal);
+    }
+
+    /// <summary>A forged token with a symmetric algorithm and a made-up signature, built at run time.</summary>
+    private static string ForgedSymmetricToken()
+    {
+        static string Encode(string text) => Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode(text);
+        return $"{Encode("""{"alg":"HS256","typ":"at+jwt"}""")}.{Encode("""{"sub":"someone","aud":"ec-storefront"}""")}.{Encode("signature")}";
     }
 
     private static (HttpMethod Method, string Path) Split(string endpoint)
