@@ -3,6 +3,7 @@ using EnterpriseCommerce.Inventory.Application.Authorization;
 using EnterpriseCommerce.Inventory.Application.Catalog;
 using EnterpriseCommerce.Inventory.Application.Common;
 using EnterpriseCommerce.Inventory.Application.Items;
+using EnterpriseCommerce.Inventory.Application.Reservations;
 using EnterpriseCommerce.Inventory.Infrastructure.Messaging;
 using EnterpriseCommerce.Inventory.Infrastructure.Persistence;
 using EnterpriseCommerce.Inventory.Infrastructure.ServiceClients;
@@ -42,6 +43,13 @@ public static class DependencyInjection
         services.AddSingleton<IInventoryWriteGate, InventoryWriteGate>();
         services.AddScoped<IInventoryQueries, InventoryQueries>();
         services.AddScoped<InventoryDatabaseHealthCheck>();
+
+        // The reservation lifetimes (ADR-026 section 7). The section also holds the Api's client allow-list.
+        services.AddOptions<ReservationSettings>()
+            .Bind(configuration.GetSection(ReservationSettings.SectionName))
+            .Validate(settings => !settings.Validate().Any(), $"{ReservationSettings.SectionName} is invalid: DefaultLifetime and MaxLifetime 1 minute to 24 hours, DefaultLifetime at most MaxLifetime.")
+            .ValidateOnStart();
+        services.AddSingleton(provider => provider.GetRequiredService<IOptions<ReservationSettings>>().Value);
 
         // The outbox settings, the topic of every new row, and the relay that publishes committed rows to Kafka
         // (ADR-023 sections 5 and 6, ADR-028), from the shared block.

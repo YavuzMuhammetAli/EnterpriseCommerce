@@ -2,6 +2,7 @@ using EnterpriseCommerce.Inventory.Api.Diagnostics;
 using EnterpriseCommerce.Inventory.Api.ExceptionHandling;
 using EnterpriseCommerce.Inventory.Api.Hosting;
 using EnterpriseCommerce.Inventory.Api.Items;
+using EnterpriseCommerce.Inventory.Api.Reservations;
 using EnterpriseCommerce.Inventory.Api.Security;
 using EnterpriseCommerce.Inventory.Application;
 using EnterpriseCommerce.Inventory.Infrastructure;
@@ -77,6 +78,7 @@ if (app.Environment.IsDevelopment())
 
 app.MapInventoryHealthChecks();
 app.MapMerchantInventoryEndpoints();
+app.MapInternalReservationEndpoints();
 
 await app.RunAsync();
 

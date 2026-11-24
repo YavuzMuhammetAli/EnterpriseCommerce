@@ -1,5 +1,6 @@
 using EnterpriseCommerce.Inventory.Application.Authorization;
 using EnterpriseCommerce.Inventory.Application.Items;
+using EnterpriseCommerce.Inventory.Application.Reservations;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EnterpriseCommerce.Inventory.Application;
@@ -16,6 +17,8 @@ public static class DependencyInjection
         services.AddScoped<CreateInventoryItemHandler>();
         services.AddScoped<AdjustStockHandler>();
         services.AddScoped<InventoryQueryHandler>();
+        services.AddScoped<CreateReservationHandler>();
+        services.AddScoped<ReservationHandlers>();
         return services;
     }
 }

@@ -37,7 +37,7 @@
 | 4 | SQL Server persistence, migration, outbox mapping and event contracts | done |
 | 5 | Catalog variant verification endpoint | done |
 | 6 | Merchant stock management with membership and Catalog verification | done |
-| 7 | Reservation lifecycle (internal API) | planned |
+| 7 | Reservation lifecycle (internal API) | done |
 | 8 | Reservation expiry worker | planned |
 | 9 | Kafka relay, Gateway route, topic and development keys | planned |
 | 10 | Measurements, evidence and closure | planned |

@@ -156,3 +156,95 @@ The item is locked. The balance change, its `Adjustment` movement (with the acto
 - **Types:** `InitialStock`, `Adjustment`, `Reservation`, `ReservationRelease`, `ReservationExpiry`, `ReservationCommit`.
 - **Actors:** `User` (the subject), `Service` (the reservation's client ID), or `System` (`reservation-expiry`).
 - **The ledger is append-only.** Replaying it in version order reproduces the balance.
+
+## 7. Internal reservations
+
+These endpoints are for checkout orchestration by a future Order service (ADR-026 sections 6 to 10). The Gateway never routes `/internal/**`.
+
+**Callers:**
+
+- a service token (`ec_ptype=service`, `sub == client_id`, `svc-` prefix)
+- the audience `inventory-api`; another audience answers `401`
+- the scope `svc.inventory.reservations`
+- a client in `Inventory:Reservations:AllowedClientIds`, which is empty by default and accepts only `svc-` entries
+
+Any other caller, a merchant user among them, answers `403`. **A reservation is visible only to the client that created it.** Another allowed client, or another tenant in the route, answers `404 reservation-not-found`. The client is trusted for the tenants it names: there is no membership check, since the allow-list is the authorization (as for the provisioning API of Tenant & Merchant).
+
+**The reservation representation:**
+
+```json
+{
+  "id": "<guid>", "tenantId": "<guid>", "status": "Active",
+  "lines": [{ "inventoryItemId": "<guid>", "productId": "<guid>", "variantId": "<guid>", "quantity": 2 }],
+  "reference": "order-42", "createdAt": "...", "expiresAt": "...", "completedAt": null, "version": 1
+}
+```
+
+`status` is `Active`, `Committed`, `Released` or `Expired`. Terminal states are final, and `version` becomes 2 at the terminal transition.
+
+### 7.1 Create a reservation
+
+`POST /internal/v1/inventory/tenants/{tenantId}/reservations` with an `Idempotency-Key` header:
+
+```json
+{ "lines": [{ "variantId": "<guid>", "quantity": 2 }], "reference": "order-42", "expiresInSeconds": 900 }
+```
+
+**The request:**
+
+- `lines`: 1 to 50 lines of distinct variants, each with a quantity of 1 to 1,000,000.
+- `reference`: optional, 1 to 64 of `A-Z a-z 0-9 - _ . :`, never personal data.
+- `expiresInSeconds`: optional, between 60 and `MaxLifetime` (1 hour by default). Without it, `DefaultLifetime` applies (15 minutes). The expiry is computed from the database clock.
+
+**All or nothing.** Every line is checked against the tenant's items under their locks, taken in item ID order. Only if all fit are they reserved, together with the movements, the reservation, `ReservationCreated` and one `StockLevelChanged` per line, in one transaction.
+
+| Status | When |
+|---|---|
+| `201` | Created. `Location` points to the reservation. |
+| `200` | The same key and request (the lines in any order) again: the original reservation, **in its current state** |
+| `400 validation-failed` | Invalid lines, reference or lifetime, or a missing `Idempotency-Key`. A fractional quantity or an unknown member is `400` too. |
+| `409 insufficient-stock` | At least one line lacks available stock. The `variantIds` extension lists every short variant. Nothing is reserved. |
+| `422 inventory-item-not-found` | A line names a variant without an inventory item in the tenant (`variantIds` lists them) |
+| `422 idempotency-key-reused` | The key was used for a different request |
+
+**Idempotency scope:** (client, tenant, key). A retry that arrives during the original waits for it and replays it. A failed attempt stores nothing.
+
+### 7.2 Read a reservation
+
+`GET .../reservations/{reservationId}` answers `200` with the reservation, or `404 reservation-not-found`.
+
+### 7.3 Commit and release
+
+`POST .../reservations/{reservationId}/commit` and `POST .../reservations/{reservationId}/release` take no body and no key: they are idempotent state transitions.
+
+| Request | `Active` | `Committed` | `Released` | `Expired` | `Active` but past its expiry |
+|---|---|---|---|---|---|
+| commit | `200`: the units leave on-hand stock | `200`, unchanged | `409 reservation-released` | `409 reservation-expired` | expires now, then `409 reservation-expired` |
+| release | `200`: the units become available | `409 reservation-committed` | `200`, unchanged | `200`, unchanged (status `Expired`) | expires now, then `200` (status `Expired`) |
+
+Commit, release and the expiry worker lock the reservation, then its items, and re-read the state under the lock. A reservation is therefore transitioned exactly once whatever the concurrency, and it emits exactly one terminal event.
+
+## 8. Health
+
+See [INVENTORY_OPERATIONS.md section 3](../operations/INVENTORY_OPERATIONS.md#3-health).
+
+## 9. Errors
+
+Every error is RFC 9457 problem details. It has `type` `https://errors.enterprisecommerce.example/inventory/<code>`, `title`, `status`, `instance` (`<METHOD> <path>`) and `correlationId`, and it never carries exception details.
+
+| Status | Codes |
+|---|---|
+| `400` | `validation-failed` (with `errors`); a body that cannot be bound uses the generic RFC 9110 type |
+| `401` | No valid token (no body) |
+| `403` | `permission-denied`, or a caller the policy refuses (no body) |
+| `404` | `tenant-not-found`, `inventory-item-not-found`, `reservation-not-found` |
+| `409` | `inventory-item-exists`, `variant-not-eligible`, `insufficient-unreserved-stock`, `stock-limit-exceeded`, `insufficient-stock` (with `variantIds`), `reservation-committed`, `reservation-released`, `reservation-expired`, `concurrency-conflict` |
+| `413` | A body above 256 KiB |
+| `422` | `variant-not-found`, `inventory-item-not-found` (with `variantIds`), `idempotency-key-reused` |
+| `503` | `membership-unavailable`, `catalog-unavailable`, or the generic RFC 9110 type when SQL Server cannot complete the operation; all with `Retry-After: 5` |
+
+## 10. Gateway
+
+- **Development:** the Gateway routes `/api/v1/inventory/**` on `localhost:7000` to the service (port 7104).
+- **Internal paths are never routed:** every `/internal/**` path answers `404` at the Gateway, including encoded and traversal forms.
+- **No other service and no BFF calls the merchant API yet.** Order will call the internal API directly, not through the Gateway.
