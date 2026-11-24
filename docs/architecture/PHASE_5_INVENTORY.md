@@ -251,7 +251,7 @@ The database is created with `READ_COMMITTED_SNAPSHOT` on, by EF Core. Every dec
 |---|---|---|---|---|---|---|---|
 | Single-unit reservations, **one item** (contended) | 32 | 800 | 7.54 s | 106/s | 265 | 539 | 603 |
 | Single-unit reservations, **one item per caller** (independent) | 32 | 800 | 2.66 s | 301/s | 89 | 190 | 442 |
-| 10-line reservations over 20 shared items | 16 | 320 | 15.51 s | 21/s | 143 | 744 | 4,197 |
+| 10-line reservations over 20 shared items (first run; see the review below) | 16 | 320 | 15.51 s | 21/s | 143 | 744 | 4,197 |
 | Item list, first page (20), 10,001 items | 1 | 20 | – | – | 5.0 | 7.5 | 8.3 |
 | Item list, page 100 of 20 | 1 | 20 | – | – | 8.5 | 9.6 | 9.6 |
 | Item list, last page of 100 | 1 | 20 | – | – | 21.8 | 26.0 | 26.1 |
@@ -263,11 +263,36 @@ The database is created with `READ_COMMITTED_SNAPSHOT` on, by EF Core. Every dec
 **Observations.** They are not targets and not production expectations.
 
 - **Same-item contention serializes on the item's row lock,** as designed. Independent items reached about 3 times the throughput.
-- **Overlapping 10-line reservations** take 10 locking round trips each and queue behind each other. The p99 of about 4 s approaches the 5-second lock timeout, beyond which a request answers `503`.
+- **Overlapping 10-line reservations** take 10 locking round trips each and queue behind each other. Their p99 reaches the 5-second lock timeout, beyond which a request answers `503` (see the review below).
   - This is the main bottleneck observed.
   - Options, if real load demands them, each with its own evidence: a single ordered locking statement per request, a higher lock timeout, or fewer lines per reservation.
 - **Offset paging grows with depth.** The movement history's deep pages, and the `COUNT` of a 100,000-movement item, dominate. Keyset paging (by `ItemVersion`) is the remedy if deep history pages become a use case.
 - **The relay publishes sequentially.** Its rate bounds the event throughput (ADR-023 Consequences). Each reservation of *n* lines produces *n* + 1 events.
+
+### The 10-line scenario in the reliability review
+
+The reliability review re-ran the 10-line scenario to check that it is reproducible.
+
+**The first measurement could not be repeated as written:** it asserted that every request succeeds, and in 5 of 9 runs one request answered `503` and stopped it. The measurement now counts those refusals instead. It asserts that each one is a lock timeout: the exception handler's `DataStoreUnavailableException` whose cause is SQL Server error 1222. It also asserts that the accepted reservations alone hold the reserved stock. It also reports SQL Server's lock waits (`sys.dm_os_wait_stats`, `LCK_M_*`, server-wide, so it runs alone) and the gate's deadlock retries (log event 5020). A disjoint baseline gives every caller 10 items of its own, so it has the same 10 locking round trips without shared rows. Transactions, lock order and the 5-second lock timeout are unchanged.
+
+Six runs, each scenario once per run, same environment as above:
+
+| Scenario (16 callers, 320 requests) | Throughput | p50 ms | p95 ms | p99 ms | Refused at the lock timeout | Lock waits per run | Deadlock retries |
+|---|---|---|---|---|---|---|---|
+| Over 20 shared items (contended) | 19.5 to 27.7/s | 141 to 154 | 790 to 1,082 | 4,476 to 5,181 | 7 of 1,920 requests (0.36 %), in 4 of 6 runs | 522 to 524, 78 to 86 s in total | 0 |
+| Disjoint items (baseline) | 42 to 123/s (typically about 110/s) | 110 to 137 | 202 to 258 | 276 to 322 | 0 | 0 to 6, at most 7 ms | 0 |
+
+**The dominant latency source is lock queueing on the shared rows, not the round trips:**
+
+- The median request costs about the same in both scenarios (about 145 ms against about 120 ms), so the 10 locking statements and the inserts set the typical latency.
+- The tail differs by more than ten times (p99 about 4.6 s against about 0.3 s). The contended run waits about 80 s for locks in total, about a third of all request time. Each request holds up to 10 row locks for its whole transaction, and each caller's 10 items overlap 9 other callers' sets, so waits chain into convoys.
+- No deadlock occurred: the ascending lock order holds.
+
+**The result is reproducible, with one correction:**
+
+- About 21/s, and a p99 of 4.2 to 5.2 s across the 11 contended runs of the review.
+- The p99 does not stay below the 5-second lock timeout. A few requests in a thousand exceed it and are refused with `503`, the designed fail-closed behaviour (ADR-026 section 9). Nothing is reserved for them, and the caller may retry.
+- Whether that is acceptable depends on real reservation shapes. The options above remain, each needing its own evidence. None was applied for a local benchmark.
 
 ## 12. Known limitations and production gates
 
@@ -276,7 +301,7 @@ The database is created with `READ_COMMITTED_SNAPSHOT` on, by EF Core. Every dec
 - **Catalog changes after item creation are not seen,** because Catalog has no events: archival, variant removal and SKU changes (ADR-026 section 11). Order must check sellability at checkout.
 - **Availability is under-reported for overdue reservations** until the worker runs. It is never over-reported.
 - **Cross-aggregate event order within a tenant** is not guaranteed (ADR-028 section 3).
-- **Same-item throughput is bounded** by one short transaction at a time. Multi-line contention is the main bottleneck (section 11).
+- **Same-item throughput is bounded** by one short transaction at a time. Multi-line contention is the main bottleneck: under the measured overlap, a few requests in a thousand reach the 5-second lock timeout and are refused with `503` (section 11).
 - **The movement ledger has no retention** yet.
 - **The `svc-` token provider is now copied in three services** (Tenant & Merchant, Catalog, Inventory): a building-block candidate (deferred).
 - **No consumer and no Order:** the reservation API is exercised by test clients only.

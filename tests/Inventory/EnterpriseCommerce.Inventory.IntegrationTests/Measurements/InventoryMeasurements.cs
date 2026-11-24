@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Text.Json;
+using EnterpriseCommerce.Inventory.Application.Common;
 using EnterpriseCommerce.Inventory.IntegrationTests.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
 
@@ -78,12 +79,86 @@ public sealed class InventoryMeasurements : IAsyncLifetime
         const int Callers = 16;
         const int PerCaller = 20;
 
-        // Overlapping sets: each caller takes 10 of the 20 items, so callers contend on some rows.
-        var (elapsed, latencies) = await RunAsync(Callers, PerCaller, caller => ReserveAsync(tenantId, [.. Enumerable.Range(0, 10).Select(offset => Line(items[(caller + offset) % items.Count], 1))]));
+        // Overlapping sets: each caller takes 10 of the 20 items, so callers contend on some rows. The queue can exceed
+        // the 5-second lock timeout: such a request is refused with 503 (fail closed, ADR-026 section 9) and counted.
+        var (waitsBefore, deadlocksBefore, timeoutsBefore) = (await LockWaitsAsync(), DeadlockRetries(), LockTimeouts());
+        var refused = 0;
+        var (elapsed, latencies) = await RunAsync(Callers, PerCaller, async caller =>
+        {
+            var status = await ReserveOrRefuseAsync(tenantId, [.. Enumerable.Range(0, 10).Select(offset => Line(items[(caller + offset) % items.Count], 1))]);
+            if (status == HttpStatusCode.ServiceUnavailable)
+            {
+                Interlocked.Increment(ref refused);
+            }
+
+            return status;
+        });
+        var waits = await LockWaitsAsync();
+
+        // Every refusal was a lock timeout, and only the accepted reservations hold stock.
+        Assert.Equal(refused, LockTimeouts() - timeoutsBefore);
+        Assert.Equal(((Callers * PerCaller) - refused) * 10 + 1, (await Task.WhenAll(items.Select(ReservedAsync))).Sum());
+        Report(
+            $"10-line reservations over 20 shared items (refused at the 5 s lock timeout: {refused}; lock waits: {waits.Count - waitsBefore.Count}, {waits.Milliseconds - waitsBefore.Milliseconds} ms in total; deadlock retries: {DeadlockRetries() - deadlocksBefore})",
+            Callers, Callers * PerCaller, elapsed, latencies);
+    }
+
+    [Fact]
+    public async Task TenLineReservations_OfDisjointItems_ShowTheRoundTripCost()
+    {
+        RequireEnabled();
+        var tenantId = _fixture.NewTenant(out var owner, out _, out _);
+        const int Callers = 16;
+        const int PerCaller = 20;
+        var items = new List<JsonElement>();
+        for (var i = 0; i < Callers * 10; i++)
+        {
+            items.Add(await _fixture.CreateItemAsync(tenantId, owner, onHand: 10_000));
+        }
+
+        await WarmUpAsync(tenantId, items[0]);
+
+        // Every caller has 10 items of its own: no two callers ever wait for the same row.
+        var (waitsBefore, deadlocksBefore) = (await LockWaitsAsync(), DeadlockRetries());
+        var (elapsed, latencies) = await RunAsync(Callers, PerCaller, caller => ReserveAsync(tenantId, [.. Enumerable.Range(0, 10).Select(offset => Line(items[(caller * 10) + offset], 1))]));
+        var waits = await LockWaitsAsync();
 
         Assert.Equal(Callers * PerCaller * 10 + 1, (await Task.WhenAll(items.Select(ReservedAsync))).Sum());
-        Report("10-line reservations over 20 shared items", Callers, Callers * PerCaller, elapsed, latencies);
+        Report(
+            $"10-line reservations of disjoint items (lock waits: {waits.Count - waitsBefore.Count}, {waits.Milliseconds - waitsBefore.Milliseconds} ms in total; deadlock retries: {DeadlockRetries() - deadlocksBefore})",
+            Callers, Callers * PerCaller, elapsed, latencies);
     }
+
+    /// <summary>SQL Server's cumulative lock waits (every LCK_M_* type), server-wide: run measurements alone.</summary>
+    private async Task<(long Count, long Milliseconds)> LockWaitsAsync()
+    {
+        var text = await _fixture.Database.ScalarAsync<string>("SELECT CONCAT(SUM(waiting_tasks_count), '|', SUM(wait_time_ms)) FROM sys.dm_os_wait_stats WHERE wait_type LIKE 'LCK_M_%'");
+        var parts = text.Split('|');
+        return (long.Parse(parts[0], CultureInfo.InvariantCulture), long.Parse(parts[1], CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
+    /// Requests refused because a lock wait exceeded <c>LOCK_TIMEOUT</c> (SQL Server error 1222): the exception handler's
+    /// event for the 503, whose cause is that error. EF Core logs the same SQL error once more, so only this event counts.
+    /// </summary>
+    private int LockTimeouts() => _fixture.Logs.Events.Count(logEvent =>
+        logEvent.Exception is DataStoreUnavailableException && IsLockTimeout(logEvent.Exception));
+
+    private static bool IsLockTimeout(Exception? exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is Microsoft.Data.SqlClient.SqlException { Number: 1222 })
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Whole-transaction retries of the write gate after a deadlock (log event 5020).</summary>
+    private int DeadlockRetries() => _fixture.Logs.Events.Count(logEvent => logEvent.MessageTemplate.Text.Contains("deadlock victim", StringComparison.Ordinal));
 
     [Fact]
     public async Task ListingAndMovementPaging_OnALargeTenant()
@@ -166,6 +241,14 @@ public sealed class InventoryMeasurements : IAsyncLifetime
     {
         using var response = await _fixture.SendAsync(_fixture.ServiceToken(), HttpMethod.Post, $"/internal/v1/inventory/tenants/{tenantId}/reservations", new { lines }, InventoryApiFixture.Key());
         Assert.True(response.StatusCode == HttpStatusCode.Created, await response.Content.ReadAsStringAsync(Token));
+        return response.StatusCode;
+    }
+
+    /// <summary>A reservation that is either created or refused with 503; anything else fails the measurement.</summary>
+    private async Task<HttpStatusCode> ReserveOrRefuseAsync(Guid tenantId, object[] lines)
+    {
+        using var response = await _fixture.SendAsync(_fixture.ServiceToken(), HttpMethod.Post, $"/internal/v1/inventory/tenants/{tenantId}/reservations", new { lines }, InventoryApiFixture.Key());
+        Assert.True(response.StatusCode is HttpStatusCode.Created or HttpStatusCode.ServiceUnavailable, await response.Content.ReadAsStringAsync(Token));
         return response.StatusCode;
     }
 
