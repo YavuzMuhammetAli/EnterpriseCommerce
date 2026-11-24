@@ -19,6 +19,7 @@ public sealed class DevelopmentRouteTests : IDisposable
         builder.UseSetting("ReverseProxy:Clusters:tenant-merchant:Destinations:primary:Address", "http://127.0.0.1:1/");
         builder.UseSetting("ReverseProxy:Clusters:catalog:Destinations:primary:Address", "http://127.0.0.1:1/");
         builder.UseSetting("ReverseProxy:Clusters:inventory:Destinations:primary:Address", "http://127.0.0.1:1/");
+        builder.UseSetting("ReverseProxy:Clusters:cart:Destinations:primary:Address", "http://127.0.0.1:1/");
     });
 
     [Fact]
@@ -71,6 +72,45 @@ public sealed class DevelopmentRouteTests : IDisposable
         Assert.Equal("inventory-api", route.Name);
         Assert.Equal("/api/v1/inventory/{**catch-all}", route.Path);
         Assert.Equal(["localhost:7000"], route.Hosts);
+    }
+
+    [Fact]
+    public void TheCartRoute_ExposesOnlyTheCustomerCartApi()
+    {
+        // ADR-029: the storefront customer's cart; Cart has no internal endpoints, and none may become reachable.
+        var route = Assert.Single(Routes(), candidate => candidate.Name.StartsWith("cart", StringComparison.Ordinal));
+
+        Assert.Equal("cart-api", route.Name);
+        Assert.Equal("/api/v1/cart/{**catch-all}", route.Path);
+        Assert.Equal(["localhost:7000"], route.Hosts);
+    }
+
+    [Theory]
+    [InlineData("GET", "/api/v1/cart")]
+    [InlineData("POST", "/api/v1/cart/items")]
+    [InlineData("PUT", "/api/v1/cart/items/0196f0a0-0000-7000-8000-000000000002")]
+    [InlineData("DELETE", "/api/v1/cart/items")]
+    [InlineData("POST", "/api/v1/cart/refresh")]
+    public async Task TheCartApi_IsForwardedOnTheServiceRouteHost(string method, string path)
+    {
+        using var client = _gateway.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("http://localhost:7000") });
+
+        using var response = await client.SendAsync(new HttpRequestMessage(new HttpMethod(method), path), TestContext.Current.CancellationToken);
+
+        // Forwarded to the (unreachable) Cart destination.
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("/api/v1/carts")]
+    [InlineData("/api/v1/cartx/items")]
+    public async Task OnlyTheCartPrefix_IsRouted(string path)
+    {
+        using var client = _gateway.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("http://localhost:7000") });
+
+        using var response = await client.GetAsync(path, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Theory]

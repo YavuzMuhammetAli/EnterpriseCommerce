@@ -62,6 +62,8 @@ public sealed class InternalPathExposureTests(KestrelGatewayFixture gateway) : I
             $"/internal/v1/catalog/tenants/{TenantId}/variant-verifications",
             $"/internal/v1/inventory/tenants/{TenantId}/reservations",
             $"/internal/v1/inventory/tenants/{TenantId}/reservations/{TenantId}/commit",
+            "/internal/v1/cart",
+            "/internal/v1/carts",
         })
         {
             var response = await gateway.SendAsync("POST", target, host);
@@ -106,6 +108,13 @@ public sealed class InternalPathExposureTests(KestrelGatewayFixture gateway) : I
     [InlineData($"/api/v1/inventory/tenants/{TenantId}/items/../../../../../../internal/v1/catalog/tenants/{TenantId}/variant-verifications")]
     [InlineData($"/Internal/V1/Inventory/tenants/{TenantId}/reservations")]
     [InlineData($"/%69nternal/v1/inventory/tenants/{TenantId}/reservations")]
+    [InlineData("/api/v1/cart/../../../internal/v1/cart")]
+    [InlineData("/api/v1/cart/%2e%2e/%2e%2e/%2e%2e/internal/v1/inventory/tenants/0196f0a0-0000-7000-8000-000000000001/reservations")]
+    [InlineData("/api/v1/cart/items/..%2F..%2F..%2F..%2Finternal/v1/catalog/categories")]
+    [InlineData("/api/v1/cart/items/%2e%2e%2f%2e%2e%2f%2e%2e%2f%2e%2e%2finternal/v1/tenants")]
+    [InlineData("/api/v1/cart/%252e%252e/%252e%252e/%252e%252e/internal/v1/cart")]
+    [InlineData("/api/v1/cart/..%5C..%5C..%5Cinternal/v1/cart")]
+    [InlineData("/INTERNAL/v1/Cart")]
     [InlineData("http://localhost:5000/internal/v1/accounts/1/disable")]
     [InlineData("http://localhost:5000/identity/internal/v1/accounts/1/disable")]
     public async Task AlternatePathForms_CannotBypassTheBlock(string target)
@@ -155,6 +164,22 @@ public sealed class InternalPathExposureTests(KestrelGatewayFixture gateway) : I
     [InlineData("POST", $"/api/v1/inventory/tenants/{TenantId}/items/{TenantId}/adjustments")]
     [InlineData("GET", $"/api/v1/inventory/tenants/{TenantId}/items/{TenantId}/movements")]
     public async Task TheInventoryApi_IsForwarded(string method, string target)
+    {
+        var response = await gateway.SendAsync(method, target, "localhost:7000");
+
+        Assert.True(response.Forwarded, $"{target} was not forwarded (status {response.Status}).");
+        Assert.Equal(200, response.Status);
+        Assert.Equal(target, response.BackendTarget);
+    }
+
+    [Theory]
+    [InlineData("GET", "/api/v1/cart")]
+    [InlineData("POST", "/api/v1/cart/items")]
+    [InlineData("PUT", $"/api/v1/cart/items/{TenantId}")]
+    [InlineData("DELETE", $"/api/v1/cart/items/{TenantId}")]
+    [InlineData("DELETE", "/api/v1/cart/items")]
+    [InlineData("POST", "/api/v1/cart/refresh")]
+    public async Task TheCartApi_IsForwarded(string method, string target)
     {
         var response = await gateway.SendAsync(method, target, "localhost:7000");
 

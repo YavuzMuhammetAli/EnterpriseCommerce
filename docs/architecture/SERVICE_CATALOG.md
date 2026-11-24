@@ -284,6 +284,7 @@ It routes Identity and each backend-for-frontend by host name, and it is the onl
   - the Tenant & Merchant member API: `/api/v1/tenants/**` on host `localhost:7000` (Phase 3 S1)
   - the Catalog API: `/api/v1/catalog/**` on host `localhost:7000` (Phase 4)
   - the Inventory merchant API: `/api/v1/inventory/**` on host `localhost:7000` (Phase 5)
+  - the Cart customer API: `/api/v1/cart/**` on host `localhost:7000` (Phase 6)
 - **Internal paths are never forwarded.** A path whose first segment is `internal` answers `404` on every host, by every route and in every environment.
   - The check is case-insensitive, after percent-decoding and resolving empty and dot segments.
   - It runs on the incoming path, and again on the outgoing path of every proxied request after the route's transforms, so a prefix-removing or rewriting route cannot produce an internal destination (IDENTITY_API_CONTRACT.md section 2.12; finding P3-1, resolved).
