@@ -1,3 +1,4 @@
+using EnterpriseCommerce.Cart.Api.Carts;
 using EnterpriseCommerce.Cart.Api.Diagnostics;
 using EnterpriseCommerce.Cart.Api.ExceptionHandling;
 using EnterpriseCommerce.Cart.Api.Hosting;
@@ -75,6 +76,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapCartHealthChecks();
+app.MapCartEndpoints();
 
 await app.RunAsync();
 

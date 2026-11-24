@@ -22,9 +22,6 @@ internal sealed class CatalogReadOptions
     /// <summary>The largest product answer accepted. 64 KiB to 8 MiB.</summary>
     public int MaxResponseBytes { get; set; } = 1024 * 1024;
 
-    /// <summary>How many products a refresh reads at once. 1 to 16.</summary>
-    public int RefreshParallelism { get; set; } = 4;
-
     public IEnumerable<string> Validate(bool isDevelopment)
     {
         if (BaseAddress is null)
@@ -47,11 +44,6 @@ internal sealed class CatalogReadOptions
         if (MaxResponseBytes is < 64 * 1024 or > 8 * 1024 * 1024)
         {
             yield return $"{SectionName}:MaxResponseBytes must be 64 KiB to 8 MiB.";
-        }
-
-        if (RefreshParallelism is < 1 or > 16)
-        {
-            yield return $"{SectionName}:RefreshParallelism must be 1 to 16.";
         }
     }
 }

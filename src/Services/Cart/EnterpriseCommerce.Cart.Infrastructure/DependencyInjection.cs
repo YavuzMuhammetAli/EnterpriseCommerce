@@ -100,5 +100,6 @@ public static class DependencyInjection
             .ValidateOnStart();
         services.AddSingleton<CartCacheConnection>();
         services.AddSingleton<CartCacheHealthCheck>();
+        services.AddSingleton<ICartCache, NoCartCache>();
     }
 }

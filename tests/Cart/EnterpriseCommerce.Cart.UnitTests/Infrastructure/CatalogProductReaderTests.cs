@@ -181,7 +181,7 @@ public sealed class CatalogProductReaderTests
         Assert.NotEmpty(new CatalogReadOptions { BaseAddress = new Uri("https://catalog.internal/api") }.Validate(isDevelopment: false));
         Assert.Empty(new CatalogReadOptions { BaseAddress = new Uri("https://catalog.internal/") }.Validate(isDevelopment: false));
         Assert.NotEmpty(new CatalogReadOptions { BaseAddress = Catalog, Timeout = TimeSpan.FromSeconds(11) }.Validate(isDevelopment: false));
-        Assert.NotEmpty(new CatalogReadOptions { BaseAddress = Catalog, RefreshParallelism = 0 }.Validate(isDevelopment: false));
+        Assert.NotEmpty(new CatalogReadOptions { BaseAddress = Catalog, MaxResponseBytes = 1024 }.Validate(isDevelopment: false));
     }
 
     private static CatalogProductReader Reader(StubHandler handler, TimeSpan? timeout = null, int maxResponseBytes = 1024 * 1024) =>

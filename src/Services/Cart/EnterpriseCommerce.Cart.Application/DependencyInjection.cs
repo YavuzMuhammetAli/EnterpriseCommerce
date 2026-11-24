@@ -1,3 +1,4 @@
+using EnterpriseCommerce.Cart.Application.Carts;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EnterpriseCommerce.Cart.Application;
@@ -8,6 +9,8 @@ public static class DependencyInjection
     public static IServiceCollection AddCartApplication(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+        services.AddScoped<CartReader>();
+        services.AddScoped<CartCommands>();
         return services;
     }
 }
